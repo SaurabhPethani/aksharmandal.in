@@ -1,0 +1,299 @@
+import axios from 'axios';
+import { messageForStatus, toneForStatus } from '../constants/messages';
+import { STORAGE_KEYS } from '../constants/storage';
+
+// Axios instance for the Akshar Connect API.
+//
+// Two API traits every caller would otherwise repeat are absorbed here:
+//   1. Responses are a StandardResponse envelope { status_code, detail, data },
+//      where `status_code` is a BOOLEAN success flag, not an HTTP status int.
+//   2. The refresh token is an HttpOnly cookie rotated by POST /auth/refresh,
+//      so every request needs withCredentials. The access token is mirrored into
+//      sessionStorage (see below) so a reload can reuse it while it is still
+//      valid, and only spends a /auth/refresh once it has actually expired.
+
+const BASE = import.meta.env.VITE_API_BASE ?? '';
+
+/**
+ * An API path as a URL the *browser* can fetch on its own — an `<img src>`, a
+ * download link, anything that does not go through axios.
+ *
+ * In dev that is same-origin and the Vite proxy handles it; in production it is
+ * the configured API origin. Writing `/api/v1/...` straight into a `src` works
+ * in dev and 404s in production, where the app and the API are different hosts.
+ */
+export const apiUrl = (path) => `${BASE}${path}`;
+
+export const AUTH_PATHS = {
+  loginInit: '/api/v1/auth/login-init',
+  loginPassword: '/api/v1/auth/login/password',
+  loginPin: '/api/v1/auth/login/pin',
+  verifyOtp: '/api/v1/auth/verify-otp',
+  setCredentials: '/api/v1/auth/set-credentials',
+  refresh: '/api/v1/auth/refresh',
+  logout: '/api/v1/auth/logout',
+  // Family account switching: the signed-in person plus any managed child
+  // accounts they can open, and the endpoint that opens one.
+  myAccounts: '/api/v1/auth/my-accounts',
+  switchAccount: '/api/v1/auth/switch-account',
+};
+
+/**
+ * Every failure the app can see, in one shape. `message` is always presentable —
+ * the backend's `detail` when it sent one, otherwise the catalogue's wording for
+ * the status — so a caller can surface `err.message` without composing its own
+ * fallback. `tone` says which toast it belongs in.
+ */
+export class ApiError extends Error {
+  constructor(message, { status, detail, body } = {}) {
+    super(message || messageForStatus(status));
+    this.name = 'ApiError';
+    this.status = status;
+    this.detail = detail;
+    this.body = body;
+    this.tone = toneForStatus(status);
+    // Login failures carry structure the sign-in screen acts on rather than just
+    // text — see readFailure. Null for every other kind of error.
+    this.failure = readFailure(body);
+    // { field: message } for a 422, so a form can put each message under the
+    // control that caused it instead of in one banner. Null otherwise.
+    this.fieldErrors = readFieldErrors(body);
+  }
+}
+
+let accessToken = null;
+let onAuthLost = () => {};
+
+export const setAccessToken = (t) => { accessToken = t; };
+export const getAccessToken = () => accessToken;
+export const setAuthLostHandler = (fn) => { onAuthLost = fn; };
+
+// Reload should not cost a round-trip. The Token record is mirrored here and the
+// JWT's own `exp` decides whether a reload can pick it back up or has to fall
+// back to the cookie — so /auth/refresh fires when the access token expires, not
+// once per page load.
+//
+// sessionStorage, not localStorage: the mirror dies with the tab, leaving the
+// HttpOnly cookie as the only thing that survives a browser restart. The window
+// where a stolen access token is useful is its remaining lifetime; the refresh
+// token stays out of JS reach either way.
+const SESSION_KEY = STORAGE_KEYS.token;
+const CLOCK_SKEW_MS = 30_000;
+
+/** Millisecond `exp` from a JWT payload, or null when it cannot be read. */
+function jwtExpiry(jwt) {
+  try {
+    const b64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(b64));
+    return typeof exp === 'number' ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function readRecord() {
+  try {
+    return JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null');
+  } catch {
+    return null; // private mode, or someone hand-edited the entry
+  }
+}
+
+/**
+ * Make `token` the current bearer and mirror it for the next reload. Fields the
+ * refresh response omits (it carries no user_id) are carried over from the
+ * stored record, so resuming never has to re-resolve the user via /users/me.
+ * Returns the merged record.
+ */
+export function rememberSession(token) {
+  const merged = { ...(readRecord() ?? {}), ...token };
+  setAccessToken(merged.access_token ?? null);
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(merged));
+  } catch { /* private mode — falls back to refresh-on-reload */ }
+  return merged;
+}
+
+export function forgetSession() {
+  setAccessToken(null);
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+    // Everything else scoped to the SIGN-IN rather than to the tab goes with it.
+    // The birthday greeting is shown once per session and marks itself seen; if
+    // that mark outlived the session, signing back in on the same tab would
+    // swallow it.
+    sessionStorage.removeItem(STORAGE_KEYS.birthdayWishesSeen);
+  } catch { /* private mode */ }
+}
+
+/**
+ * The mirrored Token if its JWT is still comfortably unexpired, else null — and
+ * an expired mirror is dropped on the way out. An unreadable `exp` counts as
+ * expired: without proof the token is live, the cookie is the safer path.
+ */
+export function resumeSession() {
+  const record = readRecord();
+  const exp = record?.access_token ? jwtExpiry(record.access_token) : null;
+  if (!exp || exp - CLOCK_SKEW_MS <= Date.now()) {
+    if (record) forgetSession();
+    return null;
+  }
+  setAccessToken(record.access_token);
+  return record;
+}
+
+/**
+ * A REQUEST MUST ALWAYS SETTLE. axios defaults `timeout` to 0, which means
+ * "wait forever" — and on a phone that is not a theoretical state. A radio
+ * handing between cells, a tunnel, a wifi/5G switch mid-flight: the socket goes
+ * quiet and the promise neither resolves nor rejects, ever.
+ *
+ * Nothing downstream can recover from that. A React Query mutation's `onSettled`
+ * never runs, so any pending flag it owns is never cleared — which is how a
+ * marked row on the Attendance screen kept its spinner and stayed disabled until
+ * the page was reloaded. The bug looked like the Attendance screen's; it was
+ * this line's absence.
+ *
+ * 60s rather than something tight, because this is a BACKSTOP, not a latency
+ * budget. It exists to convert "hung forever" into "failed, and here is a
+ * message" — screens that need a faster answer pass their own shorter timeout
+ * (`attendanceService.markBulk` does). The slowest thing here is a report export
+ * building a workbook server-side, which is well inside a minute.
+ */
+export const api = axios.create({
+  baseURL: BASE,
+  withCredentials: true,
+  timeout: 60_000,
+  headers: { Accept: 'application/json' },
+});
+
+/**
+ * `detail` is not always a string. FastAPI validation errors arrive as
+ * { detail: [{loc, msg, type}, ...] }, and the login endpoints answer a wrong
+ * password/PIN with { detail: { message, failed_attempts, is_locked } } — so all
+ * three shapes have to collapse to one presentable line.
+ */
+function readDetail(body, fallback) {
+  const d = body?.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) return d.map((e) => e?.msg).filter(Boolean).join('; ') || fallback;
+  if (d && typeof d === 'object') return d.message || fallback;
+  return fallback;
+}
+
+/**
+ * FastAPI's 422 body names the field that failed, in `loc`:
+ *
+ *   { detail: [{ loc: ['body', 'email'], msg: 'value is not a valid email…' }] }
+ *
+ * `readDetail` collapses that to one line for callers that only want text, which
+ * throws the names away — the user then reads a banner and has to work out which
+ * control it means. This keeps `{ field: message }` alongside it.
+ *
+ * The last string segment is the field: `['body', 'educations', 0, 'year']` is a
+ * `year`, and the row it belongs to is not something this layer can know. First
+ * message per field wins, matching the one-message-per-field rule the forms use.
+ */
+function readFieldErrors(body) {
+  const d = body?.detail;
+  if (!Array.isArray(d)) return null;
+
+  const out = {};
+  for (const entry of d) {
+    const loc = Array.isArray(entry?.loc) ? entry.loc : [];
+    const field = [...loc].reverse().find((p) => typeof p === 'string' && p !== 'body');
+    if (field && entry?.msg && !(field in out)) out[field] = entry.msg;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * The LoginFailureResponse that /auth/login/password and /auth/login/pin put in
+ * `detail` on a 400:
+ *
+ *   { message: 'Invalid Credentials', failed_attempts: 3, is_locked: false }
+ *
+ * The message alone does not say how close the account is to being locked, or
+ * that it already is, so the fields are kept as well. Returns null unless the
+ * shape is really there — `err.failure` is never a guess.
+ */
+function readFailure(body) {
+  const d = body?.detail;
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return null;
+  if (!('is_locked' in d) && !('failed_attempts' in d)) return null;
+  return {
+    message: typeof d.message === 'string' ? d.message : null,
+    isLocked: d.is_locked === true,
+    failedAttempts: Number.isInteger(d.failed_attempts) ? d.failed_attempts : null,
+  };
+}
+
+api.interceptors.request.use((config) => {
+  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+  return config;
+});
+
+// Single-flight refresh: concurrent 401s share one /auth/refresh call rather than
+// racing to rotate the cookie, where a lost race invalidates the winner's token.
+let refreshInFlight = null;
+
+export async function refreshAccessToken() {
+  if (!refreshInFlight) {
+    refreshInFlight = axios
+      .post(`${BASE}${AUTH_PATHS.refresh}`, null, {
+        withCredentials: true,
+        headers: { Accept: 'application/json' },
+      })
+      .then((res) => {
+        const token = res.data?.data;
+        if (!token?.access_token) throw new ApiError(messageForStatus(401), { status: 401 });
+        // Re-mirror, or the next reload would resume the token we just replaced.
+        return rememberSession(token);
+      })
+      .finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+}
+
+api.interceptors.response.use(
+  (res) => {
+    const body = res.data;
+    // Pass through non-envelope payloads (blobs, plain values) untouched.
+    if (!body || typeof body !== 'object' || !('status_code' in body)) return body;
+    if (body.status_code === false) {
+      throw new ApiError(readDetail(body, messageForStatus(res.status)), {
+        status: res.status, detail: body.detail, body,
+      });
+    }
+    // Write endpoints put their human-readable result in `detail` and leave
+    // `data` null, so unwrapping to `data` would throw the message away. Callers
+    // that surface it (toasts) ask for the envelope with { envelope: true }.
+    return res.config?.envelope ? body : body.data;
+  },
+  async (error) => {
+    const { response, config } = error;
+    // No response at all: offline, DNS, CORS, timeout. axios's own message
+    // ("Network Error") is not something to show a user.
+    if (!response) throw new ApiError(messageForStatus(0), { status: 0 });
+
+    const isAuthCall = config?.url?.startsWith('/api/v1/auth/');
+    // One silent refresh, then replay the original request.
+    if (response.status === 401 && !config?._retried && !isAuthCall) {
+      config._retried = true;
+      try {
+        await refreshAccessToken();
+        return api(config);
+      } catch {
+        forgetSession();
+        onAuthLost();
+        throw new ApiError(messageForStatus(401), { status: 401 });
+      }
+    }
+
+    throw new ApiError(readDetail(response.data, messageForStatus(response.status)), {
+      status: response.status,
+      detail: readDetail(response.data, null),
+      body: response.data,
+    });
+  }
+);

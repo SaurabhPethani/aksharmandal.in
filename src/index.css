@@ -1,0 +1,292 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens copied verbatim from the live site's :root block.
+   Source: https://aksharmandal.in/aksharconnect/assets/index-BUwmXP6z.css */
+:root {
+  --primary: #003158;
+  --accent: #ff862a;
+  --bg: #ebf0f6;
+  --surface: #ffffff;
+  --text: #003158;
+  --text-muted: #5c7a96;
+  --border: #d8e5f0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* One point down from the 16px default (16 -> 15). Tailwind sizes text, padding,
+   margins and gaps in rem, so this single value scales the whole UI down together
+   and buys back the vertical room that was pushing screens past one viewport —
+   rather than re-tuning font sizes screen by screen and drifting out of step.
+   A percentage, not a px value, so a reader who has raised their browser's
+   default font size still gets the increase applied on top of this.
+   Tighter still if needed: 87.5% = 14px. */
+html {
+  font-size: 93.75%;
+}
+
+html,
+body {
+  font-family: 'DM Sans', sans-serif;
+}
+
+body {
+  @apply bg-bg text-text antialiased;
+  /* Nothing should ever scroll the page sideways; wide content (tables, PIN rows)
+     scrolls inside its own container instead. */
+  overflow-x: hidden;
+}
+
+/* An unbreakable run of characters — a 40-character email, a pasted URL, a
+   surname with no spaces — is the one thing `overflow-x: hidden` above turns
+   into silent data loss rather than a scrollbar: the text simply ends at the
+   edge of the phone. `break-word` only breaks where nothing else can, so
+   ordinary prose still wraps on spaces exactly as before.
+   Deliberately NOT `anywhere`, which would also break short words to satisfy a
+   narrow column and make table cells look shredded. */
+body {
+  overflow-wrap: break-word;
+}
+
+/* Headings use Sora on the live site; body copy stays DM Sans. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Sora', sans-serif;
+}
+
+@layer components {
+  /* Each rule mirrors the corresponding class in the live stylesheet —
+     same radius, padding, weight, shadow and hover/active behaviour.
+     Exception: the heading sizes below are deliberately one step smaller than
+     the live site's (2xl / lg / base), which read as oversized in this shell.
+     Keep the three tiers stepping down together if you change them again. */
+
+  .page-title {
+    @apply font-display text-xl font-bold text-primary;
+  }
+
+  .section-title {
+    @apply font-display text-base font-semibold text-primary;
+  }
+
+  /* Padding steps down below sm. At p-6 a card spends ~45px of a 360px phone on
+     its own margins, on top of the 12px the page shell already takes — so a
+     two-column row of labels and values had barely 290px to live in. The desktop
+     value is unchanged; only phones get the tighter box.
+     A `p-0` / `!p-0` utility on the same element still wins either way: Tailwind
+     emits utilities after components, so the override outranks both steps. */
+  .card {
+    @apply rounded-card border border-line-soft bg-surface p-4 shadow-card sm:p-6;
+  }
+
+  /* Dashboard surfaces are lighter than `.card`: tighter padding, a paler border
+     and a much softer shadow. Values match the reference dashboard. */
+  .panel {
+    @apply rounded-2xl border border-[#E8EEF6] bg-white p-4 sm:p-5;
+    box-shadow: 0 1px 8px rgba(0, 49, 88, 0.06), 0 0 1px rgba(0, 49, 88, 0.04);
+  }
+
+  .panel-title {
+    @apply font-display text-sm font-semibold text-primary;
+  }
+
+  /* The small caps label that sits above a value or a group — "CURRENT ROLE",
+     "MODULE PERMISSIONS", "FAMILY". It was being written out longhand in four
+     places, which is how three of them ended up slightly different. */
+  .eyebrow {
+    @apply text-xs font-bold uppercase tracking-wide text-text-muted;
+  }
+
+  .chip {
+    @apply flex items-center gap-2 rounded-xl border border-[#E0EAF4] bg-white px-3.5 py-2;
+    box-shadow: 0 1px 4px rgba(0, 49, 88, 0.06);
+  }
+
+  /* Flat, by request: the live site's coloured drop shadows read as heavy in
+     this shell, where buttons sit on cards that already carry one. Hover is the
+     colour step alone. */
+  .btn-primary {
+    @apply rounded-control bg-primary px-6 py-3 font-semibold text-white
+           transition-all duration-200 hover:bg-primary-hover
+           active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-accent {
+    @apply rounded-control bg-accent px-6 py-3 font-semibold text-white
+           transition-all duration-200 hover:bg-accent-hover
+           active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-outline {
+    @apply rounded-control border border-line-strong bg-surface px-6 py-3 font-semibold text-primary
+           transition-all duration-200 hover:border-primary hover:bg-primary hover:text-white
+           active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply rounded-lg px-4 py-2 font-medium text-primary transition-all duration-200
+           hover:bg-[#E5EEF5] active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .input-field {
+    @apply w-full rounded-control border border-line-input bg-surface px-4 py-3 font-sans
+           text-primary shadow-input placeholder:text-text-faint
+           focus:border-primary/50 focus:shadow-input-focus focus:outline-none;
+  }
+
+  /* 16px MINIMUM ON TOUCH WIDTHS — this is not a type choice, it is a bug fix.
+     iOS Safari FORCE-ZOOMS the page whenever a focused <input>, <select> or
+     <textarea> computes to less than 16px, and there is no way to opt out short
+     of disabling pinch-zoom, which is worse. The root here is 15px, so every
+     `.input-field` inherited 15px and every tap on a field zoomed the page in.
+     What that looks like to a user: the layout jumps, and a <select>'s option
+     list lands somewhere other than under the control they tapped — reported as
+     "the options appear outside/above the dropdown" on the event registration
+     form's Gender field.
+     Bounded to `max-width: 767px` so the desktop type scale is untouched: the
+     zoom behaviour is a touch-device rule, and 16px controls on a wide screen
+     would read a point larger than everything beside them. */
+  @media (max-width: 767px) {
+    .input-field,
+    select.input-field,
+    textarea.input-field {
+      font-size: 16px;
+    }
+  }
+
+  /* Single PIN digit box.
+     `sm` and up is the live screen's 3.5rem x 3rem, fixed and centred.
+     BELOW sm THERE IS NO WIDTH HERE AT ALL: the boxes stretch to fill the row
+     (`flex-1` in DigitInput), so six of them plus their gaps come out exactly as
+     wide as the mobile-number field above — end to end, and each box wider than
+     the 2.25rem it used to be shrunk to. That shrinking existed because six
+     full-size boxes overflow a 375px viewport (348px needed vs 311px available);
+     filling the row solves the same problem without making the target smaller
+     than the thumb aiming at it. */
+  .pin-digit {
+    /* `h-16` on a phone, `sm:h-14` back to the live screen's height. Filling the
+       row made each box ~44px wide against a 48px height, which read as a
+       squashed letterbox rather than a digit cell; 64px tall stands it back up.
+       `sm` keeps 3.5rem x 3rem, where the box is not being stretched to fit. */
+    @apply h-16 rounded-control border-2 text-center text-xl font-bold text-primary
+           focus:outline-none disabled:opacity-50 sm:h-14 sm:w-12 sm:text-xl;
+    border-color: #d0e2ef;
+    background: #f0f5fa;
+    box-shadow: inset 2px 2px 6px #00315814, inset -2px -2px 6px #ffffffe6;
+  }
+  .pin-digit:focus {
+    border-color: #00315899;
+  }
+
+  .error-text {
+    @apply mt-1 text-sm text-[#EF4444];
+  }
+
+  /* EVERY table header in the app. One size, one weight, one colour, one case,
+     one strip. Before this each table invented its own — 11px bold wide-tracked
+     here, 14px bold there, 12px semibold navy elsewhere — and the strip behind
+     them was `bg-primary-50` on some tables, a raw `#F6F9FD` on others, `bg-bg`
+     on a `<tr>` elsewhere and nothing at all on the rest.
+     The background and rule live on the CELL, not on `<thead>`/`<tr>`, so the
+     strip is continuous however a given table wires its header row up.
+     Padding and alignment stay per-table: a dense log grid and a roomy report
+     do not want the same cell spacing. */
+  .table-th {
+    @apply whitespace-nowrap border-b border-line-soft bg-bg text-left text-xs
+           font-semibold uppercase tracking-wide text-text-muted;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+  .badge-green {
+    @apply badge bg-success-bg text-success-fg;
+  }
+  .badge-red {
+    @apply badge bg-danger-bg text-danger-fg;
+  }
+  .badge-neutral {
+    @apply badge bg-bg text-text-muted;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   CONTENT AREA: ONE POINT LARGER
+   ---------------------------------------------------------------------------
+   Every text size inside the app's right-hand panel — header, page content and
+   the dialogs that portal out of it — steps up by exactly 1pt. The Left
+   Navigation is deliberately NOT included: it carries its own sizes, tuned
+   separately, and scaling it again here would take it well past where it was
+   asked to land.
+
+   WHY NOT THE ROOT FONT SIZE. That is the usual lever for this and it is one
+   line (see `html` above), but rem is root-relative by definition: bumping it
+   would grow the sidebar and the login screen too, and it would scale every
+   padding, margin and gap by the same ~9% — undoing the vertical-fit work that
+   the 93.75% exists for in the first place. The ask was font size, so this
+   changes font size and nothing else.
+
+   HOW IT WORKS. `.content-type X` is specificity (0,2,0) against a utility's
+   (0,1,0), so it wins wherever it applies regardless of layer order. `!text-*`
+   still beats it, which is correct — those are deliberate local overrides.
+
+   1pt = 4/3 px, and the root is 15px, so 1pt = 0.08889rem. Every value below is
+   its Tailwind original plus exactly that.
+
+   ⚠ ADDING A NEW TEXT SIZE IN THE CONTENT AREA MEANS ADDING IT HERE, or it
+   stays a point smaller than everything around it. The arbitrary values below
+   are the complete set in use — they were enumerated, not guessed. */
+.content-type .text-xs { font-size: 0.83889rem; }
+.content-type .text-sm { font-size: 0.96389rem; }
+.content-type .text-base { font-size: 1.08889rem; }
+.content-type .text-lg { font-size: 1.21389rem; }
+.content-type .text-xl { font-size: 1.33889rem; }
+.content-type .text-2xl { font-size: 1.58889rem; }
+.content-type .text-3xl { font-size: 1.96389rem; }
+.content-type .text-4xl { font-size: 2.33889rem; }
+
+/* Arbitrary sizes already in the content area. */
+.content-type .text-\[0\.6rem\] { font-size: 0.68889rem; }
+.content-type .text-\[0\.65rem\] { font-size: 0.73889rem; }
+.content-type .text-\[0\.7rem\] { font-size: 0.78889rem; }
+.content-type .text-\[1\.5rem\] { font-size: 1.58889rem; }
+.content-type .text-\[1\.75rem\] { font-size: 1.83889rem; }
+.content-type .text-\[1\.9rem\] { font-size: 1.98889rem; }
+.content-type .text-\[9px\] { font-size: 10.33px; }
+.content-type .text-\[10px\] { font-size: 11.33px; }
+.content-type .text-\[11px\] { font-size: 12.33px; }
+.content-type .text-\[12px\] { font-size: 13.33px; }
+
+/* Responsive variants have their own class names, so a `.text-sm` rule above
+   never reaches a `sm:text-base`. These are the ones the content area uses. */
+@media (min-width: 640px) {
+  .content-type .sm\:text-base { font-size: 1.08889rem; }
+  .content-type .sm\:text-4xl { font-size: 2.33889rem; }
+}
+@media (min-width: 1280px) {
+  .content-type .xl\:text-4xl { font-size: 2.33889rem; }
+}
+
+/* Tabular figures keep stat cards from jittering as numbers update. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The live site hides the sidebar scrollbar; same utility name. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

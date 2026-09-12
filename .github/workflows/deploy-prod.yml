@@ -1,0 +1,87 @@
+name: Deploy aksharmandal.in (PROD)
+
+# Auto-deploys the main branch to the PROD environment on the VPS.
+#   branch          : main
+#   VITE_API_BASE   : /aksharconnect
+#                     Same-origin relative path. Nginx on aksharmandal.in
+#                     proxies /aksharconnect/api/ to 127.0.0.1:8002 (PROD
+#                     backend); everything else under /aksharconnect/ falls
+#                     through to the SPA. This value MUST match what the
+#                     nginx location block on prod actually serves — if you
+#                     ever move prod to a split-host layout (SPA on the main
+#                     domain, API on api.aksharmandal.in), change this to
+#                     https://api.aksharmandal.in/aksharconnect and remove
+#                     the nginx api-proxy block on aksharmandal.in.
+#   SCP target      : /var/www/aksharmandal.in/aksharconnect
+#
+# The app lives at the repo ROOT (moved out of aksharconnect/ in 75112a7),
+# so every path below is root-relative. The /aksharconnect segment that
+# remains is the URL/deploy prefix, not a source directory.
+
+on:
+  push:
+    branches:
+      - main
+  # Manual re-deploy from the Actions tab, so a failed run or an nginx-only
+  # change can re-ship the same build without a new commit.
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-aksharmandal-prod
+  # Do NOT cancel an in-flight prod deploy — a half-uploaded dist/ is worse
+  # than an old bundle. Whichever run got to SCP first finishes; the next
+  # run starts when it is done.
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Match ci.yml so tests run on the same Node version the merge PR
+          # was validated against.
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      # `ci`, not `install`: installs from the lockfile exactly and fails on
+      # drift, so a deploy can never build a different tree than CI verified.
+      - name: Install Dependencies
+        run: npm ci
+
+      # Same gates as ci.yml, run inline so this workflow is a
+      # verify-then-deploy pipeline (no split brain with a separate CI run on
+      # main). If any of these fail, build + scp never run — a failing gate
+      # blocks the prod deploy.
+      - name: Verify API contract
+        run: npm run verify:contract
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=critical
+
+      - name: Build (PROD)
+        run: npm run build
+        env:
+          # SPLIT-HOST routing on PROD (unlike DEV/UAT which share a host):
+          #   SPA served from:  https://aksharmandal.in/aksharconnect/
+          #   API served from:  https://api.aksharmandal.in/aksharconnect/api/v1/...
+          # Must be the ABSOLUTE API origin — a relative /aksharconnect would
+          # resolve to aksharmandal.in and hit the SPA static handler → 405.
+          # This mirrors env-config/prod/frontend.env; keep the two in sync.
+          VITE_API_BASE: https://api.aksharmandal.in/aksharconnect
+
+      - name: Deploy Akshar Connect via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "dist/*"
+          target: "/var/www/aksharmandal.in/aksharconnect"
+          strip_components: 1
+          overwrite: true

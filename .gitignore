@@ -1,0 +1,15 @@
+node_modules/
+dist/
+
+.env.local
+.env.*.local
+
+*.log
+logs/
+
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.claude/
+aksharconnect/
