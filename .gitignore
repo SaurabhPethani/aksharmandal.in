@@ -78,7 +78,6 @@ yarn-error.log
 # Environment variables
 .env.local
 .env
-.env.*.local
 *.log
 logs/
 
