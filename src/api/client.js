@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { VITE_API_BASE } from '@env';
 import { messageForStatus, toneForStatus } from '../constants/messages';
-import { STORAGE_KEYS } from '../constants/storage';
 
 // Axios instance for the Akshar Connect API.
 //
@@ -9,19 +8,14 @@ import { STORAGE_KEYS } from '../constants/storage';
 //   1. Responses are a StandardResponse envelope { status_code, detail, data },
 //      where `status_code` is a BOOLEAN success flag, not an HTTP status int.
 //   2. The refresh token is an HttpOnly cookie rotated by POST /auth/refresh,
-//      so every request needs withCredentials. The access token is mirrored into
-//      sessionStorage (see below) so a reload can reuse it while it is still
-//      valid, and only spends a /auth/refresh once it has actually expired.
+//      so every request needs withCredentials. On the phone the native
+//      networking layer holds that cookie; the access token lives in memory.
 
-const BASE = VITE_API_BASE ?? '';
+const BASE = (VITE_API_BASE ?? '').replace(/\/+$/, '');
 
 /**
- * An API path as a URL the *browser* can fetch on its own — an `<img src>`, a
- * download link, anything that does not go through axios.
- *
- * In dev that is same-origin and the Vite proxy handles it; in production it is
- * the configured API origin. Writing `/api/v1/...` straight into a `src` works
- * in dev and 404s in production, where the app and the API are different hosts.
+ * An API path as a full URL, for anything that does not go through axios —
+ * an <Image source={{ uri }}>, a download link.
  */
 export const apiUrl = (path) => `${BASE}${path}`;
 
@@ -70,71 +64,48 @@ export const setAccessToken = (t) => { accessToken = t; };
 export const getAccessToken = () => accessToken;
 export const setAuthLostHandler = (fn) => { onAuthLost = fn; };
 
-// Reload should not cost a round-trip. The Token record is mirrored here and the
-// JWT's own `exp` decides whether a reload can pick it back up or has to fall
-// back to the cookie — so /auth/refresh fires when the access token expires, not
-// once per page load.
-//
-// sessionStorage, not localStorage: the mirror dies with the tab, leaving the
-// HttpOnly cookie as the only thing that survives a browser restart. The window
-// where a stolen access token is useful is its remaining lifetime; the refresh
-// token stays out of JS reach either way.
-const SESSION_KEY = STORAGE_KEYS.token;
+// The Token record is held in memory for the life of the app process. The web
+// app mirrors it into sessionStorage; there is no storage library here yet, so
+// a cold start always begins signed out.
 const CLOCK_SKEW_MS = 30_000;
+let sessionRecord = null;
 
 /** Millisecond `exp` from a JWT payload, or null when it cannot be read. */
 function jwtExpiry(jwt) {
   try {
     const b64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const { exp } = JSON.parse(atob(b64));
+    const { exp } = JSON.parse(global.atob(b64));
     return typeof exp === 'number' ? exp * 1000 : null;
   } catch {
     return null;
   }
 }
 
-function readRecord() {
-  try {
-    return JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null');
-  } catch {
-    return null; // private mode, or someone hand-edited the entry
-  }
-}
-
 /**
- * Make `token` the current bearer and mirror it for the next reload. Fields the
- * refresh response omits (it carries no user_id) are carried over from the
- * stored record, so resuming never has to re-resolve the user via /users/me.
- * Returns the merged record.
+ * Make `token` the current bearer and remember it. Fields the refresh response
+ * omits (it carries no user_id) are carried over from the held record, so
+ * resuming never has to re-resolve the user via /users/me. Returns the merged
+ * record.
  */
 export function rememberSession(token) {
-  const merged = { ...(readRecord() ?? {}), ...token };
+  const merged = { ...(sessionRecord ?? {}), ...token };
   setAccessToken(merged.access_token ?? null);
-  try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(merged));
-  } catch { /* private mode — falls back to refresh-on-reload */ }
+  sessionRecord = merged;
   return merged;
 }
 
 export function forgetSession() {
   setAccessToken(null);
-  try {
-    sessionStorage.removeItem(SESSION_KEY);
-    // Everything else scoped to the SIGN-IN rather than to the tab goes with it.
-    // The birthday greeting is shown once per session and marks itself seen; if
-    // that mark outlived the session, signing back in on the same tab would
-    // swallow it.
-    sessionStorage.removeItem(STORAGE_KEYS.birthdayWishesSeen);
-  } catch { /* private mode */ }
+  sessionRecord = null;
 }
 
 /**
- * The mirrored Token if its JWT is still comfortably unexpired, else null — and
- * an expired mirror is dropped on the way out. An unreadable `exp` counts as
+ * The held Token if its JWT is still comfortably unexpired, else null — and an
+ * expired record is dropped on the way out. An unreadable `exp` counts as
  * expired: without proof the token is live, the cookie is the safer path.
  */
 export function resumeSession() {
-  const record = readRecord();
+  const record = sessionRecord;
   const exp = record?.access_token ? jwtExpiry(record.access_token) : null;
   if (!exp || exp - CLOCK_SKEW_MS <= Date.now()) {
     if (record) forgetSession();
@@ -150,17 +121,12 @@ export function resumeSession() {
  * handing between cells, a tunnel, a wifi/5G switch mid-flight: the socket goes
  * quiet and the promise neither resolves nor rejects, ever.
  *
- * Nothing downstream can recover from that. A React Query mutation's `onSettled`
- * never runs, so any pending flag it owns is never cleared — which is how a
- * marked row on the Attendance screen kept its spinner and stayed disabled until
- * the page was reloaded. The bug looked like the Attendance screen's; it was
- * this line's absence.
+ * Nothing downstream can recover from that: any pending flag the caller owns is
+ * never cleared, so a spinner spins and a button stays disabled forever.
  *
  * 60s rather than something tight, because this is a BACKSTOP, not a latency
  * budget. It exists to convert "hung forever" into "failed, and here is a
- * message" — screens that need a faster answer pass their own shorter timeout
- * (`attendanceService.markBulk` does). The slowest thing here is a report export
- * building a workbook server-side, which is well inside a minute.
+ * message" — callers that need a faster answer pass their own shorter timeout.
  */
 export const api = axios.create({
   baseURL: BASE,
@@ -249,7 +215,6 @@ export async function refreshAccessToken() {
       .then((res) => {
         const token = res.data?.data;
         if (!token?.access_token) throw new ApiError(messageForStatus(401), { status: 401 });
-        // Re-mirror, or the next reload would resume the token we just replaced.
         return rememberSession(token);
       })
       .finally(() => { refreshInFlight = null; });
@@ -274,7 +239,7 @@ api.interceptors.response.use(
   },
   async (error) => {
     const { response, config } = error;
-    // No response at all: offline, DNS, CORS, timeout. axios's own message
+    // No response at all: offline, DNS, timeout. axios's own message
     // ("Network Error") is not something to show a user.
     if (!response) throw new ApiError(messageForStatus(0), { status: 0 });
 

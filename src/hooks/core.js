@@ -1,11 +1,13 @@
-import { useContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { useContext, useCallback, useEffect, useState } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { PermissionContext } from '../contexts/PermissionContext';
-import { ToastContext } from '../contexts/ToastContext';
-import { readRows } from '../services/paginationService';
 
 // Context accessors and the UI primitives every domain uses. Nothing here talks
 // to the API — that is what makes this the one hook file with no service import.
+//
+// Mobile port: useToast and useTableRows are left out until ToastContext has a
+// native UI (it renders HTML and uses lucide-react) and services/paginationService
+// exists in this app.
 
 function required(ctx, name) {
   if (!ctx) throw new Error(`${name} must be used inside its provider`);
@@ -14,7 +16,6 @@ function required(ctx, name) {
 
 export const useAuth = () => required(useContext(AuthContext), 'useAuth');
 export const usePermissions = () => required(useContext(PermissionContext), 'usePermissions');
-export const useToast = () => required(useContext(ToastContext), 'useToast');
 
 /** Open/close state for modals, drawers and dropdowns. */
 export function useDisclosure(initial = false) {
@@ -51,9 +52,4 @@ export function useDismissable(ref, onDismiss, active = true) {
       document.removeEventListener('mousedown', onClick);
     };
   }, [ref, onDismiss, active]);
-}
-
-/** List endpoints return either a bare array or a paginated envelope. */
-export function useTableRows(data) {
-  return useMemo(() => readRows(data), [data]);
 }

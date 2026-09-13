@@ -6,25 +6,54 @@
  */
 
 import { StatusBar, StyleSheet, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
+import { AuthProvider } from './src/contexts/AuthContext';
 import LoginPage from './src/pages/LoginPage';
 
 function App() {
   return (
     <SafeAreaProvider style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
 
+// Insets are applied once here, so screens must not add their own
+// SafeAreaView or the padding doubles up.
 function AppContent() {
-  return <LoginPage />;
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      style={[
+        styles.content,
+        {
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        },
+      ]}
+    >
+      <LoginPage />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  // Painted behind the status bar and home indicator areas.
+  content: {
+    flex: 1,
+    backgroundColor: '#F0F4F8',
   },
 });
 

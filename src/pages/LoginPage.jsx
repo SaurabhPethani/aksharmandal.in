@@ -12,16 +12,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { VITE_API_BASE } from '@env';
 import SiteFooter from '../components/SiteFooter';
+import { useAuth } from '../hooks/core';
 
 const PIN_LENGTH = 6;
 const MIN_PASSWORD_LENGTH = 6;
 const LOCKOUT_LIMIT = 5;
-const API_BASE = String(VITE_API_BASE || '').replace(/\/+$/, '');
-let scopedSetupToken = null;
 
 const iconNames = {
   eye: 'eye',
@@ -38,69 +35,6 @@ function NativeIcon({ name, size = 20, color = '#9BB5CB' }) {
   return (
     <MaterialCommunityIcons name={iconNames[name]} size={size} color={color} />
   );
-}
-
-const paths = {
-  init: '/api/v1/auth/login-init',
-  password: '/api/v1/auth/login/password',
-  pin: '/api/v1/auth/login/pin',
-  otp: '/api/v1/auth/verify-otp',
-  setup: '/api/v1/auth/set-credentials',
-};
-
-function detailFrom(body, fallback) {
-  if (typeof body?.detail === 'string') return body.detail;
-  if (body?.detail && typeof body.detail.message === 'string')
-    return body.detail.message;
-  if (Array.isArray(body?.detail))
-    return (
-      body.detail
-        .map(item => item?.msg)
-        .filter(Boolean)
-        .join('; ') || fallback
-    );
-  return fallback;
-}
-
-async function request(path, payload, auth = false) {
-  if (!API_BASE) throw new Error('API base URL is missing from .env');
-  let response;
-  try {
-    response = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        ...(auth && scopedSetupToken
-          ? { Authorization: `Bearer ${scopedSetupToken}` }
-          : {}),
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    const error = new Error('Network error. Please check your connection.');
-    error.status = 0;
-    throw error;
-  }
-
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok || body?.status_code === false) {
-    const error = new Error(
-      detailFrom(body, `Request failed (${response.status})`),
-    );
-    error.status = response.status;
-    error.failure =
-      body?.detail && typeof body.detail === 'object'
-        ? {
-            isLocked: body.detail.is_locked === true,
-            failedAttempts: Number.isInteger(body.detail.failed_attempts)
-              ? body.detail.failed_attempts
-              : null,
-          }
-        : null;
-    throw error;
-  }
-  return body?.data ?? body;
 }
 
 function Field({
@@ -256,6 +190,7 @@ function CodeInput({
 }
 
 export default function LoginPage() {
+  const auth = useAuth();
   const [step, setStep] = useState('main');
   const [tab, setTab] = useState('pin');
   const [mobile, setMobile] = useState('');
@@ -326,10 +261,10 @@ export default function LoginPage() {
       if (tab === 'pin') {
         if (pinValue.length !== PIN_LENGTH)
           throw new Error(`Enter all ${PIN_LENGTH} PIN digits`);
-        await request(paths.pin, { mobile_number: mobile, pin: pinValue });
+        await auth.loginWithPin(mobile, pinValue);
       } else {
         if (!password) throw new Error('Enter your password');
-        await request(paths.password, { mobile_number: mobile, password });
+        await auth.loginWithPassword(mobile, password);
       }
       setNotice('Signed in successfully.');
     });
@@ -337,10 +272,7 @@ export default function LoginPage() {
   const startSetup = () =>
     run(async () => {
       if (!mobileValid) throw new Error('Enter your mobile number first');
-      const result = await request(paths.init, {
-        mobile_number: mobile,
-        is_forgot_password: true,
-      });
+      const result = await auth.loginInit(mobile, true);
       setPurpose(result?.purpose || 'RESET');
       setNotice(result?.message || 'OTP sent to your WhatsApp number.');
       setOtp('');
@@ -351,12 +283,7 @@ export default function LoginPage() {
     run(async () => {
       if (otpValue.length !== PIN_LENGTH)
         throw new Error(`Enter all ${PIN_LENGTH} OTP digits`);
-      const token = await request(paths.otp, {
-        mobile_number: mobile,
-        otp: otpValue,
-        purpose,
-      });
-      scopedSetupToken = token?.access_token || null;
+      await auth.verifyOtp(mobile, otpValue, purpose);
       setStep('setup');
     });
 
@@ -391,16 +318,7 @@ export default function LoginPage() {
       if (newPin.length !== PIN_LENGTH)
         throw new Error(`PIN must be exactly ${PIN_LENGTH} digits`);
       if (newPin !== confirmPin) throw new Error('PINs do not match');
-      await request(
-        paths.setup,
-        {
-          mobile_number: mobile,
-          password: newPassword,
-          pin: newPin,
-        },
-        true,
-      );
-      scopedSetupToken = null;
+      await auth.completeSetup(mobile, newPassword, newPin);
       setStep('main');
       setTab('pin');
       setPin('');
@@ -417,7 +335,7 @@ export default function LoginPage() {
         : 'Welcome Back';
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
+    <View style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.safe}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -692,7 +610,7 @@ export default function LoginPage() {
         </ScrollView>
         <SiteFooter light />
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

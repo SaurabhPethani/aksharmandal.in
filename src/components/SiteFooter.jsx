@@ -1,6 +1,5 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { VITE_APP_VERSION } from '@env';
 
 export default function SiteFooter({ transparent = false, light = false }) {
@@ -16,22 +15,16 @@ export default function SiteFooter({ transparent = false, light = false }) {
       : styles.textOnSolid;
 
   return (
-    // The footer owns the bottom safe area so its background reaches the
-    // bottom edge of the screen instead of stopping above the home indicator.
-    <SafeAreaView edges={['bottom']} style={background}>
-      <View style={styles.footer}>
-        <Text style={[styles.text, textColor]}>
-          {'© 2026 Akshar Connect. All rights reserved.'}
-          {VITE_APP_VERSION ? (
-            // Tabular digits, and a non-breaking space so "v" can never wrap
-            // away from the number it labels on a narrow phone.
-            <Text style={styles.version}>
-              {` · v${VITE_APP_VERSION}`}
-            </Text>
-          ) : null}
-        </Text>
-      </View>
-    </SafeAreaView>
+    <View style={[styles.footer, background]}>
+      <Text style={[styles.text, textColor]}>
+        {'© 2026 Akshar Connect. All rights reserved.'}
+        {VITE_APP_VERSION ? (
+          // Tabular digits, and a non-breaking space so "v" can never wrap
+          // away from the number it labels on a narrow phone.
+          <Text style={styles.version}>{` · v${VITE_APP_VERSION}`}</Text>
+        ) : null}
+      </Text>
+    </View>
   );
 }
 
