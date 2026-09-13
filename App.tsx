@@ -6,14 +6,15 @@
  */
 
 import { StatusBar, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import LoginPage from './src/pages/LoginPage';
 
 function App() {
   return (
-    <View style={styles.container}>
+    <SafeAreaProvider style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <AppContent />
-    </View>
+    </SafeAreaProvider>
   );
 }
 

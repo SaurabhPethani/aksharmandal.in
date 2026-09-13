@@ -37,6 +37,7 @@ export const AUTH_PATHS = {
   // accounts they can open, and the endpoint that opens one.
   myAccounts: '/api/v1/auth/my-accounts',
   switchAccount: '/api/v1/auth/switch-account',
+  me: '/api/v1/users/me',
 };
 
 /**

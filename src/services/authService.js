@@ -32,7 +32,7 @@ export const authService = {
 
   logout: () => api.post(AUTH_PATHS.logout),
 
-  me: () => api.get('/api/v1/users/me'),
+  me: () => api.get(AUTH_PATHS.me),
 
   /** The accounts this person may open: themselves + any managed children. */
   getMyAccounts: () => api.get(AUTH_PATHS.myAccounts),
