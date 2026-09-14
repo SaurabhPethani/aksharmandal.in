@@ -11,7 +11,10 @@ import { messageForStatus, toneForStatus } from '../constants/messages';
 //      so every request needs withCredentials. On the phone the native
 //      networking layer holds that cookie; the access token lives in memory.
 
-const BASE = (VITE_API_BASE ?? '').replace(/\/+$/, '');
+// Keep local debug builds usable even when `.env` has not been created yet or
+// Metro is started from a clean checkout. Production/CI builds should always
+// provide VITE_API_BASE explicitly.
+const BASE = (VITE_API_BASE || 'https://uat.aksharmandal.in/aksharconnect').replace(/\/+$/, '');
 
 /**
  * An API path as a full URL, for anything that does not go through axios —

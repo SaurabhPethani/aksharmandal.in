@@ -63,7 +63,8 @@ const MAX_REMEMBERED = 50;
 
 function readStamps() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.photoStamps) || '{}');
+    const raw = typeof global !== 'undefined' && global.localStorage ? global.localStorage.getItem(STORAGE_KEYS.photoStamps) : null;
+    const parsed = raw ? JSON.parse(raw) : {};
     // Anything but an object of numbers is treated as absent rather than
     // trusted: this is parsed on every cold start, and a hand-edited or
     // half-written value must not be able to throw the module's first render.
@@ -91,7 +92,9 @@ function bumpPhotoStamp(userId) {
     for (const [key] of oldest) photoStamps.delete(key);
   }
   try {
-    localStorage.setItem(STORAGE_KEYS.photoStamps, JSON.stringify(Object.fromEntries(photoStamps)));
+    if (typeof global !== 'undefined' && global.localStorage) {
+      global.localStorage.setItem(STORAGE_KEYS.photoStamps, JSON.stringify(Object.fromEntries(photoStamps)));
+    }
   } catch { /* private mode — the stamp still works for this tab */ }
   for (const notify of stampWatchers) notify();
 }

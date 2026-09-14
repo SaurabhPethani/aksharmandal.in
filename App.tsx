@@ -5,13 +5,15 @@
  * @format
  */
 
-import { StatusBar, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/contexts/AuthContext';
 import LoginPage from './src/pages/LoginPage';
+import DashboardPage from './src/pages/DashboardPage';
+import { useAuth } from './src/hooks/core';
 
 function App() {
   return (
@@ -28,6 +30,7 @@ function App() {
 // SafeAreaView or the padding doubles up.
 function AppContent() {
   const insets = useSafeAreaInsets();
+  const { status } = useAuth();
 
   return (
     <View
@@ -41,7 +44,7 @@ function AppContent() {
         },
       ]}
     >
-      <LoginPage />
+      {status === 'booting' ? <ActivityIndicator size="large" color="#003158" /> : status === 'authed' ? <DashboardPage /> : <LoginPage />}
     </View>
   );
 }

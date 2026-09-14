@@ -46,7 +46,7 @@ export function useNotifications() {
       ...fromMyTransferRequests(rowsOf(mineQ)),
       ...fromInfoRequests(rowsOf(infoQ)),
     ]).map((entry) => ({ ...entry, unread: isUnread(entry, watermark) })),
-    [pendingQ.data, mineQ.data, infoQ.data, watermark]
+    [pendingQ, mineQ, infoQ, watermark]
   );
 
   const unreadCount = items.filter((i) => i.unread).length;
