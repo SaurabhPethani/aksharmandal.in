@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
 import { useAuth } from '../hooks/core';
 
@@ -25,7 +25,7 @@ const iconNames = {
   eyeOff: 'eye-off',
   key: 'key-variant',
   lock: 'lock-outline',
-  message: 'message-circle-outline',
+  message: 'message-outline',
   phone: 'phone-outline',
   shield: 'shield-check-outline',
   check: 'check-circle',
@@ -33,7 +33,7 @@ const iconNames = {
 
 function NativeIcon({ name, size = 20, color = '#9BB5CB' }) {
   return (
-    <MaterialCommunityIcons name={iconNames[name]} size={size} color={color} />
+    <MaterialDesignIcons name={iconNames[name]} size={size} color={color} />
   );
 }
 
