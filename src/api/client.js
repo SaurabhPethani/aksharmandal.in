@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { VITE_API_BASE } from '@env';
 import { messageForStatus, toneForStatus } from '../constants/messages';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Axios instance for the Akshar Connect API.
 //
@@ -14,13 +15,15 @@ import { messageForStatus, toneForStatus } from '../constants/messages';
 // Keep local debug builds usable even when `.env` has not been created yet or
 // Metro is started from a clean checkout. Production/CI builds should always
 // provide VITE_API_BASE explicitly.
-const BASE = (VITE_API_BASE || 'https://uat.aksharmandal.in/aksharconnect').replace(/\/+$/, '');
+const BASE = (
+  VITE_API_BASE || 'https://uat.aksharmandal.in/aksharconnect'
+).replace(/\/+$/, '');
 
 /**
  * An API path as a full URL, for anything that does not go through axios —
  * an <Image source={{ uri }}>, a download link.
  */
-export const apiUrl = (path) => `${BASE}${path}`;
+export const apiUrl = path => `${BASE}${path}`;
 
 export const AUTH_PATHS = {
   loginInit: '/api/v1/auth/login-init',
@@ -61,11 +64,15 @@ export class ApiError extends Error {
 }
 
 let accessToken = null;
-let onAuthLost = () => { };
+let onAuthLost = () => {};
 
-export const setAccessToken = (t) => { accessToken = t; };
+export const setAccessToken = t => {
+  accessToken = t;
+};
 export const getAccessToken = () => accessToken;
-export const setAuthLostHandler = (fn) => { onAuthLost = fn; };
+export const setAuthLostHandler = fn => {
+  onAuthLost = fn;
+};
 
 // The Token record is held in memory for the life of the app process. The web
 // app mirrors it into sessionStorage; there is no storage library here yet, so
@@ -90,16 +97,18 @@ function jwtExpiry(jwt) {
  * resuming never has to re-resolve the user via /users/me. Returns the merged
  * record.
  */
-export function rememberSession(token) {
+export async function rememberSession(token) {
   const merged = { ...(sessionRecord ?? {}), ...token };
   setAccessToken(merged.access_token ?? null);
   sessionRecord = merged;
+  await AsyncStorage.setItem('token', merged.access_token);
   return merged;
 }
 
-export function forgetSession() {
+export async function forgetSession() {
   setAccessToken(null);
   sessionRecord = null;
+  await AsyncStorage.removeItem('token');
 }
 
 /**
@@ -147,7 +156,13 @@ export const api = axios.create({
 function readDetail(body, fallback) {
   const d = body?.detail;
   if (typeof d === 'string') return d;
-  if (Array.isArray(d)) return d.map((e) => e?.msg).filter(Boolean).join('; ') || fallback;
+  if (Array.isArray(d))
+    return (
+      d
+        .map(e => e?.msg)
+        .filter(Boolean)
+        .join('; ') || fallback
+    );
   if (d && typeof d === 'object') return d.message || fallback;
   return fallback;
 }
@@ -172,7 +187,9 @@ function readFieldErrors(body) {
   const out = {};
   for (const entry of d) {
     const loc = Array.isArray(entry?.loc) ? entry.loc : [];
-    const field = [...loc].reverse().find((p) => typeof p === 'string' && p !== 'body');
+    const field = [...loc]
+      .reverse()
+      .find(p => typeof p === 'string' && p !== 'body');
     if (field && entry?.msg && !(field in out)) out[field] = entry.msg;
   }
   return Object.keys(out).length ? out : null;
@@ -195,11 +212,13 @@ function readFailure(body) {
   return {
     message: typeof d.message === 'string' ? d.message : null,
     isLocked: d.is_locked === true,
-    failedAttempts: Number.isInteger(d.failed_attempts) ? d.failed_attempts : null,
+    failedAttempts: Number.isInteger(d.failed_attempts)
+      ? d.failed_attempts
+      : null,
   };
 }
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(config => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   return config;
 });
@@ -215,24 +234,30 @@ export async function refreshAccessToken() {
         withCredentials: true,
         headers: { Accept: 'application/json' },
       })
-      .then((res) => {
+      .then(res => {
         const token = res.data?.data;
-        if (!token?.access_token) throw new ApiError(messageForStatus(401), { status: 401 });
+        if (!token?.access_token)
+          throw new ApiError(messageForStatus(401), { status: 401 });
         return rememberSession(token);
       })
-      .finally(() => { refreshInFlight = null; });
+      .finally(() => {
+        refreshInFlight = null;
+      });
   }
   return refreshInFlight;
 }
 
 api.interceptors.response.use(
-  (res) => {
+  res => {
     const body = res.data;
     // Pass through non-envelope payloads (blobs, plain values) untouched.
-    if (!body || typeof body !== 'object' || !('status_code' in body)) return body;
+    if (!body || typeof body !== 'object' || !('status_code' in body))
+      return body;
     if (body.status_code === false) {
       throw new ApiError(readDetail(body, messageForStatus(res.status)), {
-        status: res.status, detail: body.detail, body,
+        status: res.status,
+        detail: body.detail,
+        body,
       });
     }
     // Write endpoints put their human-readable result in `detail` and leave
@@ -240,7 +265,7 @@ api.interceptors.response.use(
     // that surface it (toasts) ask for the envelope with { envelope: true }.
     return res.config?.envelope ? body : body.data;
   },
-  async (error) => {
+  async error => {
     const { response, config } = error;
     // No response at all: offline, DNS, timeout. axios's own message
     // ("Network Error") is not something to show a user.
@@ -260,10 +285,13 @@ api.interceptors.response.use(
       }
     }
 
-    throw new ApiError(readDetail(response.data, messageForStatus(response.status)), {
-      status: response.status,
-      detail: readDetail(response.data, null),
-      body: response.data,
-    });
-  }
+    throw new ApiError(
+      readDetail(response.data, messageForStatus(response.status)),
+      {
+        status: response.status,
+        detail: readDetail(response.data, null),
+        body: response.data,
+      },
+    );
+  },
 );

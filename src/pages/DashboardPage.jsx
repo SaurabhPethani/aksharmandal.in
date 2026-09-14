@@ -207,13 +207,11 @@ function Drawer({ visible, onClose, onSignOut, roleName }) {
       <Pressable style={styles.drawerBackdrop} onPress={onClose} />
       <Animated.View style={[styles.drawer, { transform: [{ translateX: slide }] }]}>
         <View style={styles.drawerHeader}>
-          <View style={styles.drawerLogo}>
-            <Text style={styles.drawerLogoText}>a</Text>
-          </View>
-          <View style={styles.flex1}>
-            <Text style={styles.drawerTitle}>Akshar</Text>
-            <Text style={styles.drawerSub}>Connect</Text>
-          </View>
+          <Image
+  source={require('../assets/logo-square.png')}
+  style={styles.drawerLogo}
+  resizeMode="contain"
+/>
           <Pressable onPress={onClose} style={styles.drawerClose}>
             <MaterialCommunityIcons name="close" size={20} color={COLORS.surface} />
           </Pressable>
@@ -235,19 +233,19 @@ function Drawer({ visible, onClose, onSignOut, roleName }) {
               <MaterialCommunityIcons
                 name={icon}
                 size={20}
-                color={active ? COLORS.surface : '#C5D8E8'}
+                color={active ? COLORS.navy : '#C5D8E8'}
               />
               <Text style={[styles.drawerItemText, active && styles.drawerItemTextActive]}>
                 {label}
               </Text>
-              <MaterialCommunityIcons name="chevron-right" size={18} color="#7EA1BA" />
+              <MaterialCommunityIcons name="chevron-right" size={18} color={active ? COLORS.navy : "#7EA1BA"} />
             </Pressable>
           ))}
         </ScrollView>
 
-        <Pressable onPress={onSignOut} style={styles.drawerLogout}>
-          <MaterialCommunityIcons name="logout" size={19} color="#FFD0B0" />
-          <Text style={styles.drawerLogoutText}>Logout</Text>
+        <Pressable onPress={onSignOut}  style={[styles.drawerItem]}>
+          <MaterialCommunityIcons name="logout" size={20} color="#C5D8E8" />
+          <Text style={[styles.drawerItemText]}>Logout</Text>
         </Pressable>
       </Animated.View>
     </View>
@@ -350,7 +348,7 @@ function MetricCard({ icon, label, value, detail, tone = 'navy', action = false,
       </View>
       <View style={styles.metricValueContainer}>
         {typeof value === 'string' || typeof value === 'number' ? (
-          <Text style={styles.metricValue} numberOfLines={1}>
+          <Text style={styles.metricValue} numberOfLines={2}>
             {value}
           </Text>
         ) : (
@@ -359,13 +357,13 @@ function MetricCard({ icon, label, value, detail, tone = 'navy', action = false,
       </View>
       {detail ? (
         action ? (
-          <Text style={styles.metricAction} numberOfLines={1}>
+          <Text style={styles.metricAction} numberOfLines={2}>
             {detail}
           </Text>
         ) : (
           <Text
             style={[styles.metricDetail, tone === 'goodText' && styles.greenDetailText]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {detail}
           </Text>
@@ -390,6 +388,7 @@ function ErrorPanel({ message, onRetry }) {
 
 function ThoughtCard({ thought }) {
   const [portrait, setPortrait] = useState(false);
+  console.error('ThoughtCard thought: in card', thought);
   const image = portrait && thought?.image_url_portrait ? thought.image_url_portrait : thought?.image_url;
 
   const handleDownload = async () => {
@@ -437,9 +436,10 @@ function ThoughtCard({ thought }) {
       </View>
 
       <Image
-        source={{ uri: image }}
-        style={portrait ? styles.thoughtPortrait : styles.thoughtLandscape}
-        resizeMode="contain"
+       source={{ uri: encodeURI(image.trim()) }}
+  style={portrait ? styles.thoughtPortrait : styles.thoughtLandscape}
+  resizeMode="contain"
+ 
       />
 
       <View style={styles.thoughtActions}>
@@ -922,7 +922,7 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
           label="Last Sabha"
           value={
             lastSabha ? (
-              <Text numberOfLines={1}>
+              <Text numberOfLines={2}>
                 <Text style={styles.metricValue}>
                   {lastSabha.attended ? 'Attended' : 'Not Attended'}
                 </Text>
@@ -1020,7 +1020,9 @@ export default function DashboardPage() {
             : eventsResult.value?.items || []
           : []
       );
-      setThought(thoughtResult.status === 'fulfilled' ? thoughtResult.value : null);
+      console.error('Thought Result:', thoughtResult);
+      setThought(thoughtResult.status === 'fulfilled' && thoughtResult.value ? thoughtResult.value : null);
+      
     } catch (caught) {
       setError(caught?.message || 'Unable to load dashboard.');
     } finally {
@@ -1130,7 +1132,9 @@ export default function DashboardPage() {
           />
         )}
 
-        <SiteFooter light />
+        <View style={styles.footerBleed}>
+          <SiteFooter />
+        </View>
       </ScrollView>
 
       <Drawer
@@ -1201,18 +1205,31 @@ const styles = StyleSheet.create({
   drawerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent:"space-between",
     paddingTop: 10,
     paddingBottom: 20,
+    width: '100%'
   },
-  drawerLogo: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
+drawerLogo: {
+  width: 80,
+  height: 80,
+  borderRadius: 16,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 10,
+
+  // Subtle white shadow
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 2,
   },
+  shadowOpacity: 0.35,
+  shadowRadius: 4,
+
+  // Android
+  elevation: 8,
+},
   drawerLogoText: {
     color: COLORS.accent,
     fontSize: 28,
@@ -1251,7 +1268,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
   },
-  drawerItemActive: { backgroundColor: 'rgba(255,255,255,0.16)' },
+  drawerItemActive: { backgroundColor: COLORS.background },
   drawerItemText: {
     flex: 1,
     color: '#C5D8E8',
@@ -1259,7 +1276,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 10,
   },
-  drawerItemTextActive: { color: COLORS.surface, fontWeight: '800' },
+  drawerItemTextActive: { color: COLORS.navy, fontWeight: '800' },
   drawerLogout: {
     height: 48,
     borderRadius: 14,
@@ -1272,7 +1289,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   drawerLogoutText: { color: '#FFD0B0', fontSize: 14, fontWeight: '800' },
-  scroll: { padding: 16, paddingTop: 16, paddingBottom: 24 },
+  scroll: { padding: 16, paddingTop: 16, paddingBottom: 0 },
+  footerBleed: { marginHorizontal: -16,paddingTop:14 },
   header: { marginBottom: 16 },
   title: { color: COLORS.navy, fontSize: 24, fontWeight: '800' },
   qrBar: {
@@ -1389,17 +1407,18 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justify: 'space-between',
+    justifyContent: 'space-between',
     rowGap: 12,
+    marginBottom: 14,
   },
   metricCard: {
     width: '48.2%',
-    minHeight: 128,
+    minHeight: 90,
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 14,
+    padding: 12,
     elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1486,7 +1505,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: 16,
-    marginTop: 14,
+    marginBottom: 14,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1759,7 +1778,7 @@ const styles = StyleSheet.create({
   },
   ringPercentText: { color: COLORS.navy, fontSize: 18, fontWeight: '800' },
   ringMissedLabel: { color: COLORS.faint, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
-  greenText: { color: COLORS.green, fontWeight: '800' },
-  redText: { color: COLORS.red, fontWeight: '800' },
-  navyText: { color: COLORS.navy, fontWeight: '800' },
+  greenText: { color: COLORS.green, fontWeight: '800', fontSize: 18 },
+  redText: { color: COLORS.red, fontWeight: '800' , fontSize: 18},
+  navyText: { color: COLORS.navy, fontWeight: '800', fontSize: 18 },
 });
