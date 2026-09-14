@@ -5,6 +5,6 @@ module.exports = {
     '^.+\\.(bmp|gif|jpg|jpeg|mp4|png|psd|svg|webp)$': require.resolve('@react-native/jest-preset/jest/assetFileTransformer.js'),
   },
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|react-native-css-interop|react-native-vector-icons)/)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|react-native-css-interop|@react-native-vector-icons)/)',
   ],
 };

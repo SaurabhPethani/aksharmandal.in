@@ -1,0 +1,14 @@
+diff --git a/node_modules/@react-native-vector-icons/material-design-icons/android/build.gradle b/node_modules/@react-native-vector-icons/material-design-icons/android/build.gradle
+index a5f51d0..7688f5e 100644
+--- a/node_modules/@react-native-vector-icons/material-design-icons/android/build.gradle
++++ b/node_modules/@react-native-vector-icons/material-design-icons/android/build.gradle
+@@ -57,7 +57,8 @@ dependencies {
+ if (isNewArchitectureEnabled()) {
+   react {
+     jsRootDir = file("../src/")
+-    libraryName = "VectorIconsMaterialDesignIcons"
++    // Library name removed via patch-package: the Android package has no native modules, and the
++    // app-level C++ codegen target it registered exceeded Windows' 260-char path limit.
+     codegenJavaPackageName = "com.reactnativevectoricons.material_design_icons"
+   }
+ }
