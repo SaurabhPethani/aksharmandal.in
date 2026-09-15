@@ -21,6 +21,7 @@
     "prettier-plugin-tailwindcss": "^0.5.14",
     "react": "19.2.3",
     "react-native": "0.87.1",
+    "react-native-keychain": "^10.0.0",
     "react-native-reanimated": "^4.6.0",
     "react-native-safe-area-context": "^5.9.1",
     "react-native-svg": "^15.15.5",

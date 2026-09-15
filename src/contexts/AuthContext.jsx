@@ -1,92 +1,271 @@
-import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
 import {
   setAccessToken,
+  getAccessToken,
   setAuthLostHandler,
+  setTokenRefreshedHandler,
   rememberSession,
   resumeSession,
   forgetSession,
 } from '../api/client';
+
 import { authService } from '../services/authService';
-// Imported from the module rather than the hooks barrel: that barrel imports
-// this file, and the cycle would leave one of them undefined at module-eval time.
+
 import { clearAllFilterState } from '../hooks/useFilterState';
+
+import {
+  getBiometricType,
+  isBiometricAvailable,
+  isBiometricLoginEnabled,
+  enableBiometricLogin,
+  authenticateWithBiometric,
+  disableBiometricLogin,
+  updateBiometricToken,
+} from '../services/biometricService';
 
 export const AuthContext = createContext(null);
 
-// Mobile port of the web AuthContext. Left out until what they depend on exists
-// in this app:
-//   - permission loading (/full-context): needs services/permissionService
-//   - clearing the query cache: @tanstack/react-query is not installed
-//   - the session hint and cold-start refresh: need a storage library
-//   - re-reading permissions on focus: used document/window (AppState on mobile)
-// `permissionContext` and `reloadPermissions` stay in the value so consumers
-// keep the same shape.
-
 export function AuthProvider({ children }) {
-  const [status, setStatus] = useState('booting'); // booting | anonymous | authed
-  const [session, setSession] = useState(null); // { userId, isSetupRequired }
-  // Family accounts the signed-in person may operate: themselves + any managed
-  // child accounts. `accountChoicePending` is raised once right after an
-  // interactive login when there is more than one, so the UI can prompt "which
-  // account?"; it is not raised on a silent resume.
+  const [status, setStatus] = useState('booting');
+
+  const [session, setSession] = useState(null);
+
   const [accounts, setAccounts] = useState([]);
+
   const [accountChoicePending, setAccountChoicePending] = useState(false);
+
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+
   const mounted = useRef(true);
+
   const booted = useRef(false);
 
-  // Must re-arm on mount, not just disarm on cleanup: StrictMode mounts twice in
-  // dev, and a cleanup-only version latches this false and swallows every setState.
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+
+    return () => {
+      mounted.current = false;
+    };
   }, []);
 
+  /**
+   * Convert an access token into an
+   * authenticated application session.
+   */
   const establish = useCallback(async (token, { interactive = false } = {}) => {
-    const record = rememberSession(token);
+    const record = await rememberSession(token);
+
     let userId = record.user_id;
-    // user_id is optional on Token; fall back to /users/me when absent.
+
     if (userId == null) {
       const me = await authService.me();
+
       userId = me?.id ?? me?.user_id;
     }
-    if (userId == null) throw new Error('Could not resolve the signed-in user id.');
-    // The family accounts this person can operate (self + managed children).
-    // Best-effort: a member with no children just gets [self], and a failure
-    // must never block an otherwise-good sign-in.
+
+    if (userId == null) {
+      throw new Error('Could not resolve the signed-in user id.');
+    }
+
     let list = [];
-    try { list = await authService.getMyAccounts(); } catch { list = []; }
+
+    try {
+      list = await authService.getMyAccounts();
+    } catch {
+      list = [];
+    }
+
     const accountList = Array.isArray(list) ? list : [];
+
     if (mounted.current) {
       setAccounts(accountList);
-      setSession({ userId, isSetupRequired: record.is_setup_required === true });
-      // Prompt "which account?" only on a fresh interactive login with a choice
-      // to make — never on a silent resume or a deliberate switch.
+
+      setSession({
+        userId,
+        isSetupRequired: record.is_setup_required === true,
+      });
+
       setAccountChoicePending(interactive && accountList.length > 1);
+
       setStatus('authed');
     }
-    return userId;
+
+    return {
+      userId,
+      token: record.access_token,
+    };
   }, []);
 
-  // Open one of the caller's accounts (self or a managed child). The picker is
-  // dismissed either way.
-  const switchTo = useCallback(async (userId) => {
-    const token = await authService.switchAccount(userId);
-    // Remembered list filters belong to the previous profile.
-    clearAllFilterState();
-    await establish(token, { interactive: false });
-    if (mounted.current) setAccountChoicePending(false);
+  /**
+   * Normal PIN login.
+   */
+  const loginWithPin = useCallback(
+    async (mobile, pin) => {
+      const token = await authService.loginWithPin(mobile, pin);
+
+      return establish(token, {
+        interactive: true,
+      });
+    },
+    [establish],
+  );
+
+  /**
+   * Normal password login.
+   */
+  const loginWithPassword = useCallback(
+    async (mobile, password) => {
+      const token = await authService.loginWithPassword(mobile, password);
+
+      return establish(token, {
+        interactive: true,
+      });
+    },
+    [establish],
+  );
+
+  /**
+   * Switch account.
+   */
+  const switchTo = useCallback(
+    async userId => {
+      const token = await authService.switchAccount(userId);
+
+      clearAllFilterState();
+
+      const result = await establish(token, {
+        interactive: false,
+      });
+
+      /*
+       * If biometric login is enabled,
+       * keep its token synchronized.
+       */
+      await updateBiometricToken(result.token);
+
+      if (mounted.current) {
+        setAccountChoicePending(false);
+      }
+
+      return result;
+    },
+    [establish],
+  );
+
+  const dismissAccountChoice = useCallback(() => {
+    setAccountChoicePending(false);
+  }, []);
+
+  /**
+   * Enable biometric login for the
+   * currently authenticated account.
+   */
+  const enableBiometric = useCallback(async () => {
+    const available = await isBiometricAvailable();
+
+    if (!available) {
+      throw new Error(
+        'Biometric authentication is not available on this device.',
+      );
+    }
+
+    const token = getAccessToken();
+
+    if (!token) {
+      throw new Error('No active session is available for biometric login.');
+    }
+
+    const type = await getBiometricType();
+
+    await enableBiometricLogin(token);
+
+    if (mounted.current) {
+      setBiometricAvailable(true);
+      setBiometricEnabled(true);
+    }
+
+    return {
+      enabled: true,
+      type,
+    };
+  }, []);
+
+  /**
+   * Disable biometric login.
+   *
+   * Current application session remains active.
+   */
+  const disableBiometric = useCallback(async () => {
+    await disableBiometricLogin();
+
+    if (mounted.current) {
+      setBiometricEnabled(false);
+    }
+
+    return true;
+  }, []);
+
+  /**
+   * Login using biometric authentication.
+   */
+  const loginWithBiometric = useCallback(async () => {
+    const credentials = await authenticateWithBiometric();
+
+    if (!credentials?.token) {
+      throw new Error(
+        'Biometric authentication was cancelled or no biometric login is configured.',
+      );
+    }
+
+    try {
+      const result = await establish(
+        {
+          access_token: credentials.token,
+        },
+        {
+          interactive: false,
+        },
+      );
+
+      if (mounted.current) {
+        setStatus('authed');
+      }
+
+      return result;
+    } catch (error) {
+      await forgetSession();
+      throw error;
+    }
   }, [establish]);
 
-  const dismissAccountChoice = useCallback(() => setAccountChoicePending(false), []);
-
+  /**
+   * Normal logout.
+   *
+   * Biometric enrollment remains enabled.
+   */
   const signOut = useCallback(async ({ callApi = true } = {}) => {
     if (callApi) {
-      try { await authService.logout(); } catch { /* best effort */ }
+      try {
+        await authService.logout();
+      } catch {
+        // Best effort.
+      }
     }
-    forgetSession();
-    // Remembered list filters are per session — the next person to sign in on
-    // this phone should not inherit someone else's search.
+
+    await forgetSession();
+
     clearAllFilterState();
+
     if (mounted.current) {
       setSession(null);
       setAccounts([]);
@@ -95,79 +274,175 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // A refresh failure anywhere in the app drops us to the login screen.
+  /**
+   * Handle expired/invalid authentication.
+   */
   useEffect(() => {
-    setAuthLostHandler(() => { signOut({ callApi: false }); });
+    setAuthLostHandler(() => {
+      signOut({
+        callApi: false,
+      });
+    });
+
+    return () => {
+      setAuthLostHandler(null);
+    };
   }, [signOut]);
 
-  // On mount, pick up a token still held in memory (a remount inside the same app
-  // process). A cold start has nothing to resume and goes straight to login.
-  // The guard is a ref rather than the usual cancel flag because StrictMode's
-  // second mount must let the first run finish, not abort it.
+  /**
+   * Keep biometric token synchronized after
+   * silent access-token refresh.
+   */
   useEffect(() => {
-    if (booted.current) return;
-    booted.current = true;
+    setTokenRefreshedHandler(async token => {
+      await updateBiometricToken(token);
+    });
 
-    const live = resumeSession();
-    if (!live) {
-      setStatus('anonymous');
+    return () => {
+      setTokenRefreshedHandler(null);
+    };
+  }, []);
+
+  /**
+   * Initial application boot.
+   *
+   * Normal session:
+   *   resumeSession()
+   *
+   * No normal session:
+   *   show login screen
+   *
+   * Biometric credentials are not automatically
+   * opened here. LoginPage controls the biometric
+   * prompt.
+   */
+  useEffect(() => {
+    if (booted.current) {
       return;
     }
+
+    booted.current = true;
+
     (async () => {
+      try {
+        const available = await isBiometricAvailable();
+
+        const enabled = await isBiometricLoginEnabled();
+
+        if (mounted.current) {
+          setBiometricAvailable(available);
+
+          setBiometricEnabled(available && enabled);
+        }
+      } catch {
+        if (mounted.current) {
+          setBiometricAvailable(false);
+          setBiometricEnabled(false);
+        }
+      }
+
+      const live = resumeSession();
+
+      if (!live) {
+        if (mounted.current) {
+          setStatus('anonymous');
+        }
+
+        return;
+      }
+
       try {
         await establish(live);
       } catch {
-        forgetSession();
-        if (mounted.current) setStatus('anonymous');
+        await forgetSession();
+
+        if (mounted.current) {
+          setStatus('anonymous');
+        }
       }
     })();
   }, [establish]);
 
-  const value = useMemo(() => ({
-    status,
-    session,
-    permissionContext: null,
+  const value = useMemo(
+    () => ({
+      status,
 
-    accounts,
-    activeUserId: session?.userId ?? null,
-    accountChoicePending,
-    switchTo,
-    dismissAccountChoice,
+      session,
 
-    loginInit: authService.loginInit,
-    loginWithPassword: async (m, p) => establish(await authService.loginWithPassword(m, p), { interactive: true }),
-    loginWithPin: async (m, p) => establish(await authService.loginWithPin(m, p), { interactive: true }),
+      permissionContext: null,
 
-    /**
-     * verify-otp returns a SETUP/RESET-scoped token, NOT an access token, so this
-     * deliberately does not start a session — it only parks the scoped token as
-     * the bearer so set-credentials can authenticate. setAccessToken, not
-     * rememberSession: remembering it would let a resume treat a scoped token as
-     * a session.
-     */
-    verifyOtp: async (mobile, otp, purpose) => {
-      const token = await authService.verifyOtp(mobile, otp, purpose);
-      setAccessToken(token.access_token);
-      return token;
-    },
+      accounts,
 
-    /**
-     * Completes setup/reset. The backend bumps token_version and invalidates
-     * other sessions, so the scoped token is dropped and the user logs in again.
-     */
-    completeSetup: async (mobile, password, pin) => {
-      const result = await authService.setCredentials(mobile, password, pin);
-      forgetSession();
-      return result;
-    },
+      activeUserId: session?.userId ?? null,
 
-    /** No-op until services/permissionService is ported. */
-    reloadPermissions: async () => null,
-    signOut,
-  }), [
-    status, session, accounts, accountChoicePending,
-    establish, signOut, switchTo, dismissAccountChoice,
-  ]);
+      accountChoicePending,
+
+      switchTo,
+
+      dismissAccountChoice,
+
+      loginInit: authService.loginInit,
+
+      loginWithPassword,
+
+      loginWithPin,
+
+      verifyOtp: async (mobile, otp, purpose) => {
+        const token = await authService.verifyOtp(mobile, otp, purpose);
+
+        setAccessToken(token.access_token);
+
+        return token;
+      },
+
+      completeSetup: async (mobile, password, pin) => {
+        const result = await authService.setCredentials(mobile, password, pin);
+
+        /*
+         * set-credentials invalidates the
+         * existing access token/session.
+         */
+        await forgetSession();
+
+        return result;
+      },
+
+      /*
+       * Biometric functionality.
+       */
+      biometricAvailable,
+
+      biometricEnabled,
+
+      getBiometricType,
+
+      enableBiometric,
+
+      disableBiometric,
+
+      loginWithBiometric,
+
+      reloadPermissions: async () => null,
+
+      signOut,
+    }),
+    [
+      status,
+      session,
+      accounts,
+      accountChoicePending,
+      switchTo,
+      dismissAccountChoice,
+      loginWithPassword,
+      loginWithPin,
+      biometricAvailable,
+      biometricEnabled,
+      enableBiometric,
+      disableBiometric,
+      loginWithBiometric,
+      signOut,
+    ],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

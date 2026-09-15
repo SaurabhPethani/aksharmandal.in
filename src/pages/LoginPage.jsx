@@ -27,6 +27,7 @@ const iconNames = {
   message: 'message-outline',
   phone: 'phone-outline',
   shield: 'shield-check-outline',
+  fingerprint: 'fingerprint',
   check: 'check-circle',
 };
 
@@ -49,6 +50,8 @@ function Field({
   keyboardType = 'default',
   placeholder,
   editable = true,
+  onSubmitEditing,
+  returnKeyType,
 }) {
   const [focused, setFocused] = useState(false);
   const inputRef = useRef(null);
@@ -76,6 +79,8 @@ function Field({
           placeholder={placeholder}
           placeholderTextColor="#A7BACA"
           editable={editable}
+          onSubmitEditing={onSubmitEditing}
+          returnKeyType={returnKeyType}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           style={styles.input}
@@ -207,6 +212,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [failure, setFailure] = useState(null);
+  const [biometricBusy, setBiometricBusy] = useState(false);
 
   const mobileValid = mobile.length === 10;
   const locked = failure?.isLocked === true;
@@ -250,6 +256,29 @@ export default function LoginPage() {
       setError(caught.message || 'Something went wrong');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const biometricLogin = async () => {
+    if (
+      biometricBusy ||
+      !auth.biometricAvailable ||
+      !auth.biometricEnabled
+    ) {
+      return;
+    }
+
+    setBiometricBusy(true);
+    setError('');
+
+    try {
+      await auth.loginWithBiometric();
+
+      setNotice('Signed in successfully.');
+    } catch (biometricError) {
+      setError(biometricError?.message || 'Biometric authentication failed.');
+    } finally {
+      setBiometricBusy(false);
     }
   };
 
@@ -446,6 +475,8 @@ export default function LoginPage() {
                     }
                     placeholder="Enter your password"
                     editable={!busy}
+                    onSubmitEditing={() => login()}
+                    returnKeyType="go"
                   />
                 )}
                 <Pressable
@@ -461,6 +492,32 @@ export default function LoginPage() {
                     {busy ? 'Please wait...' : 'Continue'}
                   </Text>
                 </Pressable>
+                {auth.biometricAvailable && auth.biometricEnabled && (
+                  <>
+                    <Text style={styles.biometricOr}>OR</Text>
+
+                    <Pressable
+                      style={styles.biometricButton}
+                      onPress={biometricLogin}
+                      disabled={biometricBusy || busy}
+                    >
+                      {biometricBusy ? (
+                        <ActivityIndicator size="small" />
+                      ) : (
+                        <>
+                          <NativeIcon
+                            name="fingerprint"
+                            size={25}
+                            color="#FFFFFF"
+                          />
+                          <Text style={styles.biometricButtonText}>
+                            Login with Biometrics
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </>
+                )}
                 <Pressable
                   style={({ pressed }) => pressed && styles.pressedLink}
                   onPress={startSetup}
@@ -806,4 +863,26 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   loader: { marginTop: 8 },
+  biometricOr: {
+    textAlign: 'center',
+    marginVertical: 12,
+    opacity: 0.6,
+  },
+
+  biometricButton: {
+    minHeight: 52,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
+  biometricButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });

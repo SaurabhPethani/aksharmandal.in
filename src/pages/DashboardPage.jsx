@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Image,
   Linking,
@@ -39,10 +40,25 @@ const COLORS = {
   chartBlue: '#3389C9',
 };
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
-const numberText = value => (value == null ? '—' : Number(value).toLocaleString('en-IN'));
-const qrUrl = userId => (userId ? `${API_BASE}/api/v1/qr/codes/akshar-connect-${userId}.jpeg` : null);
+const numberText = value =>
+  value == null ? '—' : Number(value).toLocaleString('en-IN');
+const qrUrl = userId =>
+  userId ? `${API_BASE}/api/v1/qr/codes/akshar-connect-${userId}.jpeg` : null;
 
 function weekRange(weekDate, { live = false } = {}) {
   if (!weekDate) return null;
@@ -107,13 +123,16 @@ function buildChartPoints(weeks) {
       const present = Number(w?.present_count) || (w?.attended ? 1 : 0);
       const absent = Number(w?.absent_count) || (w?.attended === false ? 1 : 0);
       const total = present + absent;
-      const pct = w?.present_percentage != null
-        ? Number(w.present_percentage)
-        : w?.attended != null
-        ? (w.attended ? 100 : 0)
-        : total > 0
-        ? (present / total) * 100
-        : 0;
+      const pct =
+        w?.present_percentage != null
+          ? Number(w.present_percentage)
+          : w?.attended != null
+            ? w.attended
+              ? 100
+              : 0
+            : total > 0
+              ? (present / total) * 100
+              : 0;
 
       return {
         key: read?.key || String(w?.week_date || ''),
@@ -122,7 +141,14 @@ function buildChartPoints(weeks) {
         absent,
         total,
         percentage: Math.round(pct * 10) / 10,
-        ratio: total > 0 ? `${present}/${total}` : w?.attended != null ? (w.attended ? 'P' : 'A') : '0/0',
+        ratio:
+          total > 0
+            ? `${present}/${total}`
+            : w?.attended != null
+              ? w.attended
+                ? 'P'
+                : 'A'
+              : '0/0',
       };
     })
     .sort((a, b) => String(a.key).localeCompare(String(b.key)));
@@ -168,28 +194,49 @@ function TopBar({ onMenu }) {
           accessibilityLabel="Help and FAQ"
           style={styles.topButton}
         >
-          <MaterialCommunityIcons name="book-open-outline" size={22} color={COLORS.surface} />
+          <MaterialCommunityIcons
+            name="book-open-outline"
+            size={22}
+            color={COLORS.surface}
+          />
         </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Notifications"
           style={styles.topButton}
         >
-          <MaterialCommunityIcons name="bell-outline" size={22} color={COLORS.surface} />
+          <MaterialCommunityIcons
+            name="bell-outline"
+            size={22}
+            color={COLORS.surface}
+          />
         </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Profile"
           style={styles.avatar}
         >
-          <MaterialCommunityIcons name="account" size={22} color={COLORS.surface} />
+          <MaterialCommunityIcons
+            name="account"
+            size={22}
+            color={COLORS.surface}
+          />
         </Pressable>
       </View>
     </View>
   );
 }
 
-function Drawer({ visible, onClose, onSignOut, roleName }) {
+function Drawer({
+  visible,
+  onClose,
+  onSignOut,
+  roleName,
+  biometricAvailable,
+  biometricEnabled,
+  biometricBusy,
+  onToggleBiometric,
+}) {
   const slide = useRef(new Animated.Value(-320)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(visible);
@@ -236,48 +283,94 @@ function Drawer({ visible, onClose, onSignOut, roleName }) {
 
   return (
     <View style={styles.drawerLayer}>
-      <Animated.View style={[styles.drawer, { transform: [{ translateX: slide }] }]}>
+      <Animated.View
+        style={[styles.drawer, { transform: [{ translateX: slide }] }]}
+      >
         <View style={styles.drawerHeader}>
           <Image
-  source={require('../assets/logo-square.png')}
-  style={styles.drawerLogo}
-  resizeMode="contain"
-/>
+            source={require('../assets/logo-square.png')}
+            style={styles.drawerLogo}
+            resizeMode="contain"
+          />
           <Pressable onPress={onClose} style={styles.drawerClose}>
-            <MaterialCommunityIcons name="close" size={20} color={COLORS.surface} />
+            <MaterialCommunityIcons
+              name="close"
+              size={20}
+              color={COLORS.surface}
+            />
           </Pressable>
         </View>
 
         <View style={styles.roleBadge}>
-          <Text style={styles.roleBadgeText}>{roleName || 'Sabha DB Manager'}</Text>
+          <Text style={styles.roleBadgeText}>
+            {roleName || 'Sabha DB Manager'}
+          </Text>
         </View>
 
         <ScrollView style={styles.flex1} showsVerticalScrollIndicator={false}>
-          {[
-            ['view-dashboard-outline', 'Dashboard', true],
-          ].map(([icon, label, active]) => (
-            <Pressable
-              key={label}
-              onPress={onClose}
-              style={[styles.drawerItem, active && styles.drawerItemActive]}
-            >
-              <MaterialCommunityIcons
-                name={icon}
-                size={20}
-                color={active ? COLORS.navy : '#C5D8E8'}
-              />
-              <Text style={[styles.drawerItemText, active && styles.drawerItemTextActive]}>
-                {label}
-              </Text>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={active ? COLORS.navy : "#7EA1BA"} />
-            </Pressable>
-          ))}
+          {[['view-dashboard-outline', 'Dashboard', true]].map(
+            ([icon, label, active]) => (
+              <Pressable
+                key={label}
+                onPress={onClose}
+                style={[styles.drawerItem, active && styles.drawerItemActive]}
+              >
+                <MaterialCommunityIcons
+                  name={icon}
+                  size={20}
+                  color={active ? COLORS.navy : '#C5D8E8'}
+                />
+                <Text
+                  style={[
+                    styles.drawerItemText,
+                    active && styles.drawerItemTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={18}
+                  color={active ? COLORS.navy : '#7EA1BA'}
+                />
+              </Pressable>
+            ),
+          )}
         </ScrollView>
 
-        <Pressable onPress={onSignOut}  style={[styles.drawerItem]}>
+        <Pressable onPress={onSignOut} style={[styles.drawerItem]}>
           <MaterialCommunityIcons name="logout" size={20} color="#C5D8E8" />
           <Text style={[styles.drawerItemText]}>Logout</Text>
         </Pressable>
+
+        {biometricAvailable ? (
+          <Pressable
+            onPress={onToggleBiometric}
+            disabled={biometricBusy}
+            style={styles.drawerItem}
+            accessibilityRole="button"
+            accessibilityLabel={
+              biometricEnabled
+                ? 'Disable biometric login'
+                : 'Enable biometric login'
+            }
+          >
+            {biometricBusy ? (
+              <ActivityIndicator size="small" color="#C5D8E8" />
+            ) : (
+              <MaterialCommunityIcons
+                name="fingerprint"
+                size={20}
+                color="#C5D8E8"
+              />
+            )}
+            <Text style={styles.drawerItemText}>
+              {biometricEnabled
+                ? 'Disable biometric login'
+                : 'Enable biometric login'}
+            </Text>
+          </Pressable>
+        ) : null}
       </Animated.View>
       <Animated.View
         style={[styles.drawerBackdrop, { opacity: backdropOpacity }]}
@@ -317,7 +410,11 @@ function QrBar({ userId, expanded, onToggle, onDownload }) {
             accessibilityRole="button"
             accessibilityLabel="Download QR Code"
           >
-            <MaterialCommunityIcons name="download-outline" size={16} color={COLORS.navy} />
+            <MaterialCommunityIcons
+              name="download-outline"
+              size={16}
+              color={COLORS.navy}
+            />
             <Text style={styles.qrDownloadText}>Download</Text>
           </Pressable>
         </View>
@@ -325,14 +422,24 @@ function QrBar({ userId, expanded, onToggle, onDownload }) {
       {expanded ? (
         <View style={styles.qrContent}>
           {image ? (
-            <Image source={{ uri: image }} style={styles.qrInlineImage} resizeMode="contain" />
+            <Image
+              source={{ uri: image }}
+              style={styles.qrInlineImage}
+              resizeMode="contain"
+            />
           ) : (
             <View style={styles.qrMissingBox}>
-              <MaterialCommunityIcons name="qrcode-remove" size={40} color={COLORS.muted} />
+              <MaterialCommunityIcons
+                name="qrcode-remove"
+                size={40}
+                color={COLORS.muted}
+              />
               <Text style={styles.qrMissingText}>QR code not available</Text>
             </View>
           )}
-          <Text style={styles.qrInlineHint}>Show this at Sabha to mark your attendance</Text>
+          <Text style={styles.qrInlineHint}>
+            Show this at Sabha to mark your attendance
+          </Text>
         </View>
       ) : null}
     </View>
@@ -343,10 +450,18 @@ function NotLoginCard() {
   return (
     <Pressable style={styles.notLoginCard}>
       <View style={styles.notLoginIcon}>
-        <MaterialCommunityIcons name="account-alert-outline" size={22} color={COLORS.accent} />
+        <MaterialCommunityIcons
+          name="account-alert-outline"
+          size={22}
+          color={COLORS.accent}
+        />
       </View>
       <Text style={styles.notLoginText}>Not Login</Text>
-      <MaterialCommunityIcons name="chevron-right" size={22} color={COLORS.muted} />
+      <MaterialCommunityIcons
+        name="chevron-right"
+        size={22}
+        color={COLORS.muted}
+      />
     </Pressable>
   );
 }
@@ -364,7 +479,15 @@ function SearchBar() {
   );
 }
 
-function MetricCard({ icon, label, value, detail, tone = 'navy', action = false, iconBg }) {
+function MetricCard({
+  icon,
+  label,
+  value,
+  detail,
+  tone = 'navy',
+  action = false,
+  iconBg,
+}) {
   const getIconBg = () => {
     if (iconBg) return { backgroundColor: iconBg };
     if (tone === 'green') return { backgroundColor: COLORS.greenBg };
@@ -382,7 +505,11 @@ function MetricCard({ icon, label, value, detail, tone = 'navy', action = false,
     <View style={styles.metricCard}>
       <View style={styles.metricCardHeader}>
         <View style={[styles.metricIcon, getIconBg()]}>
-          <MaterialCommunityIcons name={icon} size={18} color={getIconColor()} />
+          <MaterialCommunityIcons
+            name={icon}
+            size={18}
+            color={getIconColor()}
+          />
         </View>
         <Text style={styles.metricLabel} numberOfLines={2}>
           {label}
@@ -404,7 +531,10 @@ function MetricCard({ icon, label, value, detail, tone = 'navy', action = false,
           </Text>
         ) : (
           <Text
-            style={[styles.metricDetail, tone === 'goodText' && styles.greenDetailText]}
+            style={[
+              styles.metricDetail,
+              tone === 'goodText' && styles.greenDetailText,
+            ]}
             numberOfLines={2}
           >
             {detail}
@@ -418,7 +548,11 @@ function MetricCard({ icon, label, value, detail, tone = 'navy', action = false,
 function ErrorPanel({ message, onRetry }) {
   return (
     <View style={styles.errorPanel}>
-      <MaterialCommunityIcons name="alert-circle-outline" size={32} color={COLORS.red} />
+      <MaterialCommunityIcons
+        name="alert-circle-outline"
+        size={32}
+        color={COLORS.red}
+      />
       <Text style={styles.errorTitle}>Couldn&apos;t load dashboard</Text>
       <Text style={styles.errorText}>{message || 'Please try again.'}</Text>
       <Pressable onPress={onRetry} style={styles.retryButton}>
@@ -430,7 +564,10 @@ function ErrorPanel({ message, onRetry }) {
 
 function ThoughtCard({ thought }) {
   const [portrait, setPortrait] = useState(false);
-  const image = portrait && thought?.image_url_portrait ? thought.image_url_portrait : thought?.image_url;
+  const image =
+    portrait && thought?.image_url_portrait
+      ? thought.image_url_portrait
+      : thought?.image_url;
 
   const handleDownload = async () => {
     if (!image) return;
@@ -455,21 +592,42 @@ function ThoughtCard({ thought }) {
 
   return (
     <View style={[styles.sectionPanel, styles.thoughtPanel]}>
-      <View style={[styles.thoughtHeader, !portrait && styles.thoughtHeaderLandscape]}>
+      <View
+        style={[
+          styles.thoughtHeader,
+          !portrait && styles.thoughtHeaderLandscape,
+        ]}
+      >
         <View style={styles.orientation}>
           <Pressable
             onPress={() => setPortrait(false)}
-            style={[styles.orientationBtn, !portrait && styles.orientationActive]}
+            style={[
+              styles.orientationBtn,
+              !portrait && styles.orientationActive,
+            ]}
           >
-            <Text style={!portrait ? styles.orientationTextActive : styles.orientationText}>
+            <Text
+              style={
+                !portrait
+                  ? styles.orientationTextActive
+                  : styles.orientationText
+              }
+            >
               Landscape
             </Text>
           </Pressable>
           <Pressable
             onPress={() => setPortrait(true)}
-            style={[styles.orientationBtn, portrait && styles.orientationActive]}
+            style={[
+              styles.orientationBtn,
+              portrait && styles.orientationActive,
+            ]}
           >
-            <Text style={portrait ? styles.orientationTextActive : styles.orientationText}>
+            <Text
+              style={
+                portrait ? styles.orientationTextActive : styles.orientationText
+              }
+            >
               Portrait
             </Text>
           </Pressable>
@@ -477,19 +635,31 @@ function ThoughtCard({ thought }) {
       </View>
 
       <Image
-       source={{ uri: encodeURI(image.trim()) }}
-  style={portrait ? styles.thoughtPortrait : styles.thoughtLandscape}
-  resizeMode="contain"
- 
+        source={{ uri: encodeURI(image.trim()) }}
+        style={portrait ? styles.thoughtPortrait : styles.thoughtLandscape}
+        resizeMode="contain"
       />
 
-      <View style={[styles.thoughtActions, !portrait && styles.thoughtActionsLandscape]}>
+      <View
+        style={[
+          styles.thoughtActions,
+          !portrait && styles.thoughtActionsLandscape,
+        ]}
+      >
         <Pressable style={styles.thoughtDownloadBtn} onPress={handleDownload}>
-          <MaterialCommunityIcons name="download-outline" size={16} color={COLORS.surface} />
+          <MaterialCommunityIcons
+            name="download-outline"
+            size={16}
+            color={COLORS.surface}
+          />
           <Text style={styles.thoughtBtnText}>Download</Text>
         </Pressable>
         <Pressable style={styles.thoughtShareBtn} onPress={handleShare}>
-          <MaterialCommunityIcons name="whatsapp" size={16} color={COLORS.surface} />
+          <MaterialCommunityIcons
+            name="whatsapp"
+            size={16}
+            color={COLORS.surface}
+          />
           <Text style={styles.thoughtBtnText}>Share</Text>
         </Pressable>
       </View>
@@ -532,7 +702,9 @@ function FriendsCard({ me }) {
   const handleWhatsApp = mobile => {
     if (mobile) {
       const clean = mobile.replace(/[^0-9]/g, '');
-      Linking.openURL(`https://wa.me/${clean}?text=${encodeURIComponent('Jai Swaminarayan')}`);
+      Linking.openURL(
+        `https://wa.me/${clean}?text=${encodeURIComponent('Jai Swaminarayan')}`,
+      );
     }
   };
 
@@ -540,7 +712,11 @@ function FriendsCard({ me }) {
     <View style={styles.sectionPanel}>
       <View style={styles.sectionHeaderWithIcon}>
         <View style={styles.sectionTitleIcon}>
-          <MaterialCommunityIcons name="account-check-outline" size={18} color={COLORS.navy} />
+          <MaterialCommunityIcons
+            name="account-check-outline"
+            size={18}
+            color={COLORS.navy}
+          />
         </View>
         <Text style={styles.sectionTitle}>My Spiritual Friend</Text>
       </View>
@@ -556,11 +732,25 @@ function FriendsCard({ me }) {
           </View>
           {mobile ? (
             <View style={styles.friendActions}>
-              <Pressable onPress={() => handleCall(mobile)} style={styles.friendActionCall}>
-                <MaterialCommunityIcons name="phone" size={16} color={COLORS.surface} />
+              <Pressable
+                onPress={() => handleCall(mobile)}
+                style={styles.friendActionCall}
+              >
+                <MaterialCommunityIcons
+                  name="phone"
+                  size={16}
+                  color={COLORS.surface}
+                />
               </Pressable>
-              <Pressable onPress={() => handleWhatsApp(mobile)} style={styles.friendActionWhatsApp}>
-                <MaterialCommunityIcons name="whatsapp" size={16} color={COLORS.surface} />
+              <Pressable
+                onPress={() => handleWhatsApp(mobile)}
+                style={styles.friendActionWhatsApp}
+              >
+                <MaterialCommunityIcons
+                  name="whatsapp"
+                  size={16}
+                  color={COLORS.surface}
+                />
               </Pressable>
             </View>
           ) : null}
@@ -572,7 +762,10 @@ function FriendsCard({ me }) {
 
 function EventsCard({ events }) {
   const upcoming = (Array.isArray(events) ? events : [])
-    .filter(event => event?.date && new Date(event.date).getTime() >= Date.now() - 86400000)
+    .filter(
+      event =>
+        event?.date && new Date(event.date).getTime() >= Date.now() - 86400000,
+    )
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 4);
 
@@ -586,7 +779,11 @@ function EventsCard({ events }) {
         upcoming.map(event => (
           <View key={event.id || event.title} style={styles.eventRow}>
             <View style={styles.eventIcon}>
-              <MaterialCommunityIcons name="calendar-star" size={18} color={COLORS.accent} />
+              <MaterialCommunityIcons
+                name="calendar-star"
+                size={18}
+                color={COLORS.accent}
+              />
             </View>
             <View style={styles.flex1}>
               <Text style={styles.eventTitle} numberOfLines={1}>
@@ -647,15 +844,26 @@ function LineChart({ points = [], height = 180 }) {
           contentContainerStyle={{ minWidth: chartWidth }}
         >
           {(() => {
-            const step = Math.max(52, (chartWidth - 48) / Math.max(1, points.length - 1));
+            const step = Math.max(
+              52,
+              (chartWidth - 48) / Math.max(1, points.length - 1),
+            );
             const calculatedPoints = points.map((p, i) => {
               const x = 32 + i * step;
-              const y = 24 + chartHeight * (1 - Math.min(100, Math.max(0, p.percentage)) / 100);
+              const y =
+                24 +
+                chartHeight *
+                  (1 - Math.min(100, Math.max(0, p.percentage)) / 100);
               return { ...p, x, y };
             });
 
             return (
-              <View style={{ width: Math.max(chartWidth, 32 + points.length * step), height }}>
+              <View
+                style={{
+                  width: Math.max(chartWidth, 32 + points.length * step),
+                  height,
+                }}
+              >
                 {/* Connecting Line Segments */}
                 {calculatedPoints.map((p1, i) => {
                   if (i === calculatedPoints.length - 1) return null;
@@ -685,16 +893,31 @@ function LineChart({ points = [], height = 180 }) {
                 {calculatedPoints.map((p, i) => (
                   <React.Fragment key={`point-${i}`}>
                     {/* Floating Label above Dot */}
-                    <View style={[styles.chartPointLabelBox, { left: p.x - 30, top: Math.max(0, p.y - 24) }]}>
+                    <View
+                      style={[
+                        styles.chartPointLabelBox,
+                        { left: p.x - 30, top: Math.max(0, p.y - 24) },
+                      ]}
+                    >
                       <Text style={styles.chartRatioText}>{p.ratio}</Text>
                       <Text style={styles.chartPctText}>{p.percentage}%</Text>
                     </View>
 
                     {/* Point Marker Dot */}
-                    <View style={[styles.chartPointDot, { left: p.x - 4, top: p.y - 4 }]} />
+                    <View
+                      style={[
+                        styles.chartPointDot,
+                        { left: p.x - 4, top: p.y - 4 },
+                      ]}
+                    />
 
                     {/* X-axis Date Label */}
-                    <Text style={[styles.chartXLabel, { left: p.x - 24, top: height - 18 }]}>
+                    <Text
+                      style={[
+                        styles.chartXLabel,
+                        { left: p.x - 24, top: height - 18 },
+                      ]}
+                    >
                       {p.label}
                     </Text>
                   </React.Fragment>
@@ -730,7 +953,11 @@ function WeeklyAttendanceCard({
     <View style={styles.sectionPanel}>
       <View style={styles.sectionHeaderWithIcon}>
         <View style={styles.sectionTitleIcon}>
-          <MaterialCommunityIcons name="trending-up" size={18} color={COLORS.navy} />
+          <MaterialCommunityIcons
+            name="trending-up"
+            size={18}
+            color={COLORS.navy}
+          />
         </View>
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
@@ -740,26 +967,51 @@ function WeeklyAttendanceCard({
           <View style={styles.togglePillGroup}>
             <Pressable
               onPress={() => setWindowSize('4')}
-              style={[styles.togglePillBtn, windowSize === '4' && styles.togglePillBtnActive]}
+              style={[
+                styles.togglePillBtn,
+                windowSize === '4' && styles.togglePillBtnActive,
+              ]}
             >
-              <Text style={windowSize === '4' ? styles.togglePillTextActive : styles.togglePillText}>
+              <Text
+                style={
+                  windowSize === '4'
+                    ? styles.togglePillTextActive
+                    : styles.togglePillText
+                }
+              >
                 4 weeks
               </Text>
             </Pressable>
             <Pressable
               onPress={() => setWindowSize('12')}
-              style={[styles.togglePillBtn, windowSize === '12' && styles.togglePillBtnActive]}
+              style={[
+                styles.togglePillBtn,
+                windowSize === '12' && styles.togglePillBtnActive,
+              ]}
             >
-              <Text style={windowSize === '12' ? styles.togglePillTextActive : styles.togglePillText}>
+              <Text
+                style={
+                  windowSize === '12'
+                    ? styles.togglePillTextActive
+                    : styles.togglePillText
+                }
+              >
                 12 weeks
               </Text>
             </Pressable>
           </View>
-        ) : <View />}
+        ) : (
+          <View />
+        )}
 
-        <Pressable style={styles.showTableBtn} onPress={() => setShowTable(!showTable)}>
+        <Pressable
+          style={styles.showTableBtn}
+          onPress={() => setShowTable(!showTable)}
+        >
           <MaterialCommunityIcons name="table" size={15} color={COLORS.navy} />
-          <Text style={styles.showTableText}>{showTable ? 'Show chart' : 'Show table'}</Text>
+          <Text style={styles.showTableText}>
+            {showTable ? 'Show chart' : 'Show table'}
+          </Text>
         </Pressable>
       </View>
 
@@ -799,7 +1051,11 @@ function YearAttendance({ year }) {
     <View style={styles.sectionPanel}>
       <View style={styles.sectionHeaderWithIcon}>
         <View style={styles.sectionTitleIcon}>
-          <MaterialCommunityIcons name="clock-outline" size={18} color={COLORS.navy} />
+          <MaterialCommunityIcons
+            name="clock-outline"
+            size={18}
+            color={COLORS.navy}
+          />
         </View>
         <Text style={styles.sectionTitle}>My Last 52 Weeks</Text>
       </View>
@@ -807,7 +1063,8 @@ function YearAttendance({ year }) {
       <View style={styles.yearContentContainer}>
         <View style={styles.leaderBoxLeft}>
           <Text style={styles.leaderBoxText}>
-            Present <Text style={styles.leaderBoxCount}>{numberText(present)}</Text>
+            Present{' '}
+            <Text style={styles.leaderBoxCount}>{numberText(present)}</Text>
           </Text>
         </View>
 
@@ -845,7 +1102,8 @@ function YearAttendance({ year }) {
 
         <View style={styles.leaderBoxRight}>
           <Text style={styles.leaderBoxText}>
-            Absent <Text style={styles.leaderBoxCount}>{numberText(absent)}</Text>
+            Absent{' '}
+            <Text style={styles.leaderBoxCount}>{numberText(absent)}</Text>
           </Text>
         </View>
       </View>
@@ -855,10 +1113,14 @@ function YearAttendance({ year }) {
 
 function OverallDashboard({ data, live, birthdays }) {
   const lastWeek = data?.attendance_last_4_week?.at(-1);
-  const todayBirthdaysCount = (birthdays?.users || []).filter(user => user?.contact).length;
+  const todayBirthdaysCount = (birthdays?.users || []).filter(
+    user => user?.contact,
+  ).length;
 
   const lastWeekRange = lastWeek ? weekRange(lastWeek.week_date) : null;
-  const liveWeekRange = live?.week_date ? weekRange(live.week_date, { live: true }) : null;
+  const liveWeekRange = live?.week_date
+    ? weekRange(live.week_date, { live: true })
+    : null;
 
   return (
     <>
@@ -878,7 +1140,10 @@ function OverallDashboard({ data, live, birthdays }) {
           label="Last week"
           value={
             lastWeek ? (
-              <PairValue present={lastWeek.present_count} absent={lastWeek.absent_count} />
+              <PairValue
+                present={lastWeek.present_count}
+                absent={lastWeek.absent_count}
+              />
             ) : (
               '—'
             )
@@ -890,7 +1155,10 @@ function OverallDashboard({ data, live, birthdays }) {
           label="This week"
           value={
             live?.current_week ? (
-              <PairValue present={live.current_week.present} absent={live.current_week.absent} />
+              <PairValue
+                present={live.current_week.present}
+                absent={live.current_week.absent}
+              />
             ) : (
               '—'
             )
@@ -965,7 +1233,10 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
           label="Total Sabha Attended"
           value={
             attendance ? (
-              <RatioValue part={attendance.attended} whole={attendance.total_sabha} />
+              <RatioValue
+                part={attendance.attended}
+                whole={attendance.total_sabha}
+              />
             ) : (
               '—'
             )
@@ -977,7 +1248,11 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
           icon="calendar-check-outline"
           label="Last 4 Weeks"
           value={
-            recent ? <RatioValue part={recent.attended} whole={recent.total} /> : '—'
+            recent ? (
+              <RatioValue part={recent.attended} whole={recent.total} />
+            ) : (
+              '—'
+            )
           }
           tone="green"
         />
@@ -1020,7 +1295,9 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
           label="Upcoming Sabha"
           value={
             data?.upcoming_sabha
-              ? [data.upcoming_sabha.day, readClock(data.upcoming_sabha.time)].filter(Boolean).join(' ')
+              ? [data.upcoming_sabha.day, readClock(data.upcoming_sabha.time)]
+                  .filter(Boolean)
+                  .join(' ')
               : '—'
           }
           detail={data?.upcoming_sabha?.location || null}
@@ -1036,7 +1313,14 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
 }
 
 export default function DashboardPage() {
-  const { signOut, activeUserId } = useAuth();
+  const {
+    signOut,
+    activeUserId,
+    biometricAvailable,
+    biometricEnabled,
+    enableBiometric,
+    disableBiometric,
+  } = useAuth();
   const [overview, setOverview] = useState(null);
   const [live, setLive] = useState(null);
   const [me, setMe] = useState(null);
@@ -1050,6 +1334,7 @@ export default function DashboardPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDownloading, setQrDownloading] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
 
   const load = async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -1076,16 +1361,21 @@ export default function DashboardPage() {
       setOverview(overviewResult.value);
       setLive(liveResult.status === 'fulfilled' ? liveResult.value : null);
       setMe(meResult.status === 'fulfilled' ? meResult.value : null);
-      setBirthdays(birthdaysResult.status === 'fulfilled' ? birthdaysResult.value : null);
+      setBirthdays(
+        birthdaysResult.status === 'fulfilled' ? birthdaysResult.value : null,
+      );
       setEvents(
         eventsResult.status === 'fulfilled'
           ? Array.isArray(eventsResult.value)
             ? eventsResult.value
             : eventsResult.value?.items || []
-          : []
+          : [],
       );
-      setThought(thoughtResult.status === 'fulfilled' && thoughtResult.value ? thoughtResult.value : null);
-      
+      setThought(
+        thoughtResult.status === 'fulfilled' && thoughtResult.value
+          ? thoughtResult.value
+          : null,
+      );
     } catch (caught) {
       setError(caught?.message || 'Unable to load dashboard.');
     } finally {
@@ -1112,6 +1402,28 @@ export default function DashboardPage() {
       await Share.share({ message: image });
     } finally {
       setQrDownloading(false);
+    }
+  };
+
+  const toggleBiometric = async () => {
+    if (biometricBusy) return;
+
+    setBiometricBusy(true);
+    try {
+      if (biometricEnabled) {
+        await disableBiometric();
+        Alert.alert('Biometric login', 'Biometric login disabled.');
+      } else {
+        await enableBiometric();
+        Alert.alert('Biometric login', 'Biometric login enabled.');
+      }
+    } catch (caught) {
+      Alert.alert(
+        'Biometric login',
+        caught?.message || 'Unable to update biometric login.',
+      );
+    } finally {
+      setBiometricBusy(false);
     }
   };
 
@@ -1184,7 +1496,11 @@ export default function DashboardPage() {
         ) : error ? (
           <ErrorPanel message={error} onRetry={() => load()} />
         ) : activeTab === 'overall' ? (
-          <OverallDashboard data={data.overall} live={live} birthdays={birthdays} />
+          <OverallDashboard
+            data={data.overall}
+            live={live}
+            birthdays={birthdays}
+          />
         ) : (
           <SelfDashboard
             data={data.self}
@@ -1205,6 +1521,10 @@ export default function DashboardPage() {
         onClose={() => setDrawerOpen(false)}
         onSignOut={signOut}
         roleName={me?.role_name}
+        biometricAvailable={biometricAvailable}
+        biometricEnabled={biometricEnabled}
+        biometricBusy={biometricBusy}
+        onToggleBiometric={toggleBiometric}
       />
     </View>
   );
@@ -1271,31 +1591,31 @@ const styles = StyleSheet.create({
   drawerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent:"space-between",
+    justifyContent: 'space-between',
     paddingTop: 10,
     paddingBottom: 20,
-    width: '100%'
+    width: '100%',
   },
-drawerLogo: {
-  width: 80,
-  height: 80,
-  borderRadius: 16,
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginRight: 10,
+  drawerLogo: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
 
-  // Subtle white shadow
-  shadowColor: '#000',
-  shadowOffset: {
-    width: 0,
-    height: 2,
+    // Subtle white shadow
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+
+    // Android
+    elevation: 8,
   },
-  shadowOpacity: 0.35,
-  shadowRadius: 4,
-
-  // Android
-  elevation: 8,
-},
   drawerLogoText: {
     color: COLORS.accent,
     fontSize: 28,
@@ -1356,7 +1676,7 @@ drawerLogo: {
   },
   drawerLogoutText: { color: '#FFD0B0', fontSize: 14, fontWeight: '800' },
   scroll: { padding: 16, paddingTop: 16, paddingBottom: 0 },
-  footerBleed: { marginHorizontal: -16,paddingTop:14 },
+  footerBleed: { marginHorizontal: -16, paddingTop: 14 },
   header: { marginBottom: 16 },
   title: { color: COLORS.navy, fontSize: 24, fontWeight: '800' },
   qrBar: {
@@ -1378,7 +1698,12 @@ drawerLogo: {
     justifyContent: 'space-between',
     gap: 10,
   },
-  qrBarTitle: { flex: 1, color: COLORS.surface, fontSize: 18, fontWeight: '800' },
+  qrBarTitle: {
+    flex: 1,
+    color: COLORS.surface,
+    fontSize: 18,
+    fontWeight: '800',
+  },
   qrBarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   qrShowButton: {
     height: 36,
@@ -1418,7 +1743,12 @@ drawerLogo: {
     justifyContent: 'center',
   },
   qrMissingText: { color: '#C5D8E8', fontSize: 13, marginTop: 8 },
-  qrInlineHint: { color: '#C5D8E8', textAlign: 'center', fontSize: 13, marginTop: 10 },
+  qrInlineHint: {
+    color: '#C5D8E8',
+    textAlign: 'center',
+    fontSize: 13,
+    marginTop: 10,
+  },
   notLoginCard: {
     height: 52,
     borderRadius: 16,
@@ -1434,7 +1764,13 @@ drawerLogo: {
     shadowRadius: 2,
   },
   notLoginIcon: { width: 28, alignItems: 'center' },
-  notLoginText: { flex: 1, color: COLORS.navy, fontSize: 16, fontWeight: '800', marginLeft: 8 },
+  notLoginText: {
+    flex: 1,
+    color: COLORS.navy,
+    fontSize: 16,
+    fontWeight: '800',
+    marginLeft: 8,
+  },
   searchCard: {
     height: 48,
     borderRadius: 14,
@@ -1555,7 +1891,12 @@ drawerLogo: {
     borderWidth: 1,
     borderColor: '#F4C7C7',
   },
-  errorTitle: { color: COLORS.red, fontSize: 16, fontWeight: '800', marginTop: 8 },
+  errorTitle: {
+    color: COLORS.red,
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 8,
+  },
   errorText: { color: COLORS.muted, textAlign: 'center', marginTop: 4 },
   retryButton: {
     backgroundColor: COLORS.navy,
@@ -1603,8 +1944,18 @@ drawerLogo: {
     borderColor: COLORS.border,
   },
   thoughtHeaderLandscape: { marginBottom: 4 },
-  thoughtLandscape: { width: '100%', height: 200, borderRadius: 12, backgroundColor: COLORS.surface },
-  thoughtPortrait: { width: '100%', height: 430, borderRadius: 12, backgroundColor: COLORS.surface },
+  thoughtLandscape: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+  },
+  thoughtPortrait: {
+    width: '100%',
+    height: 430,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+  },
   thoughtActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   thoughtActionsLandscape: { marginTop: 4 },
   thoughtDownloadBtn: {
@@ -1628,11 +1979,24 @@ drawerLogo: {
     gap: 6,
   },
   thoughtBtnText: { color: COLORS.surface, fontSize: 13, fontWeight: '800' },
-  orientation: { flexDirection: 'row', backgroundColor: COLORS.background, borderRadius: 18, padding: 3 },
-  orientationBtn: { borderRadius: 15, paddingHorizontal: 12, paddingVertical: 5 },
+  orientation: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.background,
+    borderRadius: 18,
+    padding: 3,
+  },
+  orientationBtn: {
+    borderRadius: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
   orientationActive: { backgroundColor: COLORS.navy },
   orientationText: { color: COLORS.muted, fontSize: 11, fontWeight: '700' },
-  orientationTextActive: { color: COLORS.surface, fontSize: 11, fontWeight: '700' },
+  orientationTextActive: {
+    color: COLORS.surface,
+    fontSize: 11,
+    fontWeight: '700',
+  },
   friendRow: {
     height: 52,
     flexDirection: 'row',
@@ -1681,7 +2045,12 @@ drawerLogo: {
   },
   eventTitle: { color: COLORS.navy, fontSize: 13, fontWeight: '800' },
   eventDate: { color: COLORS.muted, fontSize: 11, marginTop: 2 },
-  emptyText: { color: COLORS.muted, textAlign: 'center', paddingVertical: 16, fontSize: 13 },
+  emptyText: {
+    color: COLORS.muted,
+    textAlign: 'center',
+    paddingVertical: 16,
+    fontSize: 13,
+  },
   chartControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1771,7 +2140,12 @@ drawerLogo: {
     color: COLORS.muted,
     fontWeight: '600',
   },
-  tableContainer: { marginTop: 4, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12 },
+  tableContainer: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+  },
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: '#F5F8FA',
@@ -1780,8 +2154,19 @@ drawerLogo: {
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  tableHeadCellFlex2: { flex: 2, color: COLORS.muted, fontSize: 11, fontWeight: '800' },
-  tableHeadCellFlex1Center: { flex: 1, textAlign: 'center', color: COLORS.muted, fontSize: 11, fontWeight: '800' },
+  tableHeadCellFlex2: {
+    flex: 2,
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  tableHeadCellFlex1Center: {
+    flex: 1,
+    textAlign: 'center',
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '800',
+  },
   tableRow: {
     flexDirection: 'row',
     paddingVertical: 8,
@@ -1789,8 +2174,19 @@ drawerLogo: {
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  tableCellFlex2: { flex: 2, color: COLORS.navy, fontSize: 12, fontWeight: '600' },
-  tableCellFlex1Center: { flex: 1, textAlign: 'center', color: COLORS.navy, fontSize: 12, fontWeight: '600' },
+  tableCellFlex2: {
+    flex: 2,
+    color: COLORS.navy,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  tableCellFlex1Center: {
+    flex: 1,
+    textAlign: 'center',
+    color: COLORS.navy,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   chartWrapper: { marginTop: 4 },
   chartRows: { gap: 4 },
   weekRow: { flexDirection: 'row', alignItems: 'center', height: 28 },
@@ -1805,7 +2201,12 @@ drawerLogo: {
   weekFill: { height: '100%', borderRadius: 4 },
   weekFillAttended: { width: '100%', backgroundColor: COLORS.green },
   weekFillMissed: { width: '12%', backgroundColor: COLORS.softRed },
-  weekStatus: { width: 24, textAlign: 'right', fontSize: 11, fontWeight: '800' },
+  weekStatus: {
+    width: 24,
+    textAlign: 'right',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   yearContentContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1850,8 +2251,13 @@ drawerLogo: {
     justifyContent: 'center',
   },
   ringPercentText: { color: COLORS.navy, fontSize: 18, fontWeight: '800' },
-  ringMissedLabel: { color: COLORS.faint, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  ringMissedLabel: {
+    color: COLORS.faint,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   greenText: { color: COLORS.green, fontWeight: '800', fontSize: 18 },
-  redText: { color: COLORS.red, fontWeight: '800' , fontSize: 18},
+  redText: { color: COLORS.red, fontWeight: '800', fontSize: 18 },
   navyText: { color: COLORS.navy, fontWeight: '800', fontSize: 18 },
 });
