@@ -1,6 +1,4 @@
-import { api } from '../api/client';
-
-const API_BASE = 'https://uat.aksharmandal.in/aksharconnect';
+import { api, API_BASE } from '../api/client';
 
 function resolveThought(res) {
   if (!res || typeof res !== 'object') return null;

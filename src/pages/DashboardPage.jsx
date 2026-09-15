@@ -9,13 +9,14 @@ import {
   ScrollView,
   Share,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import Svg, { Circle } from 'react-native-svg';
+import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
+import { Text, TextInput } from '../components/Typography';
 import { dashboardService } from '../services/dashboardService';
+import { API_BASE } from '../api/client';
 import { useAuth } from '../hooks/core';
 import { canReadOverallDashboard, canSeeNotLoggedIn } from '../constants/roles';
 import { readWeekDate } from '../utils/dates';
@@ -41,8 +42,7 @@ const COLORS = {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const numberText = value => (value == null ? '—' : Number(value).toLocaleString('en-IN'));
-const apiBase = 'https://uat.aksharmandal.in/aksharconnect';
-const qrUrl = userId => (userId ? `${apiBase}/api/v1/qr/codes/akshar-connect-${userId}.jpeg` : null);
+const qrUrl = userId => (userId ? `${API_BASE}/api/v1/qr/codes/akshar-connect-${userId}.jpeg` : null);
 
 function weekRange(weekDate, { live = false } = {}) {
   if (!weekDate) return null;
@@ -191,20 +191,51 @@ function TopBar({ onMenu }) {
 
 function Drawer({ visible, onClose, onSignOut, roleName }) {
   const slide = useRef(new Animated.Value(-320)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = useState(visible);
 
   useEffect(() => {
-    Animated.timing(slide, {
-      toValue: visible ? 0 : -320,
-      duration: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [slide, visible]);
+    if (visible) {
+      setMounted(true);
+      Animated.parallel([
+        Animated.timing(slide, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 140,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return undefined;
+    }
 
-  if (!visible) return null;
+    const closingAnimation = Animated.parallel([
+      Animated.timing(slide, {
+        toValue: -320,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    closingAnimation.start(({ finished }) => {
+      if (finished) setMounted(false);
+    });
+
+    return () => closingAnimation.stop();
+  }, [backdropOpacity, slide, visible]);
+
+  if (!mounted) return null;
 
   return (
     <View style={styles.drawerLayer}>
-      <Pressable style={styles.drawerBackdrop} onPress={onClose} />
       <Animated.View style={[styles.drawer, { transform: [{ translateX: slide }] }]}>
         <View style={styles.drawerHeader}>
           <Image
@@ -247,6 +278,17 @@ function Drawer({ visible, onClose, onSignOut, roleName }) {
           <MaterialCommunityIcons name="logout" size={20} color="#C5D8E8" />
           <Text style={[styles.drawerItemText]}>Logout</Text>
         </Pressable>
+      </Animated.View>
+      <Animated.View
+        style={[styles.drawerBackdrop, { opacity: backdropOpacity }]}
+        pointerEvents={visible ? 'auto' : 'none'}
+      >
+        <Pressable
+          style={styles.drawerBackdropButton}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close navigation"
+        />
       </Animated.View>
     </View>
   );
@@ -388,7 +430,6 @@ function ErrorPanel({ message, onRetry }) {
 
 function ThoughtCard({ thought }) {
   const [portrait, setPortrait] = useState(false);
-  console.error('ThoughtCard thought: in card', thought);
   const image = portrait && thought?.image_url_portrait ? thought.image_url_portrait : thought?.image_url;
 
   const handleDownload = async () => {
@@ -413,8 +454,8 @@ function ThoughtCard({ thought }) {
   if (!image) return null;
 
   return (
-    <View style={styles.sectionPanel}>
-      <View style={styles.thoughtHeader}>
+    <View style={[styles.sectionPanel, styles.thoughtPanel]}>
+      <View style={[styles.thoughtHeader, !portrait && styles.thoughtHeaderLandscape]}>
         <View style={styles.orientation}>
           <Pressable
             onPress={() => setPortrait(false)}
@@ -442,7 +483,7 @@ function ThoughtCard({ thought }) {
  
       />
 
-      <View style={styles.thoughtActions}>
+      <View style={[styles.thoughtActions, !portrait && styles.thoughtActionsLandscape]}>
         <Pressable style={styles.thoughtDownloadBtn} onPress={handleDownload}>
           <MaterialCommunityIcons name="download-outline" size={16} color={COLORS.surface} />
           <Text style={styles.thoughtBtnText}>Download</Text>
@@ -772,6 +813,29 @@ function YearAttendance({ year }) {
 
         <View style={styles.ringContainer}>
           <View style={styles.ringOuter}>
+            <Svg width={100} height={100} style={styles.ringSvg}>
+              <Circle
+                cx="50"
+                cy="50"
+                r="44"
+                fill="none"
+                stroke={COLORS.green}
+                strokeWidth="12"
+              />
+              {missedPercent > 0 ? (
+                <Circle
+                  cx="50"
+                  cy="50"
+                  r="44"
+                  fill="none"
+                  stroke={COLORS.softRed}
+                  strokeWidth="12"
+                  strokeDasharray={`${(missedPercent / 100) * 2 * Math.PI * 44} ${2 * Math.PI * 44}`}
+                  strokeLinecap="butt"
+                  transform={`rotate(${-(missedPercent * 1.8)} 50 50)`}
+                />
+              ) : null}
+            </Svg>
             <View style={styles.ringInner}>
               <Text style={styles.ringPercentText}>{missedPercent}%</Text>
               <Text style={styles.ringMissedLabel}>MISSED</Text>
@@ -1020,7 +1084,6 @@ export default function DashboardPage() {
             : eventsResult.value?.items || []
           : []
       );
-      console.error('Thought Result:', thoughtResult);
       setThought(thoughtResult.status === 'fulfilled' && thoughtResult.value ? thoughtResult.value : null);
       
     } catch (caught) {
@@ -1189,8 +1252,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   drawerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10, 15, 40, 0.55)',
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  drawerBackdropButton: {
+    flex: 1,
   },
   drawer: {
     width: '82%',
@@ -1530,9 +1596,17 @@ drawerLogo: {
   sectionTitle: { color: COLORS.navy, fontSize: 15, fontWeight: '800' },
   sectionLink: { color: COLORS.accent, fontSize: 12, fontWeight: '800' },
   thoughtHeader: { alignItems: 'center', marginBottom: 12 },
-  thoughtLandscape: { width: '100%', height: 170, borderRadius: 12, backgroundColor: COLORS.background },
-  thoughtPortrait: { width: '100%', height: 310, borderRadius: 12, backgroundColor: COLORS.background },
+  thoughtPanel: {
+    padding: 16,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  thoughtHeaderLandscape: { marginBottom: 4 },
+  thoughtLandscape: { width: '100%', height: 200, borderRadius: 12, backgroundColor: COLORS.surface },
+  thoughtPortrait: { width: '100%', height: 430, borderRadius: 12, backgroundColor: COLORS.surface },
   thoughtActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  thoughtActionsLandscape: { marginTop: 4 },
   thoughtDownloadBtn: {
     flex: 1,
     height: 40,
@@ -1762,12 +1836,11 @@ drawerLogo: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    borderWidth: 12,
-    borderColor: COLORS.green,
-    backgroundColor: COLORS.softRed,
+    backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  ringSvg: { position: 'absolute' },
   ringInner: {
     width: 76,
     height: 76,

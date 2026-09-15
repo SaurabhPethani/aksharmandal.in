@@ -15,15 +15,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Keep local debug builds usable even when `.env` has not been created yet or
 // Metro is started from a clean checkout. Production/CI builds should always
 // provide VITE_API_BASE explicitly.
-const BASE = (
-  VITE_API_BASE || 'https://uat.aksharmandal.in/aksharconnect'
+export const API_BASE = (
+  VITE_API_BASE || 'https://dev.aksharmandal.in/aksharconnect'
 ).replace(/\/+$/, '');
 
 /**
  * An API path as a full URL, for anything that does not go through axios —
  * an <Image source={{ uri }}>, a download link.
  */
-export const apiUrl = path => `${BASE}${path}`;
+export const apiUrl = path => `${API_BASE}${path}`;
 
 export const AUTH_PATHS = {
   loginInit: '/api/v1/auth/login-init',
@@ -111,6 +111,10 @@ export async function forgetSession() {
   await AsyncStorage.removeItem('token');
 }
 
+export async function getAccessTokenFromStorage() {
+  return await AsyncStorage.getItem('token');
+}
+
 /**
  * The held Token if its JWT is still comfortably unexpired, else null — and an
  * expired record is dropped on the way out. An unreadable `exp` counts as
@@ -141,7 +145,7 @@ export function resumeSession() {
  * message" — callers that need a faster answer pass their own shorter timeout.
  */
 export const api = axios.create({
-  baseURL: BASE,
+  baseURL: API_BASE,
   withCredentials: true,
   timeout: 60_000,
   headers: { Accept: 'application/json' },
@@ -230,7 +234,7 @@ let refreshInFlight = null;
 export async function refreshAccessToken() {
   if (!refreshInFlight) {
     refreshInFlight = axios
-      .post(`${BASE}${AUTH_PATHS.refresh}`, null, {
+      .post(`${API_BASE}${AUTH_PATHS.refresh}`, null, {
         withCredentials: true,
         headers: { Accept: 'application/json' },
       })

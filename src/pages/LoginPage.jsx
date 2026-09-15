@@ -8,12 +8,11 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
+import { Text, TextInput } from '../components/Typography';
 import { useAuth } from '../hooks/core';
 
 const PIN_LENGTH = 6;

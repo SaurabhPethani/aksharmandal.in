@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { VITE_APP_VERSION } from '@env';
+import { Text } from './Typography';
 
 export default function SiteFooter({ transparent = false, light = false }) {
   const background = light
