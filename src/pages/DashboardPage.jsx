@@ -8,11 +8,11 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   View,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { useQueryClient } from '@tanstack/react-query';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
 import { Text, TextInput } from '../components/Typography';
@@ -21,6 +21,11 @@ import { API_BASE } from '../api/client';
 import { useAuth } from '../hooks/core';
 import { canReadOverallDashboard, canSeeNotLoggedIn } from '../constants/roles';
 import { readWeekDate } from '../utils/dates';
+import { useMyKhardo } from '../hooks/useKhardo';
+import {
+  saveRemoteImage,
+  shareRemoteImageOnWhatsApp,
+} from '../utils/saveImage';
 
 const COLORS = {
   navy: '#003158',
@@ -227,16 +232,7 @@ function TopBar({ onMenu }) {
   );
 }
 
-function Drawer({
-  visible,
-  onClose,
-  onSignOut,
-  roleName,
-  biometricAvailable,
-  biometricEnabled,
-  biometricBusy,
-  onToggleBiometric,
-}) {
+function Drawer({ visible, onClose, onSignOut, roleName }) {
   const slide = useRef(new Animated.Value(-320)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(visible);
@@ -342,35 +338,6 @@ function Drawer({
           <MaterialCommunityIcons name="logout" size={20} color="#C5D8E8" />
           <Text style={[styles.drawerItemText]}>Logout</Text>
         </Pressable>
-
-        {biometricAvailable ? (
-          <Pressable
-            onPress={onToggleBiometric}
-            disabled={biometricBusy}
-            style={styles.drawerItem}
-            accessibilityRole="button"
-            accessibilityLabel={
-              biometricEnabled
-                ? 'Disable biometric login'
-                : 'Enable biometric login'
-            }
-          >
-            {biometricBusy ? (
-              <ActivityIndicator size="small" color="#C5D8E8" />
-            ) : (
-              <MaterialCommunityIcons
-                name="fingerprint"
-                size={20}
-                color="#C5D8E8"
-              />
-            )}
-            <Text style={styles.drawerItemText}>
-              {biometricEnabled
-                ? 'Disable biometric login'
-                : 'Enable biometric login'}
-            </Text>
-          </Pressable>
-        ) : null}
       </Animated.View>
       <Animated.View
         style={[styles.drawerBackdrop, { opacity: backdropOpacity }]}
@@ -387,7 +354,7 @@ function Drawer({
   );
 }
 
-function QrBar({ userId, expanded, onToggle, onDownload }) {
+function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
   const image = qrUrl(userId);
   return (
     <View style={[styles.qrBar, expanded && styles.qrBarExpanded]}>
@@ -406,15 +373,20 @@ function QrBar({ userId, expanded, onToggle, onDownload }) {
           </Pressable>
           <Pressable
             onPress={onDownload}
-            style={styles.qrDownloadButton}
+            disabled={downloading}
+            style={[styles.qrDownloadButton, downloading && styles.qrBusy]}
             accessibilityRole="button"
             accessibilityLabel="Download QR Code"
           >
-            <MaterialCommunityIcons
-              name="download-outline"
-              size={16}
-              color={COLORS.navy}
-            />
+            {downloading ? (
+              <ActivityIndicator size="small" color={COLORS.navy} />
+            ) : (
+              <MaterialCommunityIcons
+                name="download-outline"
+                size={16}
+                color={COLORS.navy}
+              />
+            )}
             <Text style={styles.qrDownloadText}>Download</Text>
           </Pressable>
         </View>
@@ -446,12 +418,70 @@ function QrBar({ userId, expanded, onToggle, onDownload }) {
   );
 }
 
+function SevaRing() {
+  const { data, isLoading } = useMyKhardo();
+  if (isLoading) return null;
+
+  const pct = data?.data?.percentage;
+  if (pct === null || pct === undefined) return null;
+
+  const value = Math.max(0, Math.min(100, Number(pct)));
+  if (Number.isNaN(value)) return null;
+  const R = 42;
+  const C = 2 * Math.PI * R;
+  const offset = C * (1 - value / 100);
+  // Colour by how much of the promised Seva is in: red → amber → green.
+  const color = value >= 80 ? '#15803d' : value >= 50 ? '#d97706' : '#b91c1c';
+
+  return (
+    <View style={[styles.sectionPanel, styles.sevaPanel]}>
+      <Text style={[styles.sectionTitle, styles.sevaTitle]}>Seva</Text>
+      <View
+        style={styles.sevaRing}
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={`Seva ${Math.round(value)}% submitted`}
+      >
+        <Svg width="100%" height="100%" viewBox="0 0 100 100">
+          <Circle
+            cx="50"
+            cy="50"
+            r={R}
+            fill="none"
+            stroke="#e5e7eb"
+            strokeWidth="10"
+          />
+          <Circle
+            cx="50"
+            cy="50"
+            r={R}
+            fill="none"
+            stroke={color}
+            strokeWidth="10"
+            strokeLinecap="round"
+            strokeDasharray={`${C} ${C}`}
+            strokeDashoffset={offset}
+            transform="rotate(-90 50 50)"
+          />
+        </Svg>
+        <View style={styles.sevaCenter} pointerEvents="none">
+          <Text style={[styles.sevaPercent, { color }]}>
+            {Math.round(value)}%
+          </Text>
+          <Text style={styles.sevaSubmitted}>submitted</Text>
+        </View>
+      </View>
+      <Text style={styles.sevaCaption}>Seva submitted of promised</Text>
+    </View>
+  );
+}
+
 function NotLoginCard() {
   return (
     <Pressable style={styles.notLoginCard}>
       <View style={styles.notLoginIcon}>
         <MaterialCommunityIcons
-          name="account-alert-outline"
+          name="account-remove-outline"
           size={22}
           color={COLORS.accent}
         />
@@ -487,6 +517,7 @@ function MetricCard({
   tone = 'navy',
   action = false,
   iconBg,
+  iconColor,
 }) {
   const getIconBg = () => {
     if (iconBg) return { backgroundColor: iconBg };
@@ -496,6 +527,7 @@ function MetricCard({
   };
 
   const getIconColor = () => {
+    if (iconColor) return iconColor;
     if (tone === 'green') return COLORS.green;
     if (tone === 'orange') return COLORS.accent;
     return COLORS.navy;
@@ -564,27 +596,43 @@ function ErrorPanel({ message, onRetry }) {
 
 function ThoughtCard({ thought }) {
   const [portrait, setPortrait] = useState(false);
-  const image =
-    portrait && thought?.image_url_portrait
-      ? thought.image_url_portrait
-      : thought?.image_url;
+  // Which action is running ('download' | 'share'), so both buttons lock and
+  // the pressed one shows a spinner.
+  const [busy, setBusy] = useState(null);
+  const showPortrait = portrait && Boolean(thought?.image_url_portrait);
+  const image = showPortrait ? thought.image_url_portrait : thought?.image_url;
+  const name = `Todays-Thought-${showPortrait ? 'Portrait' : 'Landscape'}.png`;
 
   const handleDownload = async () => {
-    if (!image) return;
+    if (!image || busy) return;
+    setBusy('download');
     try {
-      await Share.share({ message: image });
-    } catch {
-      /* ignore */
+      const res = await saveRemoteImage(image, name);
+      if (res.ok) {
+        Alert.alert(
+          "Today's Thought",
+          res.mode === 'share'
+            ? 'Image ready to share.'
+            : 'Image saved to your gallery.',
+        );
+      } else if (res.reason !== 'cancelled') {
+        Alert.alert("Today's Thought", res.reason);
+      }
+    } finally {
+      setBusy(null);
     }
   };
 
   const handleShare = async () => {
-    if (!image) return;
+    if (!image || busy) return;
+    setBusy('share');
     try {
-      const text = `${thought?.text ? `"${thought.text}"\n\n` : ''}${image}`;
-      Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`);
-    } catch {
-      /* ignore */
+      const res = await shareRemoteImageOnWhatsApp(image, name);
+      if (!res.ok && res.reason !== 'cancelled') {
+        Alert.alert("Today's Thought", res.reason);
+      }
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -646,20 +694,38 @@ function ThoughtCard({ thought }) {
           !portrait && styles.thoughtActionsLandscape,
         ]}
       >
-        <Pressable style={styles.thoughtDownloadBtn} onPress={handleDownload}>
-          <MaterialCommunityIcons
-            name="download-outline"
-            size={16}
-            color={COLORS.surface}
-          />
+        <Pressable
+          style={[styles.thoughtDownloadBtn, busy && styles.thoughtBtnBusy]}
+          onPress={handleDownload}
+          disabled={Boolean(busy)}
+          accessibilityLabel="Download today's thought image"
+        >
+          {busy === 'download' ? (
+            <ActivityIndicator size="small" color={COLORS.surface} />
+          ) : (
+            <MaterialCommunityIcons
+              name="download-outline"
+              size={16}
+              color={COLORS.surface}
+            />
+          )}
           <Text style={styles.thoughtBtnText}>Download</Text>
         </Pressable>
-        <Pressable style={styles.thoughtShareBtn} onPress={handleShare}>
-          <MaterialCommunityIcons
-            name="whatsapp"
-            size={16}
-            color={COLORS.surface}
-          />
+        <Pressable
+          style={[styles.thoughtShareBtn, busy && styles.thoughtBtnBusy]}
+          onPress={handleShare}
+          disabled={Boolean(busy)}
+          accessibilityLabel="Share today's thought image on WhatsApp"
+        >
+          {busy === 'share' ? (
+            <ActivityIndicator size="small" color={COLORS.surface} />
+          ) : (
+            <MaterialCommunityIcons
+              name="whatsapp"
+              size={16}
+              color={COLORS.surface}
+            />
+          )}
           <Text style={styles.thoughtBtnText}>Share</Text>
         </Pressable>
       </View>
@@ -1223,7 +1289,7 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
 
       <View style={styles.grid}>
         <MetricCard
-          icon="hourglass-outline"
+          icon="timer-sand"
           label="Sabha Age"
           value={sabhaAge || '—'}
           detail={sabhaAge ? null : 'Joining date not recorded'}
@@ -1288,10 +1354,12 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
           value={birthdays?.users ? numberText(birthdays.users.length) : '—'}
           detail="Send wishes"
           tone="orange"
+          iconBg={COLORS.redBg}
+          iconColor={COLORS.red}
           action
         />
         <MetricCard
-          icon="calendar-days"
+          icon="calendar-month-outline"
           label="Upcoming Sabha"
           value={
             data?.upcoming_sabha
@@ -1313,14 +1381,8 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
 }
 
 export default function DashboardPage() {
-  const {
-    signOut,
-    activeUserId,
-    biometricAvailable,
-    biometricEnabled,
-    enableBiometric,
-    disableBiometric,
-  } = useAuth();
+  const { signOut, activeUserId } = useAuth();
+  const queryClient = useQueryClient();
   const [overview, setOverview] = useState(null);
   const [live, setLive] = useState(null);
   const [me, setMe] = useState(null);
@@ -1334,7 +1396,6 @@ export default function DashboardPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDownloading, setQrDownloading] = useState(false);
-  const [biometricBusy, setBiometricBusy] = useState(false);
 
   const load = async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -1398,32 +1459,30 @@ export default function DashboardPage() {
     const image = qrUrl(activeUserId || me?.id || me?.user_id);
     if (!image || qrDownloading) return;
     setQrDownloading(true);
+    // Named after the member, as on the web, minus characters a file name
+    // cannot hold.
+    const cleaned = String(me?.full_name || me?.user_name || '')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\\/:*?"<>|\x00-\x1f]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     try {
-      await Share.share({ message: image });
+      const res = await saveRemoteImage(
+        image,
+        `${cleaned || 'Akshar Connect'} QR.jpeg`,
+      );
+      if (res.ok) {
+        Alert.alert(
+          'My QR Code',
+          res.mode === 'share'
+            ? 'QR code shared.'
+            : 'QR code saved to your gallery.',
+        );
+      } else if (res.reason !== 'cancelled') {
+        Alert.alert('My QR Code', res.reason);
+      }
     } finally {
       setQrDownloading(false);
-    }
-  };
-
-  const toggleBiometric = async () => {
-    if (biometricBusy) return;
-
-    setBiometricBusy(true);
-    try {
-      if (biometricEnabled) {
-        await disableBiometric();
-        Alert.alert('Biometric login', 'Biometric login disabled.');
-      } else {
-        await enableBiometric();
-        Alert.alert('Biometric login', 'Biometric login enabled.');
-      }
-    } catch (caught) {
-      Alert.alert(
-        'Biometric login',
-        caught?.message || 'Unable to update biometric login.',
-      );
-    } finally {
-      setBiometricBusy(false);
     }
   };
 
@@ -1437,7 +1496,11 @@ export default function DashboardPage() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => load({ refresh: true })}
+            onRefresh={() => {
+              // SevaRing reads through React Query, outside `load`.
+              queryClient.invalidateQueries({ queryKey: ['khardo', 'me'] });
+              load({ refresh: true });
+            }}
             tintColor={COLORS.navy}
           />
         }
@@ -1453,7 +1516,11 @@ export default function DashboardPage() {
           expanded={qrOpen}
           onToggle={() => setQrOpen(value => !value)}
           onDownload={downloadQr}
+          downloading={qrDownloading}
         />
+
+        {/* Seva */}
+        <SevaRing />
 
         {canSeeNotLoggedIn(roleId) ? <NotLoginCard /> : null}
 
@@ -1521,10 +1588,6 @@ export default function DashboardPage() {
         onClose={() => setDrawerOpen(false)}
         onSignOut={signOut}
         roleName={me?.role_name}
-        biometricAvailable={biometricAvailable}
-        biometricEnabled={biometricEnabled}
-        biometricBusy={biometricBusy}
-        onToggleBiometric={toggleBiometric}
       />
     </View>
   );
@@ -1726,6 +1789,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   qrDownloadText: { color: COLORS.navy, fontSize: 13, fontWeight: '800' },
+  qrBusy: { opacity: 0.6 },
   qrContent: { alignItems: 'center', marginTop: 14 },
   qrInlineImage: {
     width: 220,
@@ -1935,6 +1999,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionTitle: { color: COLORS.navy, fontSize: 15, fontWeight: '800' },
+  sevaPanel: { alignItems: 'center' },
+  sevaTitle: { alignSelf: 'flex-start', marginBottom: 8 },
+  sevaRing: { width: 150, height: 150 },
+  sevaCenter: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sevaPercent: { fontSize: 34, lineHeight: 40, fontWeight: '800' },
+  sevaSubmitted: { color: '#64748b', fontSize: 13, marginTop: 2 },
+  sevaCaption: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
   sectionLink: { color: COLORS.accent, fontSize: 12, fontWeight: '800' },
   thoughtHeader: { alignItems: 'center', marginBottom: 12 },
   thoughtPanel: {
@@ -1979,6 +2058,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   thoughtBtnText: { color: COLORS.surface, fontSize: 13, fontWeight: '800' },
+  thoughtBtnBusy: { opacity: 0.6 },
   orientation: {
     flexDirection: 'row',
     backgroundColor: COLORS.background,

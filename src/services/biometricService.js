@@ -77,7 +77,10 @@ export async function enableBiometricLogin(token) {
 
     authenticationType: Keychain.AUTHENTICATION_TYPE.BIOMETRICS,
 
-    authenticationPrompt: AUTH_PROMPT,
+    authenticationPrompt: {
+      ...AUTH_PROMPT,
+      description: 'Confirm to use biometric login on this device.',
+    },
   });
 
   return true;

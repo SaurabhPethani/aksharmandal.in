@@ -15,6 +15,8 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './src/utils/queryClient';
 import { AuthProvider } from './src/contexts/AuthContext';
 import LoginPage from './src/pages/LoginPage';
 import DashboardPage from './src/pages/DashboardPage';
@@ -24,9 +26,12 @@ function App() {
   return (
     <SafeAreaProvider style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </QueryClientProvider>
     </SafeAreaProvider>
   );
 }

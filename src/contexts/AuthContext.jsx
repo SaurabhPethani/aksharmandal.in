@@ -9,13 +9,14 @@ import {
 
 import {
   setAccessToken,
-  getAccessToken,
   setAuthLostHandler,
   setTokenRefreshedHandler,
   rememberSession,
   resumeSession,
   forgetSession,
 } from '../api/client';
+
+import { useQueryClient } from '@tanstack/react-query';
 
 import { authService } from '../services/authService';
 
@@ -45,6 +46,8 @@ export function AuthProvider({ children }) {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
 
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+
+  const queryClient = useQueryClient();
 
   const mounted = useRef(true);
 
@@ -107,31 +110,74 @@ export function AuthProvider({ children }) {
   }, []);
 
   /**
+   * Apply the login screen's biometric checkbox using the
+   * token from a fresh PIN/password login.
+   *
+   * The token is re-saved on every login, so a token revoked
+   * by a PIN/password change (e.g. on the web) is replaced as
+   * soon as the user signs in with the new credentials.
+   *
+   * Returns false when enabling failed (e.g. prompt cancelled).
+   * Never throws: biometric setup must not block login.
+   */
+  const applyBiometricChoice = useCallback(async (token, enable) => {
+    let saved = true;
+
+    try {
+      if (enable) {
+        await enableBiometricLogin(token?.access_token);
+      } else {
+        await disableBiometricLogin();
+      }
+    } catch (error) {
+      console.warn('Unable to update biometric login:', error);
+
+      saved = false;
+    }
+
+    const enabled = await isBiometricLoginEnabled();
+
+    if (mounted.current) {
+      setBiometricEnabled(enabled);
+    }
+
+    return saved;
+  }, []);
+
+  /**
    * Normal PIN login.
    */
   const loginWithPin = useCallback(
-    async (mobile, pin) => {
+    async (mobile, pin, { biometric = false } = {}) => {
       const token = await authService.loginWithPin(mobile, pin);
 
-      return establish(token, {
+      const biometricSaved = await applyBiometricChoice(token, biometric);
+
+      const result = await establish(token, {
         interactive: true,
       });
+
+      return { ...result, biometricSaved };
     },
-    [establish],
+    [applyBiometricChoice, establish],
   );
 
   /**
    * Normal password login.
    */
   const loginWithPassword = useCallback(
-    async (mobile, password) => {
+    async (mobile, password, { biometric = false } = {}) => {
       const token = await authService.loginWithPassword(mobile, password);
 
-      return establish(token, {
+      const biometricSaved = await applyBiometricChoice(token, biometric);
+
+      const result = await establish(token, {
         interactive: true,
       });
+
+      return { ...result, biometricSaved };
     },
-    [establish],
+    [applyBiometricChoice, establish],
   );
 
   /**
@@ -140,6 +186,12 @@ export function AuthProvider({ children }) {
   const switchTo = useCallback(
     async userId => {
       const token = await authService.switchAccount(userId);
+
+      /*
+       * Wipe every cached query so no panel shows
+       * the previous profile's data (e.g. Seva %).
+       */
+      queryClient.clear();
 
       clearAllFilterState();
 
@@ -159,7 +211,7 @@ export function AuthProvider({ children }) {
 
       return result;
     },
-    [establish],
+    [establish, queryClient],
   );
 
   const dismissAccountChoice = useCallback(() => {
@@ -167,56 +219,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   /**
-   * Enable biometric login for the
-   * currently authenticated account.
-   */
-  const enableBiometric = useCallback(async () => {
-    const available = await isBiometricAvailable();
-
-    if (!available) {
-      throw new Error(
-        'Biometric authentication is not available on this device.',
-      );
-    }
-
-    const token = getAccessToken();
-
-    if (!token) {
-      throw new Error('No active session is available for biometric login.');
-    }
-
-    const type = await getBiometricType();
-
-    await enableBiometricLogin(token);
-
-    if (mounted.current) {
-      setBiometricAvailable(true);
-      setBiometricEnabled(true);
-    }
-
-    return {
-      enabled: true,
-      type,
-    };
-  }, []);
-
-  /**
-   * Disable biometric login.
-   *
-   * Current application session remains active.
-   */
-  const disableBiometric = useCallback(async () => {
-    await disableBiometricLogin();
-
-    if (mounted.current) {
-      setBiometricEnabled(false);
-    }
-
-    return true;
-  }, []);
-
-  /**
    * Login using biometric authentication.
+   *
+   * If the server rejects the saved token (PIN/password
+   * changed, session revoked), the saved token is removed
+   * so the next PIN/password login can save a fresh one.
    */
   const loginWithBiometric = useCallback(async () => {
     const credentials = await authenticateWithBiometric();
@@ -244,6 +251,23 @@ export function AuthProvider({ children }) {
       return result;
     } catch (error) {
       await forgetSession();
+
+      if (error?.status === 401) {
+        await disableBiometricLogin();
+
+        if (mounted.current) {
+          setBiometricEnabled(false);
+        }
+
+        const expired = new Error(
+          'Biometric login has expired. Sign in with your PIN or password to turn it on again.',
+        );
+
+        expired.biometricExpired = true;
+
+        throw expired;
+      }
+
       throw error;
     }
   }, [establish]);
@@ -264,6 +288,12 @@ export function AuthProvider({ children }) {
 
     await forgetSession();
 
+    /*
+     * The next person to sign in on this phone must
+     * not see the previous member's cached data.
+     */
+    queryClient.clear();
+
     clearAllFilterState();
 
     if (mounted.current) {
@@ -272,7 +302,7 @@ export function AuthProvider({ children }) {
       setAccountChoicePending(false);
       setStatus('anonymous');
     }
-  }, []);
+  }, [queryClient]);
 
   /**
    * Handle expired/invalid authentication.
@@ -416,10 +446,6 @@ export function AuthProvider({ children }) {
 
       getBiometricType,
 
-      enableBiometric,
-
-      disableBiometric,
-
       loginWithBiometric,
 
       reloadPermissions: async () => null,
@@ -437,8 +463,6 @@ export function AuthProvider({ children }) {
       loginWithPin,
       biometricAvailable,
       biometricEnabled,
-      enableBiometric,
-      disableBiometric,
       loginWithBiometric,
       signOut,
     ],

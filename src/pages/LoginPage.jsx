@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -14,6 +15,8 @@ import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-
 import SiteFooter from '../components/SiteFooter';
 import { Text, TextInput } from '../components/Typography';
 import { useAuth } from '../hooks/core';
+import { AUTH, LOGIN_LOCKOUT_LIMIT } from '../constants/messages';
+import { ErrorBanner } from '../components/form/LoginField';
 
 const PIN_LENGTH = 6;
 const MIN_PASSWORD_LENGTH = 6;
@@ -29,6 +32,8 @@ const iconNames = {
   shield: 'shield-check-outline',
   fingerprint: 'fingerprint',
   check: 'check-circle',
+  checkboxOn: 'checkbox-marked',
+  checkboxOff: 'checkbox-blank-outline',
 };
 
 function NativeIcon({ name, size = 20, color = '#9BB5CB' }) {
@@ -100,12 +105,61 @@ function Field({
     </Pressable>
   );
 }
+// Shows whether biometric login is active on this device; the choice is
+// applied (token saved or removed) on the next PIN/password sign-in.
+function BiometricCheckbox({ checked, active, onChange, disabled }) {
+  const status = active
+    ? checked
+      ? 'Active on this device'
+      : 'Will be turned off when you sign in'
+    : checked
+      ? 'Will be turned on when you sign in'
+      : 'Not active on this device';
+
+  return (
+    <Pressable
+      onPress={() => onChange(!checked)}
+      disabled={disabled}
+      hitSlop={6}
+      style={({ pressed }) => [
+        styles.biometricOption,
+        pressed && styles.pressedLink,
+      ]}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked, disabled }}
+    >
+      <NativeIcon
+        name={checked ? 'checkboxOn' : 'checkboxOff'}
+        size={22}
+        color={checked ? '#003158' : '#9BB5CB'}
+      />
+      <View style={styles.biometricOptionText}>
+        <Text style={styles.biometricOptionLabel}>Enable biometric login</Text>
+        <Text
+          style={[
+            styles.biometricOptionStatus,
+            active && checked && styles.biometricOptionActive,
+          ]}
+        >
+          {status}
+        </Text>
+      </View>
+      <NativeIcon
+        name="fingerprint"
+        size={22}
+        color={active ? '#22A06B' : '#9BB5CB'}
+      />
+    </Pressable>
+  );
+}
+
 function CodeInput({
   label,
   value,
   onChangeText,
   secureTextEntry = false,
   editable = true,
+  rightElement,
 }) {
   const inputRefs = useRef([]);
   const [focusedIndex, setFocusedIndex] = useState(null);
@@ -148,11 +202,13 @@ function CodeInput({
         <Text
           style={[
             styles.fieldLabel,
+            styles.codeLabel,
             focusedIndex !== null && styles.fieldLabelFocused,
           ]}
         >
           {label}
         </Text>
+        {rightElement}
       </View>
       <View style={styles.digitRow}>
         {digits.map((digit, index) => (
@@ -205,6 +261,7 @@ export default function LoginPage() {
   const [purpose, setPurpose] = useState('SETUP');
   const [newPassword, setNewPassword] = useState('');
   const [showSetupPass, setShowSetupPass] = useState(false);
+  const [showSetupPin, setShowSetupPin] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -213,6 +270,7 @@ export default function LoginPage() {
   const [notice, setNotice] = useState('');
   const [failure, setFailure] = useState(null);
   const [biometricBusy, setBiometricBusy] = useState(false);
+  const [useBiometric, setUseBiometric] = useState(auth.biometricEnabled);
 
   const mobileValid = mobile.length === 10;
   const locked = failure?.isLocked === true;
@@ -260,11 +318,7 @@ export default function LoginPage() {
   };
 
   const biometricLogin = async () => {
-    if (
-      biometricBusy ||
-      !auth.biometricAvailable ||
-      !auth.biometricEnabled
-    ) {
+    if (biometricBusy || !auth.biometricAvailable || !auth.biometricEnabled) {
       return;
     }
 
@@ -276,6 +330,9 @@ export default function LoginPage() {
 
       setNotice('Signed in successfully.');
     } catch (biometricError) {
+      // The saved token was revoked and removed; keep the box ticked so the
+      // next PIN/password sign-in saves a fresh one.
+      if (biometricError?.biometricExpired) setUseBiometric(true);
       setError(biometricError?.message || 'Biometric authentication failed.');
     } finally {
       setBiometricBusy(false);
@@ -286,13 +343,21 @@ export default function LoginPage() {
     run(async () => {
       if (!mobileValid) throw new Error('Enter a valid 10-digit mobile number');
       if (locked) return;
+      const biometric = auth.biometricAvailable && useBiometric;
+      let result;
       if (tab === 'pin') {
         if (pinValue.length !== PIN_LENGTH)
           throw new Error(`Enter all ${PIN_LENGTH} PIN digits`);
-        await auth.loginWithPin(mobile, pinValue);
+        result = await auth.loginWithPin(mobile, pinValue, { biometric });
       } else {
         if (!password) throw new Error('Enter your password');
-        await auth.loginWithPassword(mobile, password);
+        result = await auth.loginWithPassword(mobile, password, { biometric });
+      }
+      if (biometric && result?.biometricSaved === false) {
+        Alert.alert(
+          'Biometric login',
+          'You are signed in, but biometric login could not be turned on. You can try again the next time you sign in.',
+        );
       }
       setNotice('Signed in successfully.');
     });
@@ -354,6 +419,22 @@ export default function LoginPage() {
       setFailure(null);
       setNotice('Setup complete. Please sign in with your new credentials.');
     });
+
+  // Shared by the PIN and Confirm PIN rows, like the password fields' toggle.
+  const setupPinToggle = (
+    <Pressable
+      onPress={() => setShowSetupPin(value => !value)}
+      hitSlop={8}
+      style={({ pressed }) => [styles.pinToggle, pressed && styles.pressedLink]}
+      accessibilityRole="button"
+      accessibilityLabel={showSetupPin ? 'Hide PIN' : 'Show PIN'}
+    >
+      <NativeIcon name={showSetupPin ? 'eyeOff' : 'eye'} size={18} />
+      <Text style={styles.pinToggleText}>
+        {showSetupPin ? 'Hide' : 'Show'}
+      </Text>
+    </Pressable>
+  );
 
   const title =
     step === 'otp'
@@ -445,6 +526,15 @@ export default function LoginPage() {
                     Enter a valid 10-digit number
                   </Text>
                 )}
+                {/* Above the PIN because the PIN signs in on its last digit. */}
+                {auth.biometricAvailable && (
+                  <BiometricCheckbox
+                    checked={useBiometric}
+                    active={auth.biometricEnabled}
+                    onChange={setUseBiometric}
+                    disabled={busy}
+                  />
+                )}
                 {tab === 'pin' ? (
                   <CodeInput
                     label={`${PIN_LENGTH}-digit PIN`}
@@ -494,21 +584,30 @@ export default function LoginPage() {
                 </Pressable>
                 {auth.biometricAvailable && auth.biometricEnabled && (
                   <>
-                    <Text style={styles.biometricOr}>OR</Text>
+                    <View style={styles.orRow}>
+                      <View style={styles.orLine} />
+                      <Text style={styles.biometricOr}>OR</Text>
+                      <View style={styles.orLine} />
+                    </View>
 
                     <Pressable
-                      style={styles.biometricButton}
+                      style={({ pressed }) => [
+                        styles.biometricButton,
+                        (biometricBusy || busy) && styles.disabled,
+                        pressed && styles.pressed,
+                      ]}
                       onPress={biometricLogin}
                       disabled={biometricBusy || busy}
+                      accessibilityRole="button"
                     >
                       {biometricBusy ? (
-                        <ActivityIndicator size="small" />
+                        <ActivityIndicator size="small" color="#003158" />
                       ) : (
                         <>
                           <NativeIcon
                             name="fingerprint"
-                            size={25}
-                            color="#FFFFFF"
+                            size={24}
+                            color="#003158"
                           />
                           <Text style={styles.biometricButtonText}>
                             Login with Biometrics
@@ -620,15 +719,17 @@ export default function LoginPage() {
                   label={`${PIN_LENGTH}-digit PIN`}
                   value={newPin}
                   onChangeText={setNewPin}
-                  secureTextEntry
+                  secureTextEntry={!showSetupPin}
                   editable={!busy}
+                  rightElement={setupPinToggle}
                 />
                 <CodeInput
                   label="Confirm PIN"
                   value={confirmPin}
                   onChangeText={setConfirmPin}
-                  secureTextEntry
+                  secureTextEntry={!showSetupPin}
                   editable={!busy}
+                  rightElement={setupPinToggle}
                 />
                 <Pressable
                   style={({ pressed }) => [
@@ -646,16 +747,11 @@ export default function LoginPage() {
               </>
             )}
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            {locked ? (
-              <Text style={styles.error}>
-                This account is locked. Use the reset option above.
-              </Text>
-            ) : null}
-            {attemptsLeft != null && attemptsLeft > 0 ? (
+            <ErrorBanner message={error} />
+            {locked ? <Text style={styles.error}>{AUTH.locked}</Text> : null}
+            {!locked && attemptsLeft != null && attemptsLeft > 0 ? (
               <Text style={styles.warning}>
-                {attemptsLeft} attempt{attemptsLeft === 1 ? '' : 's'} remaining
-                before this account is locked.
+                {AUTH.attemptsLeft(attemptsLeft)}
               </Text>
             ) : null}
             {notice ? <Text style={styles.notice}>{notice}</Text> : null}
@@ -779,6 +875,9 @@ const styles = StyleSheet.create({
   fieldAction: { width: 24, alignItems: 'center', justifyContent: 'center' },
   codeBlock: { marginBottom: 12 },
   codeLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+  codeLabel: { flex: 1 },
+  pinToggle: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  pinToggleText: { color: '#7894AA', fontSize: 12, fontWeight: '700' },
   stepIcon: {
     width: 46,
     height: 46,
@@ -863,26 +962,40 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   loader: { marginTop: 8 },
-  biometricOr: {
-    textAlign: 'center',
-    marginVertical: 12,
-    opacity: 0.6,
+  biometricOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#DCE7F0',
+    borderRadius: 14,
+    backgroundColor: '#F5F9FD',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
   },
-
+  biometricOptionText: { flex: 1 },
+  biometricOptionLabel: { color: '#003158', fontSize: 14, fontWeight: '700' },
+  biometricOptionStatus: { color: '#7894AA', fontSize: 12, marginTop: 2 },
+  biometricOptionActive: { color: '#22A06B', fontWeight: '600' },
+  orRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 12,
+  },
+  orLine: { flex: 1, height: 1, backgroundColor: '#DCE7F0' },
+  biometricOr: { color: '#7894AA', fontSize: 12, fontWeight: '700' },
   biometricButton: {
-    minHeight: 52,
-    borderRadius: 12,
+    minHeight: 50,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1.5,
+    borderColor: '#003158',
+    backgroundColor: '#FFF',
   },
-
-  biometricButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  biometricButtonText: { color: '#003158', fontSize: 15, fontWeight: '800' },
 });
