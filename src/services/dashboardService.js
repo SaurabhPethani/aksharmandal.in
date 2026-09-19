@@ -1,4 +1,5 @@
-import { api, API_BASE } from '../api/client';
+import { api } from '../api/client';
+import { API_BASE } from '../config/appConfig';
 
 function resolveThought(res) {
   if (!res || typeof res !== 'object') return null;

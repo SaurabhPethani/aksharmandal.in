@@ -17,7 +17,7 @@ import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vec
 import SiteFooter from '../components/SiteFooter';
 import { Text, TextInput } from '../components/Typography';
 import { dashboardService } from '../services/dashboardService';
-import { API_BASE } from '../api/client';
+import { API_BASE } from '../config/appConfig';
 import { useAuth } from '../hooks/core';
 import { canReadOverallDashboard, canSeeNotLoggedIn } from '../constants/roles';
 import { readWeekDate } from '../utils/dates';
