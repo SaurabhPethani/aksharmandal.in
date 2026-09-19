@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { VITE_API_BASE } from '@env';
 import { messageForStatus, toneForStatus } from '../constants/messages';
+import { API_BASE } from '../config/appConfig';
 
 // Axios instance for the Akshar Connect API.
 //
@@ -11,10 +11,6 @@ import { messageForStatus, toneForStatus } from '../constants/messages';
 // 3. Biometric access token -> react-native-keychain
 //
 // DO NOT store the access token in AsyncStorage/localStorage.
-
-export const API_BASE = (
-  VITE_API_BASE || 'https://dev.aksharmandal.in/aksharconnect'
-).replace(/\/+$/, '');
 
 export const apiUrl = path => `${API_BASE}${path}`;
 

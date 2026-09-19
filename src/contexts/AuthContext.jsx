@@ -127,7 +127,7 @@ export function AuthProvider({ children }) {
       if (enable) {
         await enableBiometricLogin(token?.access_token);
       } else {
-        await disableBiometricLogin();
+        saved = await disableBiometricLogin();
       }
     } catch (error) {
       console.warn('Unable to update biometric login:', error);

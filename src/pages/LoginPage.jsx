@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -110,8 +110,8 @@ function Field({
 function BiometricCheckbox({ checked, active, onChange, disabled }) {
   const status = active
     ? checked
-      ? 'Active on this device'
-      : 'Will be turned off when you sign in'
+      ? 'Active; stays enabled after sign-in'
+      : 'Will be turned off after PIN/password sign-in'
     : checked
       ? 'Will be turned on when you sign in'
       : 'Not active on this device';
@@ -134,7 +134,9 @@ function BiometricCheckbox({ checked, active, onChange, disabled }) {
         color={checked ? '#003158' : '#9BB5CB'}
       />
       <View style={styles.biometricOptionText}>
-        <Text style={styles.biometricOptionLabel}>Enable biometric login</Text>
+        <Text style={styles.biometricOptionLabel}>
+          {active ? 'Use biometric login' : 'Enable biometric login'}
+        </Text>
         <Text
           style={[
             styles.biometricOptionStatus,
@@ -271,6 +273,14 @@ export default function LoginPage() {
   const [failure, setFailure] = useState(null);
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [useBiometric, setUseBiometric] = useState(auth.biometricEnabled);
+  const biometricStateLoaded = useRef(auth.biometricEnabled);
+
+  useEffect(() => {
+    if (auth.biometricEnabled && !biometricStateLoaded.current) {
+      setUseBiometric(true);
+    }
+    biometricStateLoaded.current = auth.biometricEnabled;
+  }, [auth.biometricEnabled]);
 
   const mobileValid = mobile.length === 10;
   const locked = failure?.isLocked === true;
@@ -353,10 +363,12 @@ export default function LoginPage() {
         if (!password) throw new Error('Enter your password');
         result = await auth.loginWithPassword(mobile, password, { biometric });
       }
-      if (biometric && result?.biometricSaved === false) {
+      if (result?.biometricSaved === false) {
         Alert.alert(
           'Biometric login',
-          'You are signed in, but biometric login could not be turned on. You can try again the next time you sign in.',
+          biometric
+            ? 'You are signed in, but biometric login could not be turned on. You can try again the next time you sign in.'
+            : 'You are signed in, but biometric login could not be turned off. Please try again the next time you sign in.',
         );
       }
       setNotice('Signed in successfully.');

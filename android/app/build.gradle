@@ -2,6 +2,14 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+project.ext.envConfigFiles = [
+    dev: ".env.dev",
+    uat: ".env.uat",
+    prod: ".env.prod",
+]
+
+apply from: file("../../node_modules/react-native-config/android/dotenv.gradle")
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -77,13 +85,30 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.aksharconnect"
+    namespace "in.aksharconnect"
+    flavorDimensions "environment"
     defaultConfig {
-        applicationId "com.aksharconnect"
+        applicationId "in.aksharconnect"
+        resValue "string", "build_config_package", "in.aksharconnect"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+    }
+    productFlavors {
+        dev {
+            dimension "environment"
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+        }
+        uat {
+            dimension "environment"
+            applicationIdSuffix ".uat"
+            versionNameSuffix "-uat"
+        }
+        prod {
+            dimension "environment"
+        }
     }
     signingConfigs {
         debug {

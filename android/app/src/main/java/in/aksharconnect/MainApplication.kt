@@ -1,4 +1,4 @@
-package com.aksharconnect
+package `in`.aksharconnect
 
 import android.app.Application
 import com.facebook.react.PackageList

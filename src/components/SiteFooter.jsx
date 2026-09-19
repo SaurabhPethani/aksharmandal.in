@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { VITE_APP_VERSION } from '@env';
 import { Text } from './Typography';
+import { APP_VERSION } from '../config/appConfig';
 
 export default function SiteFooter({ transparent = false, light = false }) {
   const background = light
@@ -19,10 +19,10 @@ export default function SiteFooter({ transparent = false, light = false }) {
     <View style={[styles.footer, background]}>
       <Text style={[styles.text, textColor]}>
         {'© 2026 Akshar Connect. All rights reserved.'}
-        {VITE_APP_VERSION ? (
+        {APP_VERSION ? (
           // Tabular digits, and a non-breaking space so "v" can never wrap
           // away from the number it labels on a narrow phone.
-          <Text style={styles.version}>{` · v${VITE_APP_VERSION}`}</Text>
+          <Text style={styles.version}>{` · v${APP_VERSION}`}</Text>
         ) : null}
       </Text>
     </View>
