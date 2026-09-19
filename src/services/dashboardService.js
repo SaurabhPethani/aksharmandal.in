@@ -26,6 +26,12 @@ export const dashboardService = {
   presentAbsent: () => api.get('/api/v1/dashboard/present-absent'),
   me: () => api.get('/api/v1/users/me'),
   birthdays: () => api.get('/api/v1/users/today-birthdays'),
+  members: params => api.get('/api/v1/users/list', { params }),
+  memberStats: userId =>
+    api.get(`/api/v1/dashboard-overview/member/${userId}`),
+  myBirthdayWishes: () => api.get('/api/v1/users/my-birthday-wishes'),
+  sendBirthdayWish: ({ userId, message }) =>
+    api.post('/api/v1/users/send-birthday-wish', { user_id: userId, message }),
   events: () => api.get('/api/v1/events', { params: { status: 'active' } }),
   todayThought: async () => {
     try {

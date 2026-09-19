@@ -11,18 +11,28 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, {
+  Circle,
+  G,
+  Polyline,
+  Text as SvgText,
+} from 'react-native-svg';
 import { useQueryClient } from '@tanstack/react-query';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
 import AppHeader from '../components/AppHeader';
-import { Text, TextInput } from '../components/Typography';
+import { Text } from '../components/Typography';
+import { Modal } from '../components/Overlays';
+import { Skeleton } from '../components/ui';
+import MemberStatsSearch from '../components/dashboard/MemberStatsSearch';
+import TrendChart from '../components/charts/TrendChart';
 import { dashboardService } from '../services/dashboardService';
 import { API_BASE } from '../config/appConfig';
 import { useAuth } from '../hooks/core';
 import { canReadOverallDashboard, canSeeNotLoggedIn } from '../constants/roles';
-import { readWeekDate } from '../utils/dates';
+import { nextWeekdayDate, readWeekDate } from '../utils/dates';
 import { useMyKhardo } from '../hooks/useKhardo';
+import { useMemberStats } from '../hooks/useMemberStats';
 import {
   saveRemoteImage,
   shareRemoteImageOnWhatsApp,
@@ -85,12 +95,15 @@ function weekRange(weekDate, { live = false } = {}) {
     return null;
   }
 
-  const monStr = `${d}-${MONTHS[mo - 1]}`;
-  if (live) return `Week ${monStr} to today`;
+  // `week_date` NAMES THE WEEK'S SUNDAY, so the Monday is six days back — the
+  // same reading as the web's `weekRange`, which is what makes "7-Sep to
+  // 13-Sep" on one screen mean the week it means on the other.
+  const sunStr = `${d}-${MONTHS[mo - 1]}`;
+  const monDate = new Date(Date.UTC(y, mo - 1, d - 6));
+  const monStr = `${monDate.getUTCDate()}-${MONTHS[monDate.getUTCMonth()]}`;
 
-  const sunDate = new Date(Date.UTC(y, mo - 1, d + 6));
-  const sunStr = `${sunDate.getUTCDate()}-${MONTHS[sunDate.getUTCMonth()]}`;
-  return `Week ${monStr} to ${sunStr}`;
+  if (live) return `${monStr} to today`;
+  return `${monStr} to ${sunStr}`;
 }
 
 function formatSabhaAge(age) {
@@ -122,14 +135,25 @@ function readClock(value) {
   return `${h12}:${m[2]} ${suffix}`;
 }
 
+/**
+ * The rows TrendChart plots, in the shape the web's chart reads:
+ * `present` IS THE PERCENTAGE (the plotted series), and the counts ride
+ * alongside it for the labels and the tooltip.
+ */
 function buildChartPoints(weeks) {
   const rows = Array.isArray(weeks) ? weeks : [];
   return rows
     .map(w => {
       const read = readWeekDate(w?.week_date);
-      const present = Number(w?.present_count) || (w?.attended ? 1 : 0);
-      const absent = Number(w?.absent_count) || (w?.attended === false ? 1 : 0);
-      const total = present + absent;
+      const presentCount = Number(w?.present_count) || (w?.attended ? 1 : 0);
+      const absentCount =
+        Number(w?.absent_count) || (w?.attended === false ? 1 : 0);
+      const total = presentCount + absentCount;
+      // THREE STATES on a personal week: present | absent | upcoming. An
+      // upcoming week has no percentage at all — see the null below.
+      const status =
+        w?.status ??
+        (w?.attended == null ? null : w.attended ? 'present' : 'absent');
       const pct =
         w?.present_percentage != null
           ? Number(w.present_percentage)
@@ -138,32 +162,94 @@ function buildChartPoints(weeks) {
               ? 100
               : 0
             : total > 0
-              ? (present / total) * 100
+              ? (presentCount / total) * 100
               : 0;
 
       return {
-        key: read?.key || String(w?.week_date || ''),
+        sortKey: read?.key || String(w?.week_date || ''),
         label: read?.label || String(w?.week_date || '').slice(0, 5),
-        present,
-        absent,
+        rangeLabel: weekRange(w?.week_date),
+        // `null` lifts the pen: a week whose Sabha has not been held is not a
+        // miss, so the line breaks rather than diving to the baseline.
+        present: status === 'upcoming' ? null : Math.round(pct * 10) / 10,
+        absentPercentage: w?.absent_percentage,
+        presentCount,
+        absentCount,
+        status,
         total,
-        percentage: Math.round(pct * 10) / 10,
-        ratio:
-          total > 0
-            ? `${present}/${total}`
-            : w?.attended != null
-              ? w.attended
-                ? 'P'
-                : 'A'
-              : '0/0',
       };
     })
-    .sort((a, b) => String(a.key).localeCompare(String(b.key)));
+    .sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey)));
 }
 
-const PairValue = ({ present, absent }) => (
+// THE YEAR AS ONE RING — the web's YearDonut, value for value. The viewBox is
+// much wider than the ring because the labels sit OUTSIDE it on leader lines:
+// the box has to hold ring, ticks and words, or the text clips at the card's
+// edge. Wide enough for the longest label the data can produce ("Present 100").
+const VB_W = 404;
+const VB_H = 214;
+const CX = 202;
+const CY = 104;
+const RING_STROKE = 30;
+const RING_RADIUS = 62;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+/** The divider between the two arcs, as a gap in the stroke. */
+const RING_GAP = 3;
+const LEADER_START = RING_RADIUS + RING_STROKE / 2;
+/** How far out the tick ends — the label box begins exactly here. */
+const LABEL_X = LEADER_START + 18;
+/** The label box is a view (see YearAttendance) and hugs its own text; only its
+ *  height is fixed, so it can be centred on the ring's middle line. */
+const DONUT_LABEL_H = 28;
+const PRESENT_COLOUR = '#15803D';
+/** A LIGHTER red than danger-fg: it differs from the green in LIGHTNESS as well
+ *  as hue, which is the channel colour blindness leaves alone. The labels carry
+ *  the counts in text, which is what allows a colour this light. */
+const ABSENT_COLOUR = '#E9878A';
+
+/** `label: 'Sabha'` pairs with the Present/Absent wording in the tooltip. */
+const SELF_SERIES = [{ key: 'present', label: 'Sabha', color: COLORS.chartBlue }];
+
+/** "13 (31.0%)" — the count with the share the API reported for it. */
+const countWithShare = (count, percentage) =>
+  percentage == null || percentage === ''
+    ? numberText(count)
+    : `${numberText(count)} (${Number(percentage).toFixed(1)}%)`;
+
+/**
+ * The week-on-week change beside a figure — "↑3", green up and red down.
+ *
+ * Drawn only when there IS a change: a zero delta, or an unknown previous
+ * figure, leaves the number on its own rather than claiming "↑0".
+ */
+const DeltaBadge = ({ delta }) => {
+  if (!delta) return null;
+  return (
+    <Text style={delta > 0 ? styles.deltaUp : styles.deltaDown}>
+      {' '}
+      {delta > 0 ? '↑' : '↓'}
+      {numberText(Math.abs(delta))}
+    </Text>
+  );
+};
+
+/** A count with its week-on-week change — "1,484 ↑3". */
+const CountWithDelta = ({ now, last }) => (
+  <Text numberOfLines={1}>
+    <Text style={styles.metricValue}>{numberText(now)}</Text>
+    <DeltaBadge delta={now == null || last == null ? null : now - last} />
+  </Text>
+);
+
+/**
+ * Present | Absent, green and red. `presentDelta` adds the week-to-date arrow
+ * beside PRESENT only — the comparison is deliberately present-only, as on the
+ * web.
+ */
+const PairValue = ({ present, absent, presentDelta }) => (
   <Text numberOfLines={1}>
     <Text style={styles.greenText}>{numberText(present)}</Text>
+    <DeltaBadge delta={presentDelta} />
     <Text style={styles.metricValue}> | </Text>
     <Text style={styles.redText}>{numberText(absent)}</Text>
   </Text>
@@ -383,6 +469,8 @@ function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
 
 function SevaRing() {
   const { data, isLoading } = useMyKhardo();
+  // Folded away by default, like the QR code.
+  const [expanded, setExpanded] = useState(false);
   if (isLoading) return null;
 
   const pct = data?.data?.percentage;
@@ -398,43 +486,63 @@ function SevaRing() {
 
   return (
     <View style={[styles.sectionPanel, styles.sevaPanel]}>
-      <Text style={[styles.sectionTitle, styles.sevaTitle]}>Seva</Text>
-      <View
-        style={styles.sevaRing}
-        accessible
-        accessibilityRole="image"
-        accessibilityLabel={`Seva ${Math.round(value)}% submitted`}
-      >
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          <Circle
-            cx="50"
-            cy="50"
-            r={R}
-            fill="none"
-            stroke="#e5e7eb"
-            strokeWidth="10"
+      <View style={styles.sevaHeader}>
+        <Text style={styles.sectionTitle}>Seva</Text>
+        <Pressable
+          onPress={() => setExpanded(open => !open)}
+          style={styles.showTableBtn}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Hide Seva' : 'Show Seva'}
+        >
+          <MaterialCommunityIcons
+            name={expanded ? 'eye-off-outline' : 'eye-outline'}
+            size={15}
+            color={COLORS.navy}
           />
-          <Circle
-            cx="50"
-            cy="50"
-            r={R}
-            fill="none"
-            stroke={color}
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={`${C} ${C}`}
-            strokeDashoffset={offset}
-            transform="rotate(-90 50 50)"
-          />
-        </Svg>
-        <View style={styles.sevaCenter} pointerEvents="none">
-          <Text style={[styles.sevaPercent, { color }]}>
-            {Math.round(value)}%
-          </Text>
-          <Text style={styles.sevaSubmitted}>submitted</Text>
-        </View>
+          <Text style={styles.showTableText}>{expanded ? 'Hide' : 'Show'}</Text>
+        </Pressable>
       </View>
-      <Text style={styles.sevaCaption}>Seva submitted of promised</Text>
+
+      {expanded ? (
+        <>
+          <View
+            style={styles.sevaRing}
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={`Seva ${Math.round(value)}% submitted`}
+          >
+            <Svg width="100%" height="100%" viewBox="0 0 100 100">
+              <Circle
+                cx="50"
+                cy="50"
+                r={R}
+                fill="none"
+                stroke="#e5e7eb"
+                strokeWidth="10"
+              />
+              <Circle
+                cx="50"
+                cy="50"
+                r={R}
+                fill="none"
+                stroke={color}
+                strokeWidth="10"
+                strokeLinecap="round"
+                strokeDasharray={`${C} ${C}`}
+                strokeDashoffset={offset}
+                transform="rotate(-90 50 50)"
+              />
+            </Svg>
+            <View style={styles.sevaCenter} pointerEvents="none">
+              <Text style={[styles.sevaPercent, { color }]}>
+                {Math.round(value)}%
+              </Text>
+              <Text style={styles.sevaSubmitted}>submitted</Text>
+            </View>
+          </View>
+          <Text style={styles.sevaCaption}>Seva submitted of promised</Text>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -459,19 +567,6 @@ function NotLoginCard() {
   );
 }
 
-function SearchBar() {
-  return (
-    <View style={styles.searchCard}>
-      <MaterialCommunityIcons name="magnify" size={20} color={COLORS.muted} />
-      <TextInput
-        style={styles.searchInput}
-        placeholder="View a member's dashboard — search by name..."
-        placeholderTextColor={COLORS.muted}
-      />
-    </View>
-  );
-}
-
 function MetricCard({
   icon,
   label,
@@ -481,7 +576,21 @@ function MetricCard({
   action = false,
   iconBg,
   iconColor,
+  onPress,
 }) {
+  // Tiles with somewhere to go are buttons; the rest stay plain views.
+  const Card = onPress ? Pressable : View;
+  const cardProps = onPress
+    ? {
+        onPress,
+        accessibilityRole: 'button',
+        style: ({ pressed }) => [
+          styles.metricCard,
+          pressed && styles.metricCardPressed,
+        ],
+      }
+    : { style: styles.metricCard };
+
   const getIconBg = () => {
     if (iconBg) return { backgroundColor: iconBg };
     if (tone === 'green') return { backgroundColor: COLORS.greenBg };
@@ -497,7 +606,7 @@ function MetricCard({
   };
 
   return (
-    <View style={styles.metricCard}>
+    <Card {...cardProps}>
       <View style={styles.metricCardHeader}>
         <View style={[styles.metricIcon, getIconBg()]}>
           <MaterialCommunityIcons
@@ -536,7 +645,7 @@ function MetricCard({
           </Text>
         )
       ) : null}
-    </View>
+    </Card>
   );
 }
 
@@ -696,12 +805,13 @@ function ThoughtCard({ thought }) {
   );
 }
 
-function FriendsCard({ me }) {
+function FriendsCard({ me, title = 'My Spiritual Friend' }) {
   const people = [
     {
       role: 'Follow-up',
       name: me?.followup_by_id_name,
       mobile: me?.followup_id_mobile,
+      whatsapp: me?.followup_id_whatsapp,
       icon: 'account-heart-outline',
       iconBg: '#FFF0E5',
       iconColor: COLORS.accent,
@@ -747,44 +857,46 @@ function FriendsCard({ me }) {
             color={COLORS.navy}
           />
         </View>
-        <Text style={styles.sectionTitle}>My Spiritual Friend</Text>
+        <Text style={styles.sectionTitle}>{title}</Text>
       </View>
-      {people.map(({ role, name, mobile, icon, iconBg, iconColor }) => (
-        <View key={role} style={styles.friendRow}>
-          <View style={[styles.friendIcon, { backgroundColor: iconBg }]}>
-            <MaterialCommunityIcons name={icon} size={18} color={iconColor} />
-          </View>
-          <View style={styles.friendCopy}>
-            <Text style={styles.friendName} numberOfLines={1}>
-              {name || '—'}
-            </Text>
-          </View>
-          {mobile ? (
-            <View style={styles.friendActions}>
-              <Pressable
-                onPress={() => handleCall(mobile)}
-                style={styles.friendActionCall}
-              >
-                <MaterialCommunityIcons
-                  name="phone"
-                  size={16}
-                  color={COLORS.surface}
-                />
-              </Pressable>
-              <Pressable
-                onPress={() => handleWhatsApp(mobile)}
-                style={styles.friendActionWhatsApp}
-              >
-                <MaterialCommunityIcons
-                  name="whatsapp"
-                  size={16}
-                  color={COLORS.surface}
-                />
-              </Pressable>
+      {people.map(
+        ({ role, name, mobile, whatsapp, icon, iconBg, iconColor }) => (
+          <View key={role} style={styles.friendRow}>
+            <View style={[styles.friendIcon, { backgroundColor: iconBg }]}>
+              <MaterialCommunityIcons name={icon} size={18} color={iconColor} />
             </View>
-          ) : null}
-        </View>
-      ))}
+            <View style={styles.friendCopy}>
+              <Text style={styles.friendName} numberOfLines={1}>
+                {name || '—'}
+              </Text>
+            </View>
+            {mobile ? (
+              <View style={styles.friendActions}>
+                <Pressable
+                  onPress={() => handleCall(mobile)}
+                  style={styles.friendActionCall}
+                >
+                  <MaterialCommunityIcons
+                    name="phone"
+                    size={16}
+                    color={COLORS.surface}
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={() => handleWhatsApp(whatsapp || mobile)}
+                  style={styles.friendActionWhatsApp}
+                >
+                  <MaterialCommunityIcons
+                    name="whatsapp"
+                    size={16}
+                    color={COLORS.surface}
+                  />
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ),
+      )}
     </View>
   );
 }
@@ -836,130 +948,6 @@ function EventsCard({ events }) {
   );
 }
 
-function LineChart({ points = [], height = 180 }) {
-  const [chartWidth, setChartWidth] = useState(0);
-  const chartHeight = height - 52;
-
-  if (!points || !points.length) {
-    return <Text style={styles.emptyText}>No attendance data available.</Text>;
-  }
-
-  const gridYValues = [100, 75, 50, 25, 0];
-
-  return (
-    <View
-      style={[styles.lineChartContainer, { height }]}
-      onLayout={e => setChartWidth(e.nativeEvent.layout.width)}
-    >
-      {/* Y-axis Grid lines */}
-      <View style={StyleSheet.absoluteFill}>
-        {gridYValues.map((val, idx) => {
-          const top = (idx / (gridYValues.length - 1)) * chartHeight + 24;
-          return (
-            <View key={val} style={[styles.chartGridLineRow, { top }]}>
-              <Text style={styles.chartYLabel}>{val}</Text>
-              <View style={styles.chartGridLine} />
-            </View>
-          );
-        })}
-      </View>
-
-      {/* Points & Lines Area */}
-      {chartWidth > 0 && points.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          scrollEnabled={points.length > 5}
-          contentContainerStyle={{ minWidth: chartWidth }}
-        >
-          {(() => {
-            const step = Math.max(
-              52,
-              (chartWidth - 48) / Math.max(1, points.length - 1),
-            );
-            const calculatedPoints = points.map((p, i) => {
-              const x = 32 + i * step;
-              const y =
-                24 +
-                chartHeight *
-                  (1 - Math.min(100, Math.max(0, p.percentage)) / 100);
-              return { ...p, x, y };
-            });
-
-            return (
-              <View
-                style={{
-                  width: Math.max(chartWidth, 32 + points.length * step),
-                  height,
-                }}
-              >
-                {/* Connecting Line Segments */}
-                {calculatedPoints.map((p1, i) => {
-                  if (i === calculatedPoints.length - 1) return null;
-                  const p2 = calculatedPoints[i + 1];
-                  const dx = p2.x - p1.x;
-                  const dy = p2.y - p1.y;
-                  const dist = Math.sqrt(dx * dx + dy * dy);
-                  const angle = `${Math.atan2(dy, dx) * (180 / Math.PI)}deg`;
-
-                  return (
-                    <View
-                      key={`line-${i}`}
-                      style={[
-                        styles.chartLineSegment,
-                        {
-                          left: p1.x,
-                          top: p1.y,
-                          width: dist,
-                          transform: [{ rotate: angle }],
-                        },
-                      ]}
-                    />
-                  );
-                })}
-
-                {/* Point Dots & Labels */}
-                {calculatedPoints.map((p, i) => (
-                  <React.Fragment key={`point-${i}`}>
-                    {/* Floating Label above Dot */}
-                    <View
-                      style={[
-                        styles.chartPointLabelBox,
-                        { left: p.x - 30, top: Math.max(0, p.y - 24) },
-                      ]}
-                    >
-                      <Text style={styles.chartRatioText}>{p.ratio}</Text>
-                      <Text style={styles.chartPctText}>{p.percentage}%</Text>
-                    </View>
-
-                    {/* Point Marker Dot */}
-                    <View
-                      style={[
-                        styles.chartPointDot,
-                        { left: p.x - 4, top: p.y - 4 },
-                      ]}
-                    />
-
-                    {/* X-axis Date Label */}
-                    <Text
-                      style={[
-                        styles.chartXLabel,
-                        { left: p.x - 24, top: height - 18 },
-                      ]}
-                    >
-                      {p.label}
-                    </Text>
-                  </React.Fragment>
-                ))}
-              </View>
-            );
-          })()}
-        </ScrollView>
-      ) : null}
-    </View>
-  );
-}
-
 function WeeklyAttendanceCard({
   last4,
   last12,
@@ -969,6 +957,9 @@ function WeeklyAttendanceCard({
 }) {
   const [showTable, setShowTable] = useState(false);
   const [windowSize, setWindowSize] = useState('4');
+  // The personal 8-week card: one member's present/absent weeks rather than a
+  // Sabha's turnout, so it reads P / A instead of a percentage.
+  const selfMode = !allowWindowToggle;
 
   const sourceWeeks = allowWindowToggle
     ? windowSize === '12'
@@ -1044,111 +1035,297 @@ function WeeklyAttendanceCard({
         </Pressable>
       </View>
 
-      {showTable ? (
-        <View style={styles.tableContainer}>
-          <View style={styles.tableHeader}>
-            <Text style={styles.tableHeadCellFlex2}>Week</Text>
-            <Text style={styles.tableHeadCellFlex1Center}>Present</Text>
-            <Text style={styles.tableHeadCellFlex1Center}>Absent</Text>
-          </View>
-          {points.map((p, idx) => (
-            <View key={idx} style={styles.tableRow}>
-              <Text style={styles.tableCellFlex2}>{p.label}</Text>
-              <Text style={[styles.tableCellFlex1Center, styles.greenText]}>
-                {p.present}
-              </Text>
-              <Text style={[styles.tableCellFlex1Center, styles.redText]}>
-                {p.absent}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : (
-        <LineChart points={points} height={200} />
-      )}
+      <TrendChart
+        points={points}
+        series={selfMode ? SELF_SERIES : undefined}
+        height={selfMode ? 220 : 240}
+        // The percentage scale is furniture on a personal chart: the P / A on
+        // each point already says what the position encodes.
+        hideYAxis={selfMode}
+        pointLabel={
+          selfMode
+            ? p =>
+                p.status === 'present'
+                  ? 'P'
+                  : p.status === 'upcoming'
+                    ? 'U'
+                    : 'A'
+            : p => {
+                if (!p.total) return null;
+                const share =
+                  p.present == null ? null : `${Number(p.present).toFixed(1)}%`;
+                const ratio = `${numberText(p.presentCount)}/${numberText(p.total)}`;
+                return share ? [ratio, share] : [ratio];
+              }
+        }
+        // A personal week reads as a word, never as the "100.0%" the axis
+        // encodes.
+        formatSeriesValue={
+          selfMode
+            ? p =>
+                p.status === 'present'
+                  ? 'Present'
+                  : p.status === 'upcoming'
+                    ? 'Upcoming'
+                    : 'Absent'
+            : null
+        }
+        tooltipExtras={
+          selfMode
+            ? null
+            : p => {
+                const present = Number(p.presentCount) || 0;
+                const absent = Number(p.absentCount) || 0;
+                // Nothing recorded that week: three zeroes say less than not
+                // asking.
+                if (!present && !absent) return [];
+                return [
+                  { label: 'Total', value: numberText(present + absent) },
+                  {
+                    label: 'Present',
+                    value: countWithShare(present, p.present),
+                  },
+                  {
+                    label: 'Absent',
+                    value: countWithShare(absent, p.absentPercentage),
+                  },
+                ];
+              }
+        }
+        showTable={showTable}
+        // The count column the web puts beside the percentage, so the table
+        // reads "2 / 7" and "29.0%" for the same week.
+        extraColumns={
+          selfMode
+            ? null
+            : [
+                {
+                  header: 'Present / Total',
+                  cell: p =>
+                    p.total
+                      ? `${numberText(p.presentCount)} / ${numberText(p.total)}`
+                      : '—',
+                },
+              ]
+        }
+      />
     </View>
   );
 }
 
-function YearAttendance({ year }) {
+function YearAttendance({ year, title = 'My Last 52 Weeks' }) {
+  // The drawing's own width, so the labels beside the ring can be placed on the
+  // same scale the SVG is drawn at.
+  const [drawnWidth, setDrawnWidth] = useState(0);
+  const scale = drawnWidth ? drawnWidth / VB_W : 0;
+
   const total = Number(year?.total) || 0;
   const present = Number(year?.present) || 0;
   const absent = Number(year?.absent) || 0;
-  const missedPercent = total ? Math.round((absent / total) * 100) : 0;
+
+  // Drawn from the ARC LENGTHS rather than from percentages the API did not
+  // send, and taken over `total`: if the two ever fail to sum to the year, the
+  // ring shows the shortfall as unfilled track instead of quietly rescaling.
+  const arcFor = n => (total > 0 ? (n / total) * RING_LENGTH : 0);
+  const presentArc = arcFor(present);
+  const absentArc = arcFor(absent);
+
+  // THE DIVIDER ONLY EXISTS WHERE THERE IS SOMETHING TO DIVIDE — a whole year
+  // on one side draws as one closed ring, not a ring with a nick in it.
+  const gap = presentArc > 0 && absentArc > 0 ? RING_GAP : 0;
+
+  // WHERE THE RING STARTS is the one free choice on a donut, spent here on
+  // putting both wedge midpoints on the horizontal: present lands at nine
+  // o'clock and absent at three, whatever the split, so each label is a short
+  // straight tick out of the ring's own side.
+  const startDeg = 270 - (total > 0 ? present / total : 0) * 180;
+
+  // THE CENTRE IS THE MISS RATE, not the size of the year — the one figure a
+  // member would repeat to somebody, and what the ring is a picture of.
+  const missed = total > 0 ? `${Math.round((absent / total) * 100)}%` : '—';
 
   return (
     <View style={styles.sectionPanel}>
       <View style={styles.sectionHeaderWithIcon}>
         <View style={styles.sectionTitleIcon}>
           <MaterialCommunityIcons
-            name="clock-outline"
+            name="chart-donut"
             size={18}
             color={COLORS.navy}
           />
         </View>
-        <Text style={styles.sectionTitle}>My Last 52 Weeks</Text>
+        <Text style={styles.sectionTitle}>{title}</Text>
       </View>
 
-      <View style={styles.yearContentContainer}>
-        <View style={styles.leaderBoxLeft}>
-          <Text style={styles.leaderBoxText}>
-            Present{' '}
-            <Text style={styles.leaderBoxCount}>{numberText(present)}</Text>
-          </Text>
-        </View>
-
-        <View style={styles.ringContainer}>
-          <View style={styles.ringOuter}>
-            <Svg width={100} height={100} style={styles.ringSvg}>
+      {!year ? (
+        <Text style={styles.yearEmpty}>
+          No attendance recorded in the last year.
+        </Text>
+      ) : (
+        <View
+          style={styles.donut}
+          onLayout={e => setDrawnWidth(e.nativeEvent.layout.width)}
+        >
+          <Svg
+            width="100%"
+            height="100%"
+            viewBox={`0 0 ${VB_W} ${VB_H}`}
+            accessibilityRole="image"
+            accessibilityLabel={`Last 52 weeks: ${present} present and ${absent} absent of ${total} Sabhas.`}
+          >
+            {/* THE ARCS ARE ROTATED, THE WORDS ARE NOT. `-90` because a dash
+                pattern starts at three o'clock. */}
+            <G transform={`rotate(${startDeg - 90} ${CX} ${CY})`}>
+              {/* The unfilled track, visible only where present and absent
+                  together fall short of the year. */}
               <Circle
-                cx="50"
-                cy="50"
-                r="44"
+                cx={CX}
+                cy={CY}
+                r={RING_RADIUS}
                 fill="none"
-                stroke={COLORS.green}
-                strokeWidth="12"
+                stroke="rgba(0,49,88,0.06)"
+                strokeWidth={RING_STROKE}
               />
-              {missedPercent > 0 ? (
-                <Circle
-                  cx="50"
-                  cy="50"
-                  r="44"
-                  fill="none"
-                  stroke={COLORS.softRed}
-                  strokeWidth="12"
-                  strokeDasharray={`${(missedPercent / 100) * 2 * Math.PI * 44} ${2 * Math.PI * 44}`}
-                  strokeLinecap="butt"
-                  transform={`rotate(${-(missedPercent * 1.8)} 50 50)`}
-                />
-              ) : null}
-            </Svg>
-            <View style={styles.ringInner}>
-              <Text style={styles.ringPercentText}>{missedPercent}%</Text>
-              <Text style={styles.ringMissedLabel}>MISSED</Text>
-            </View>
-          </View>
-        </View>
+              <Circle
+                cx={CX}
+                cy={CY}
+                r={RING_RADIUS}
+                fill="none"
+                stroke={PRESENT_COLOUR}
+                strokeWidth={RING_STROKE}
+                strokeLinecap="butt"
+                strokeDasharray={`${Math.max(0, presentArc - gap)} ${RING_LENGTH}`}
+              />
+              <Circle
+                cx={CX}
+                cy={CY}
+                r={RING_RADIUS}
+                fill="none"
+                stroke={ABSENT_COLOUR}
+                strokeWidth={RING_STROKE}
+                strokeLinecap="butt"
+                strokeDasharray={`${Math.max(0, absentArc - gap)} ${RING_LENGTH}`}
+                strokeDashoffset={-presentArc}
+              />
+            </G>
 
-        <View style={styles.leaderBoxRight}>
-          <Text style={styles.leaderBoxText}>
-            Absent{' '}
-            <Text style={styles.leaderBoxCount}>{numberText(absent)}</Text>
-          </Text>
+            <SvgText
+              x={CX}
+              y={CY + 1}
+              textAnchor="middle"
+              fontSize="15"
+              fontWeight="700"
+              fill={COLORS.navy}
+            >
+              {missed}
+            </SvgText>
+            <SvgText
+              x={CX}
+              y={CY + 17}
+              textAnchor="middle"
+              fontSize="9"
+              fontWeight="600"
+              letterSpacing="0.6"
+              fill={COLORS.faint}
+            >
+              MISSED
+            </SvgText>
+
+            {/* Each label's leader: a horizontal tick straight out of the
+                ring's side, stopping where its box begins. */}
+            <Polyline
+              points={`${CX - LEADER_START},${CY} ${CX - LABEL_X},${CY}`}
+              fill="none"
+              stroke={PRESENT_COLOUR}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <Polyline
+              points={`${CX + LEADER_START},${CY} ${CX + LABEL_X},${CY}`}
+              fill="none"
+              stroke={ABSENT_COLOUR}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </Svg>
+
+          {scale ? (
+            <>
+              <View
+                style={[
+                  styles.donutLabel,
+                  styles.donutLabelPresent,
+                  {
+                    right: drawnWidth - (CX - LABEL_X) * scale,
+                    top: CY * scale - (DONUT_LABEL_H * scale) / 2,
+                    height: DONUT_LABEL_H * scale,
+                    // Never wider than the room between the card's edge and the
+                    // tick this box hangs off.
+                    maxWidth: (CX - LABEL_X) * scale - 1,
+                  },
+                ]}
+              >
+                {/* Word and count are ONE line of text inside the box. If the
+                    room is tight the whole label shrinks, so the count is never
+                    the part that gets cut. */}
+                <Text
+                  style={[styles.donutLabelText, { fontSize: 12 * scale }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
+                  Present{' '}
+                  <Text style={styles.donutLabelCount}>
+                    {numberText(present)}
+                  </Text>
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.donutLabel,
+                  styles.donutLabelAbsent,
+                  {
+                    left: (CX + LABEL_X) * scale,
+                    top: CY * scale - (DONUT_LABEL_H * scale) / 2,
+                    height: DONUT_LABEL_H * scale,
+                    maxWidth: drawnWidth - (CX + LABEL_X) * scale - 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.donutLabelText, { fontSize: 12 * scale }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
+                  Absent{' '}
+                  <Text style={styles.donutLabelCount}>
+                    {numberText(absent)}
+                  </Text>
+                </Text>
+              </View>
+            </>
+          ) : null}
         </View>
-      </View>
+      )}
     </View>
   );
 }
 
-function OverallDashboard({ data, live, birthdays }) {
+function OverallDashboard({ data, live, birthdays, onOpenBirthdays }) {
   const lastWeek = data?.attendance_last_4_week?.at(-1);
   const todayBirthdaysCount = (birthdays?.users || []).filter(
     user => user?.contact,
   ).length;
 
   const lastWeekRange = lastWeek ? weekRange(lastWeek.week_date) : null;
-  const liveWeekRange = live?.week_date
-    ? weekRange(live.week_date, { live: true })
+  // The week lives INSIDE `current_week` here: `live` is the whole
+  // /dashboard/present-absent payload, where the web passes that block down as
+  // `live`. Read off the wrong level, the tile fell back to a bare
+  // "Present | Absent" instead of naming the week.
+  const liveWeekRange = live?.current_week?.week_date
+    ? weekRange(live.current_week.week_date, { live: true })
     : null;
 
   return (
@@ -1157,7 +1334,12 @@ function OverallDashboard({ data, live, birthdays }) {
         <MetricCard
           icon="account-group-outline"
           label="Total Users"
-          value={numberText(data?.total_users?.number)}
+          value={
+            <CountWithDelta
+              now={data?.total_users?.number}
+              last={data?.total_users_last_week}
+            />
+          }
           detail={
             data?.total_users_last_week != null
               ? `last week ${numberText(data.total_users_last_week)}`
@@ -1177,7 +1359,7 @@ function OverallDashboard({ data, live, birthdays }) {
               '—'
             )
           }
-          detail={lastWeekRange || 'Present | Absent'}
+          detail={lastWeekRange ? `Week ${lastWeekRange}` : 'Present | Absent'}
         />
         <MetricCard
           icon="pulse"
@@ -1187,12 +1369,13 @@ function OverallDashboard({ data, live, birthdays }) {
               <PairValue
                 present={live.current_week.present}
                 absent={live.current_week.absent}
+                presentDelta={live.current_week.present_delta}
               />
             ) : (
               '—'
             )
           }
-          detail={liveWeekRange || 'Present | Absent'}
+          detail={liveWeekRange ? `Week ${liveWeekRange}` : 'Present | Absent'}
         />
         <MetricCard
           icon="calendar-check-outline"
@@ -1225,6 +1408,7 @@ function OverallDashboard({ data, live, birthdays }) {
           detail="Send wishes"
           tone="orange"
           action
+          onPress={onOpenBirthdays}
         />
       </View>
 
@@ -1238,16 +1422,48 @@ function OverallDashboard({ data, live, birthdays }) {
   );
 }
 
-function SelfDashboard({ data, me, birthdays, events, thought }) {
+function SelfDashboard({
+  data,
+  me,
+  birthdays,
+  events,
+  thought,
+  onOpenBirthdays,
+  onPickMember,
+}) {
   const attendance = data?.total_sabha_present;
   const recent = data?.present_in_last_4w;
   const lastSabha = data?.last_sabha;
   const lastSabhaDay = formatLastSabhaDay(lastSabha?.date);
   const sabhaAge = formatSabhaAge(data?.sabha_age);
 
+  // WHICH four weeks the "3 / 4" is over — "(24-Aug - 20-Sep)". Read off the
+  // 8-week series' last four OCCURRED rows, so the span names the same weeks
+  // the ratio counts and the chart below plots. The not-yet-held week is left
+  // out: the backend slides the window past it.
+  const last4Range = (() => {
+    const weeks = (Array.isArray(data?.last_8w) ? data.last_8w : [])
+      .map(w => ({ w, key: readWeekDate(w?.week_date)?.key }))
+      .filter(x => x.key && x.w?.status !== 'upcoming')
+      .sort((a, b) => (a.key < b.key ? -1 : 1))
+      .slice(-4);
+    if (!weeks.length) return null;
+    const start = weekRange(weeks[0].w.week_date)?.split(' to ')[0];
+    const end = weekRange(weeks[weeks.length - 1].w.week_date)?.split(
+      ' to ',
+    )[1];
+    return start && end ? `(${start} - ${end})` : null;
+  })();
+
   return (
     <>
-      {canSeeNotLoggedIn(me?.role_id) ? <SearchBar /> : null}
+      {/* Rank >= 20 (canSeeNotLoggedIn) can pull up any member in their scope;
+          the picked member's stats open in MemberStatsDialog. */}
+      {canSeeNotLoggedIn(me?.role_id) ? (
+        <View style={styles.searchPanel}>
+          <MemberStatsSearch onPick={onPickMember} />
+        </View>
+      ) : null}
       <ThoughtCard thought={thought} />
 
       <View style={styles.grid}>
@@ -1283,24 +1499,26 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
               '—'
             )
           }
+          detail={last4Range}
           tone="green"
         />
         <MetricCard
-          icon="check-circle-outline"
-          label="Last Sabha"
+          // The date of that last Sabha rides in the LABEL — "Last Sabha
+          // (18-Sep)" — leaving the value line to the one word that matters.
+          icon={
+            lastSabha?.attended
+              ? 'check-circle-outline'
+              : 'close-circle-outline'
+          }
+          iconBg={lastSabha?.attended ? COLORS.greenBg : COLORS.redBg}
+          iconColor={lastSabha?.attended ? COLORS.green : COLORS.red}
+          label={
+            lastSabhaDay
+              ? `Last Sabha\n(${lastSabhaDay.replace(' ', '-')})`
+              : 'Last Sabha'
+          }
           value={
-            lastSabha ? (
-              <Text numberOfLines={2}>
-                <Text style={styles.metricValue}>
-                  {lastSabha.attended ? 'Attended' : 'Not Attended'}
-                </Text>
-                {lastSabhaDay ? (
-                  <Text style={styles.metricDateSub}> · {lastSabhaDay}</Text>
-                ) : null}
-              </Text>
-            ) : (
-              '—'
-            )
+            lastSabha ? (lastSabha.attended ? 'Attended' : 'Not Attended') : '—'
           }
           detail={
             lastSabha
@@ -1320,6 +1538,7 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
           iconBg={COLORS.redBg}
           iconColor={COLORS.red}
           action
+          onPress={onOpenBirthdays}
         />
         <MetricCard
           icon="calendar-month-outline"
@@ -1331,7 +1550,17 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
                   .join(' ')
               : '—'
           }
-          detail={data?.upcoming_sabha?.location || null}
+          // The coming occurrence of that weekday — "25-Sep-2026". The payload
+          // holds a standing weekly slot and no date, so the day is worked out
+          // here; location is deliberately not shown (it is null for most).
+          detail={
+            data?.upcoming_sabha
+              ? (nextWeekdayDate(data.upcoming_sabha.day)?.date.replace(
+                  / /g,
+                  '-',
+                ) ?? null)
+              : 'No schedule set for your Sabha'
+          }
         />
       </View>
 
@@ -1343,9 +1572,148 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
   );
 }
 
+// Friendly, status-aware wording — never the raw backend/404 text. The API
+// client throws an ApiError carrying the HTTP `status`.
+function friendlyMemberError(error) {
+  const status = error?.status;
+  if (status === 403) {
+    return "You don't have access to this member's dashboard — they may be outside your Sabha/Mandal.";
+  }
+  if (status === 404) {
+    return "We couldn't find this member's records. They may have been moved or removed.";
+  }
+  if (status === 401) return 'Your session has expired. Please sign in again.';
+  return 'Something went wrong loading the stats. Please check your connection and try again.';
+}
+
+/**
+ * A member's "My Dashboard" figures, shown to a rank >= 20 leader for anyone in
+ * their hierarchy — the web's MemberStatsDialog. Backed by
+ * GET /dashboard-overview/member/{id}, which enforces scope + rank.
+ *
+ * Built from the same cards as SelfDashboard, minus the self-only ones
+ * (birthdays, upcoming Sabha, events, today's thought).
+ */
+function MemberStatsDialog({ userId, isOpen, onClose }) {
+  // Only fetch while open, and re-fetch per member (the hook keys on userId).
+  const query = useMemberStats(userId, isOpen);
+  const d = query.data;
+  const stats = d?.stats;
+  const total = stats?.total_sabha_present;
+  const last4 = stats?.present_in_last_4w;
+  const lastSabha = stats?.last_sabha;
+  const lastSabhaDay = formatLastSabhaDay(lastSabha?.date);
+  const age = formatSabhaAge(stats?.sabha_age);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={d?.full_name || 'Member'}
+      description={d?.sabha_name || undefined}
+      size="lg"
+    >
+      {query.isLoading ? (
+        <View style={styles.memberLoading}>
+          <Skeleton style={styles.memberSkeletonTiles} />
+          <Skeleton style={styles.memberSkeletonCard} />
+        </View>
+      ) : query.error ? (
+        <View style={styles.memberError}>
+          <Text style={styles.memberErrorTitle}>
+            Couldn&apos;t load this member&apos;s stats
+          </Text>
+          <Text style={styles.memberErrorText}>
+            {friendlyMemberError(query.error)}
+          </Text>
+          <Pressable
+            onPress={() => query.refetch()}
+            accessibilityRole="button"
+            style={styles.memberRetry}
+          >
+            <Text style={styles.memberRetryText}>Try again</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <View style={styles.grid}>
+            <MetricCard
+              icon="timer-sand"
+              label="Sabha Age"
+              value={age || '—'}
+              detail={age ? null : 'Joining date not recorded'}
+            />
+            <MetricCard
+              icon="calendar-clock"
+              label="Total Sabha Attended"
+              value={
+                total ? (
+                  <RatioValue part={total.attended} whole={total.total_sabha} />
+                ) : (
+                  '—'
+                )
+              }
+              detail={total?.total_sabha ? null : 'No attendance recorded yet'}
+              tone="orange"
+            />
+            <MetricCard
+              icon="calendar-check-outline"
+              label="Last 4 Weeks"
+              value={
+                last4 ? (
+                  <RatioValue part={last4.attended} whole={last4.total} />
+                ) : (
+                  '—'
+                )
+              }
+              tone="green"
+            />
+            <MetricCard
+              icon={
+                lastSabha?.attended ? 'check-circle-outline' : 'close-circle-outline'
+              }
+              label="Last Sabha"
+              value={
+                lastSabha ? (
+                  <Text numberOfLines={2}>
+                    <Text style={styles.metricValue}>
+                      {lastSabha.attended ? 'Attended' : 'Not Attended'}
+                    </Text>
+                    {lastSabhaDay ? (
+                      <Text style={styles.metricDateSub}> · {lastSabhaDay}</Text>
+                    ) : null}
+                  </Text>
+                ) : (
+                  '—'
+                )
+              }
+              iconBg={lastSabha?.attended ? COLORS.greenBg : COLORS.redBg}
+              iconColor={lastSabha?.attended ? COLORS.green : COLORS.red}
+            />
+          </View>
+
+          {/* Spiritual friend (follow-up person) with Call + WhatsApp — the
+              member's own card, keyed on the fields this endpoint returns. */}
+          <FriendsCard
+            title="Spiritual Friend"
+            me={{
+              followup_by_id_name: d?.spiritual_friend_name || null,
+              followup_id_mobile: d?.spiritual_friend_mobile || null,
+              followup_id_whatsapp: d?.spiritual_friend_whatsapp || null,
+            }}
+          />
+          <WeeklyAttendanceCard weeks={stats?.last_8w} title="Last 8 Weeks" />
+          <YearAttendance year={stats?.last_52w} title="Last 52 Weeks" />
+        </>
+      )}
+    </Modal>
+  );
+}
+
 export default function DashboardPage({
   onOpenHelp,
   onOpenMenu,
+  onOpenBirthdays,
   onRoleNameChange,
 }) {
   const { activeUserId } = useAuth();
@@ -1366,6 +1734,8 @@ export default function DashboardPage({
   useEffect(() => {
     if (me?.role_name) onRoleNameChange?.(me.role_name);
   }, [me?.role_name, onRoleNameChange]);
+  /** The member whose stats modal is open, if any. */
+  const [statsUserId, setStatsUserId] = useState(null);
 
   const load = async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -1460,99 +1830,115 @@ export default function DashboardPage({
     <View style={styles.safe}>
       <AppHeader onMenu={onOpenMenu} onHelp={onOpenHelp} />
 
-      <ScrollView
-        style={styles.flex1}
-        contentContainerStyle={styles.scroll}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              // SevaRing reads through React Query, outside `load`.
-              queryClient.invalidateQueries({ queryKey: ['khardo', 'me'] });
-              load({ refresh: true });
-            }}
-            tintColor={COLORS.navy}
+      <View style={styles.flex1}>
+        <ScrollView
+          style={styles.flex1}
+          contentContainerStyle={styles.scroll}
+          // A tap on a search result must reach it rather than only close the
+          // keyboard.
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                // SevaRing reads through React Query, outside `load`.
+                queryClient.invalidateQueries({ queryKey: ['khardo', 'me'] });
+                load({ refresh: true });
+              }}
+              tintColor={COLORS.navy}
+            />
+          }
+        >
+          <View style={styles.header}>
+            <Text style={styles.title}>
+              Jai Swaminarayan, {displayName.trim().split(/\s+/)[0]}
+            </Text>
+          </View>
+
+          <QrBar
+            userId={activeUserId || me?.id || me?.user_id}
+            expanded={qrOpen}
+            onToggle={() => setQrOpen(value => !value)}
+            onDownload={downloadQr}
+            downloading={qrDownloading}
           />
-        }
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>
-            Jai Swaminarayan, {displayName.trim().split(/\s+/)[0]}
-          </Text>
-        </View>
 
-        <QrBar
-          userId={activeUserId || me?.id || me?.user_id}
-          expanded={qrOpen}
-          onToggle={() => setQrOpen(value => !value)}
-          onDownload={downloadQr}
-          downloading={qrDownloading}
-        />
+          {/* Seva */}
+          <SevaRing />
 
-        {/* Seva */}
-        <SevaRing />
+          {canSeeNotLoggedIn(roleId) ? <NotLoginCard /> : null}
 
-        {canSeeNotLoggedIn(roleId) ? <NotLoginCard /> : null}
-
-        {mayReadOverall ? (
-          <View style={styles.tabs}>
-            <Pressable
-              onPress={() => setTab('overall')}
-              style={[styles.tab, activeTab === 'overall' && styles.activeTab]}
-            >
-              <Text
+          {mayReadOverall ? (
+            <View style={styles.tabs}>
+              <Pressable
+                onPress={() => setTab('overall')}
                 style={[
-                  styles.tabText,
-                  activeTab === 'overall' && styles.activeTabText,
+                  styles.tab,
+                  activeTab === 'overall' && styles.activeTab,
                 ]}
               >
-                User Dashboard
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setTab('self')}
-              style={[styles.tab, activeTab === 'self' && styles.activeTab]}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === 'self' && styles.activeTabText,
-                ]}
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === 'overall' && styles.activeTabText,
+                  ]}
+                >
+                  User Dashboard
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setTab('self')}
+                style={[styles.tab, activeTab === 'self' && styles.activeTab]}
               >
-                My Dashboard
-              </Text>
-            </Pressable>
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === 'self' && styles.activeTabText,
+                  ]}
+                >
+                  My Dashboard
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {loading ? (
+            <View style={styles.loading}>
+              <ActivityIndicator size="large" color={COLORS.navy} />
+              <Text style={styles.loadingText}>Loading dashboard...</Text>
+            </View>
+          ) : error ? (
+            <ErrorPanel message={error} onRetry={() => load()} />
+          ) : activeTab === 'overall' ? (
+            <OverallDashboard
+              data={data.overall}
+              live={live}
+              birthdays={birthdays}
+              onOpenBirthdays={onOpenBirthdays}
+            />
+          ) : (
+            <SelfDashboard
+              data={data.self}
+              me={me}
+              birthdays={birthdays}
+              events={events}
+              thought={thought}
+              onOpenBirthdays={onOpenBirthdays}
+              onPickMember={setStatsUserId}
+            />
+          )}
+
+          <View style={styles.footerBleed}>
+            <SiteFooter />
           </View>
-        ) : null}
+        </ScrollView>
+      </View>
 
-        {loading ? (
-          <View style={styles.loading}>
-            <ActivityIndicator size="large" color={COLORS.navy} />
-            <Text style={styles.loadingText}>Loading dashboard...</Text>
-          </View>
-        ) : error ? (
-          <ErrorPanel message={error} onRetry={() => load()} />
-        ) : activeTab === 'overall' ? (
-          <OverallDashboard
-            data={data.overall}
-            live={live}
-            birthdays={birthdays}
-          />
-        ) : (
-          <SelfDashboard
-            data={data.self}
-            me={me}
-            birthdays={birthdays}
-            events={events}
-            thought={thought}
-          />
-        )}
-
-        <View style={styles.footerBleed}>
-          <SiteFooter />
-        </View>
-      </ScrollView>
-
+      <MemberStatsDialog
+        userId={statsUserId}
+        isOpen={statsUserId != null}
+        onClose={() => setStatsUserId(null)}
+      />
     </View>
   );
 }
@@ -1770,24 +2156,48 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginLeft: 8,
   },
-  searchCard: {
-    height: 48,
-    borderRadius: 14,
+  // The web's `.panel` around the member search.
+  searchPanel: {
     backgroundColor: COLORS.surface,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#E8EEF6',
+    padding: 15,
+    marginBottom: 16,
+    elevation: 1,
+    shadowColor: COLORS.navy,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  memberLoading: { gap: 15 },
+  memberSkeletonTiles: { height: 105, width: '100%' },
+  memberSkeletonCard: { height: 150, width: '100%' },
+  memberError: { alignItems: 'center', paddingVertical: 38 },
+  memberErrorTitle: {
+    color: COLORS.navy,
+    fontSize: 14.5,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  memberErrorText: {
+    marginTop: 6,
+    maxWidth: 300,
+    color: COLORS.muted,
+    fontSize: 14.5,
+    textAlign: 'center',
+  },
+  memberRetry: {
+    marginTop: 15,
+    height: 34,
+    paddingHorizontal: 19,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: COLORS.border,
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    marginBottom: 16,
+    justifyContent: 'center',
   },
-  searchInput: {
-    flex: 1,
-    color: COLORS.navy,
-    fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
+  memberRetryText: { color: COLORS.navy, fontSize: 14.5, fontWeight: '600' },
   tabs: {
     flexDirection: 'row',
     borderBottomWidth: 1,
@@ -1827,6 +2237,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     justifyContent: 'space-between',
   },
+  metricCardPressed: { opacity: 0.75 },
   metricCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1934,8 +2345,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionTitle: { color: COLORS.navy, fontSize: 15, fontWeight: '800' },
+  // The drawing keeps the web's proportions and scales with the card.
+  donut: {
+    width: '100%',
+    maxWidth: VB_W,
+    aspectRatio: VB_W / VB_H,
+    alignSelf: 'center',
+  },
+  yearEmpty: {
+    paddingVertical: 38,
+    textAlign: 'center',
+    fontSize: 14.5,
+    color: COLORS.muted,
+  },
+  // Sized by its text, so the count can never sit on the border. The outline is
+  // the wedge's own colour, faint enough not to compete with the ring.
+  donutLabel: {
+    position: 'absolute',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: COLORS.surface,
+  },
+  donutLabelPresent: { borderColor: 'rgba(21,128,61,0.45)' },
+  donutLabelAbsent: { borderColor: 'rgba(233,135,138,0.45)' },
+  donutLabelText: { fontWeight: '600', color: COLORS.muted },
+  donutLabelCount: { fontWeight: '800', color: COLORS.navy },
   sevaPanel: { alignItems: 'center' },
-  sevaTitle: { alignSelf: 'flex-start', marginBottom: 8 },
+  sevaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    gap: 10,
+    marginBottom: 2,
+  },
   sevaRing: { width: 150, height: 150 },
   sevaCenter: {
     position: 'absolute',
@@ -2093,115 +2538,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   showTableText: { color: COLORS.navy, fontSize: 11, fontWeight: '700' },
-  lineChartContainer: {
-    marginTop: 8,
-    position: 'relative',
-    justifyContent: 'flex-end',
-  },
-  chartLineSegment: {
-    position: 'absolute',
-    height: 2,
-    backgroundColor: COLORS.chartBlue,
-    transformOrigin: '0% 50%',
-  },
-  chartGridLineRow: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  chartYLabel: {
-    width: 22,
-    fontSize: 9,
-    color: COLORS.faint,
-    textAlign: 'right',
-    marginRight: 4,
-  },
-  chartGridLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E2EBF2',
-  },
-  chartPointDot: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.chartBlue,
-    borderWidth: 1.5,
-    borderColor: COLORS.surface,
-  },
-  chartPointLabelBox: {
-    position: 'absolute',
-    width: 60,
-    alignItems: 'center',
-  },
-  chartRatioText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: COLORS.navy,
-  },
-  chartPctText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: COLORS.chartBlue,
-  },
-  chartXLabel: {
-    position: 'absolute',
-    width: 48,
-    textAlign: 'center',
-    fontSize: 10,
-    color: COLORS.muted,
-    fontWeight: '600',
-  },
-  tableContainer: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F5F8FA',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  tableHeadCellFlex2: {
-    flex: 2,
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  tableHeadCellFlex1Center: {
-    flex: 1,
-    textAlign: 'center',
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  tableCellFlex2: {
-    flex: 2,
-    color: COLORS.navy,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tableCellFlex1Center: {
-    flex: 1,
-    textAlign: 'center',
-    color: COLORS.navy,
-    fontSize: 12,
-    fontWeight: '600',
-  },
   chartWrapper: { marginTop: 4 },
   chartRows: { gap: 4 },
   weekRow: { flexDirection: 'row', alignItems: 'center', height: 28 },
@@ -2222,57 +2558,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
-  yearContentContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-  },
-  leaderBoxLeft: {
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: COLORS.surface,
-  },
-  leaderBoxRight: {
-    borderWidth: 1,
-    borderColor: COLORS.softRed,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: COLORS.surface,
-  },
-  leaderBoxText: { color: COLORS.muted, fontSize: 12, fontWeight: '600' },
-  leaderBoxCount: { color: COLORS.navy, fontWeight: '800' },
-  ringContainer: { alignItems: 'center', justifyContent: 'center' },
-  ringOuter: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ringSvg: { position: 'absolute' },
-  ringInner: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ringPercentText: { color: COLORS.navy, fontSize: 18, fontWeight: '800' },
-  ringMissedLabel: {
-    color: COLORS.faint,
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
   greenText: { color: COLORS.green, fontWeight: '800', fontSize: 18 },
   redText: { color: COLORS.red, fontWeight: '800', fontSize: 18 },
+  // The change badge rides a size below the figure it qualifies.
+  deltaUp: { color: COLORS.green, fontWeight: '700', fontSize: 13 },
+  deltaDown: { color: COLORS.red, fontWeight: '700', fontSize: 13 },
   navyText: { color: COLORS.navy, fontWeight: '800', fontSize: 18 },
 });

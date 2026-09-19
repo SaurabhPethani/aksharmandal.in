@@ -39,6 +39,23 @@ export const readClock = (value) => {
   return `${hour % 12 === 0 ? 12 : hour % 12}:${m[2]} ${suffix}`;
 };
 
+export function nextWeekdayDate(dayName) {
+  const target = DAYS.indexOf(String(dayName ?? '').trim());
+  if (target < 0) return null;
+  const now = new Date();
+  const ahead = (target - now.getDay() + 7) % 7;
+  const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + ahead);
+  const pad = n => String(n).padStart(2, '0');
+  const y = at.getFullYear();
+  const mo = at.getMonth();
+  const d = at.getDate();
+  return {
+    key: `${y}-${pad(mo + 1)}-${pad(d)}`,
+    date: `${d} ${MONTHS[mo]} ${y}`,
+    label: `${d}-${MONTHS[mo]}`,
+  };
+}
+
 export const todayKey = () => {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');

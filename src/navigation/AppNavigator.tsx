@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import DashboardPage, { Drawer } from '../pages/DashboardPage';
 import HelpPage from '../pages/HelpPage';
+import BirthdaysPage from '../pages/BirthdaysPage';
 import { useAuth } from '../hooks/core';
 
-type RouteName = 'dashboard' | 'help';
+type RouteName = 'dashboard' | 'help' | 'birthdays';
 
 type AppNavigatorProps = {
   initialRoute?: RouteName;
@@ -33,7 +34,15 @@ export default function AppNavigator({
       <DashboardPage
         onOpenHelp={() => setRoute('help')}
         onOpenMenu={() => setDrawerOpen(true)}
+        onOpenBirthdays={() => setRoute('birthdays')}
         onRoleNameChange={setRoleName}
+      />
+    ) : route === 'birthdays' ? (
+      // Opened from the dashboard's birthday tiles; back returns there.
+      <BirthdaysPage
+        onBack={() => setRoute('dashboard')}
+        onMenu={() => setDrawerOpen(true)}
+        onHelp={() => setRoute('help')}
       />
     ) : (
       <HelpPage onMenu={() => setDrawerOpen(true)} />

@@ -85,6 +85,7 @@ yarn-error.log
 logs/
 
 .vscode/*
+.vscode
 !.vscode/extensions.json
 !.vscode/settings.json
 
