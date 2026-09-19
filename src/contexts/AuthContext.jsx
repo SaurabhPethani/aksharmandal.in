@@ -10,7 +10,6 @@ import {
 import {
   setAccessToken,
   setAuthLostHandler,
-  setTokenRefreshedHandler,
   rememberSession,
   resumeSession,
   forgetSession,
@@ -318,20 +317,6 @@ export function AuthProvider({ children }) {
       setAuthLostHandler(null);
     };
   }, [signOut]);
-
-  /**
-   * Keep biometric token synchronized after
-   * silent access-token refresh.
-   */
-  useEffect(() => {
-    setTokenRefreshedHandler(async token => {
-      await updateBiometricToken(token);
-    });
-
-    return () => {
-      setTokenRefreshedHandler(null);
-    };
-  }, []);
 
   /**
    * Initial application boot.
