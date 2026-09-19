@@ -15,6 +15,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { useQueryClient } from '@tanstack/react-query';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
+import AppHeader from '../components/AppHeader';
 import { Text, TextInput } from '../components/Typography';
 import { dashboardService } from '../services/dashboardService';
 import { API_BASE } from '../config/appConfig';
@@ -26,6 +27,7 @@ import {
   saveRemoteImage,
   shareRemoteImageOnWhatsApp,
 } from '../utils/saveImage';
+import drawerLogo from '../assets/logo-square.png';
 
 const COLORS = {
   navy: '#003158',
@@ -182,57 +184,14 @@ const RatioValue = ({ part, whole }) => (
   </Text>
 );
 
-function TopBar({ onMenu }) {
-  return (
-    <View style={styles.topBar}>
-      <Pressable
-        onPress={onMenu}
-        accessibilityRole="button"
-        accessibilityLabel="Open navigation"
-        style={styles.topButton}
-      >
-        <MaterialCommunityIcons name="menu" size={24} color={COLORS.surface} />
-      </Pressable>
-      <View style={styles.topActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Help and FAQ"
-          style={styles.topButton}
-        >
-          <MaterialCommunityIcons
-            name="book-open-outline"
-            size={22}
-            color={COLORS.surface}
-          />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Notifications"
-          style={styles.topButton}
-        >
-          <MaterialCommunityIcons
-            name="bell-outline"
-            size={22}
-            color={COLORS.surface}
-          />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-          style={styles.avatar}
-        >
-          <MaterialCommunityIcons
-            name="account"
-            size={22}
-            color={COLORS.surface}
-          />
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function Drawer({ visible, onClose, onSignOut, roleName }) {
+export function Drawer({
+  visible,
+  onClose,
+  onSignOut,
+  onDashboard,
+  activeRoute = 'dashboard',
+  roleName,
+}) {
   const slide = useRef(new Animated.Value(-320)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(visible);
@@ -284,9 +243,10 @@ function Drawer({ visible, onClose, onSignOut, roleName }) {
       >
         <View style={styles.drawerHeader}>
           <Image
-            source={require('../assets/logo-square.png')}
+            source={drawerLogo}
             style={styles.drawerLogo}
             resizeMode="contain"
+            fadeDuration={0}
           />
           <Pressable onPress={onClose} style={styles.drawerClose}>
             <MaterialCommunityIcons
@@ -304,11 +264,14 @@ function Drawer({ visible, onClose, onSignOut, roleName }) {
         </View>
 
         <ScrollView style={styles.flex1} showsVerticalScrollIndicator={false}>
-          {[['view-dashboard-outline', 'Dashboard', true]].map(
+          {[['view-dashboard-outline', 'Dashboard', activeRoute === 'dashboard']].map(
             ([icon, label, active]) => (
               <Pressable
                 key={label}
-                onPress={onClose}
+                onPress={() => {
+                  onDashboard?.();
+                  onClose();
+                }}
                 style={[styles.drawerItem, active && styles.drawerItemActive]}
               >
                 <MaterialCommunityIcons
@@ -1380,8 +1343,12 @@ function SelfDashboard({ data, me, birthdays, events, thought }) {
   );
 }
 
-export default function DashboardPage() {
-  const { signOut, activeUserId } = useAuth();
+export default function DashboardPage({
+  onOpenHelp,
+  onOpenMenu,
+  onRoleNameChange,
+}) {
+  const { activeUserId } = useAuth();
   const queryClient = useQueryClient();
   const [overview, setOverview] = useState(null);
   const [live, setLive] = useState(null);
@@ -1393,9 +1360,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDownloading, setQrDownloading] = useState(false);
+
+  useEffect(() => {
+    if (me?.role_name) onRoleNameChange?.(me.role_name);
+  }, [me?.role_name, onRoleNameChange]);
 
   const load = async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -1453,7 +1423,7 @@ export default function DashboardPage() {
   const roleId = me?.role_id;
   const mayReadOverall = canReadOverallDashboard(roleId);
   const activeTab = mayReadOverall ? tab : 'self';
-  const displayName = me?.user_name || me?.full_name || 'Saurabh';
+  const displayName = me?.user_name || me?.full_name || 'Bhoolku';
 
   const downloadQr = async () => {
     const image = qrUrl(activeUserId || me?.id || me?.user_id);
@@ -1488,7 +1458,7 @@ export default function DashboardPage() {
 
   return (
     <View style={styles.safe}>
-      <TopBar onMenu={() => setDrawerOpen(true)} />
+      <AppHeader onMenu={onOpenMenu} onHelp={onOpenHelp} />
 
       <ScrollView
         style={styles.flex1}
@@ -1583,12 +1553,6 @@ export default function DashboardPage() {
         </View>
       </ScrollView>
 
-      <Drawer
-        visible={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onSignOut={signOut}
-        roleName={me?.role_name}
-      />
     </View>
   );
 }
@@ -1596,35 +1560,6 @@ export default function DashboardPage() {
 const styles = StyleSheet.create({
   flex1: { flex: 1 },
   safe: { flex: 1, backgroundColor: COLORS.background },
-  topBar: {
-    height: 56,
-    backgroundColor: COLORS.navy,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-  },
-  topButton: {
-    width: 38,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-  },
-  topActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: COLORS.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
   drawerLayer: {
     position: 'absolute',
     top: 0,

@@ -19,7 +19,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './src/utils/queryClient';
 import { AuthProvider } from './src/contexts/AuthContext';
 import LoginPage from './src/pages/LoginPage';
-import DashboardPage from './src/pages/DashboardPage';
+import AppNavigator from './src/navigation/AppNavigator';
 import { useAuth } from './src/hooks/core';
 
 function App() {
@@ -41,6 +41,23 @@ function App() {
 function AppContent() {
   const insets = useSafeAreaInsets();
   const { status } = useAuth();
+  if (status === 'booting') {
+    return (
+      <View
+        style={[
+          styles.content,
+          {
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+            paddingLeft: insets.left,
+            paddingRight: insets.right,
+          },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#003158" />
+      </View>
+    );
+  }
 
   return (
     <View
@@ -54,7 +71,7 @@ function AppContent() {
         },
       ]}
     >
-      {status === 'booting' ? <ActivityIndicator size="large" color="#003158" /> : status === 'authed' ? <DashboardPage /> : <LoginPage />}
+      {status !== 'authed' ? <LoginPage /> : <AppNavigator />}
     </View>
   );
 }
