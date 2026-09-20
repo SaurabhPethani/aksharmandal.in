@@ -642,7 +642,7 @@ export default function BirthdaysPage({
         onNotifications={onNotifications}
         onProfile={onProfile}
         onBack={onBack}
-        breadcrumbs={['Dashboard', 'Birthdays']}
+        // breadcrumbs={['Dashboard', 'Birthdays']}
       />
 
       <ScrollView

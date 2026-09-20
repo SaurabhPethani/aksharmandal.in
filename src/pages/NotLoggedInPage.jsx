@@ -73,7 +73,7 @@ export default function NotLoggedInPage({
       />
       <ScrollView style={styles.flex1} contentContainerStyle={styles.scroll}>
         <View style={styles.pageHeader}>
-          <Pressable
+          {/* <Pressable
             onPress={onBack}
             style={styles.backButton}
             accessibilityRole="button"
@@ -85,7 +85,7 @@ export default function NotLoggedInPage({
               color={COLORS.navy}
             />
             <Text style={styles.backText}>Dashboard</Text>
-          </Pressable>
+          </Pressable> */}
           <Text style={styles.title}>Not Login</Text>
           <Text style={styles.subtitle}>
             Members in your hierarchy who have not signed in to the Akshar

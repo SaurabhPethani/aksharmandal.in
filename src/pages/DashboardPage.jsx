@@ -331,7 +331,7 @@ export function Drawer({
         <View style={styles.drawerHeader}>
           <View style={styles.drawerLogoFrame}>
             <Image
-              source={require('../assets/logo-square.png')}
+              source={require('../assets/Akshar-Connect-White-logo.png')}
               style={styles.drawerLogo}
               resizeMode="contain"
               fadeDuration={0}

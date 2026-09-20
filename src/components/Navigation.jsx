@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     fontWeight: WEIGHT.semibold,
     color: COLORS.textMuted,
   },
-  labelActive: { color: COLORS.primary },
+  labelActive: { fontWeight: WEIGHT.bold, color: COLORS.primary },
   count: {
     marginLeft: space(2),
     borderRadius: RADII.full,

@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 15,
     lineHeight: 21,
-    fontWeight: WEIGHT.semibold,
+    fontWeight: WEIGHT.bold,
     color: COLORS.primary,
   },
   dash: { fontSize: 15, color: FAINT },

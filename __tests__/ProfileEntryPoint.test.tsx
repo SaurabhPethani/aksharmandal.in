@@ -161,3 +161,37 @@ test('the avatar falls back to the mark when no photo is set', async () => {
   ).toHaveLength(0);
   expect(avatarOf(tree).findAllByProps({ name: 'account' }).length).toBeGreaterThan(0);
 });
+
+test('a screen that passes onBack gets a back arrow instead of the menu', async () => {
+  const onBack = jest.fn();
+  const tree = await render(<AppHeader onMenu={jest.fn()} onBack={onBack} />);
+
+  const back = tree.root.find(
+    n =>
+      n.props?.accessibilityLabel === 'Go back' &&
+      typeof n.props?.onPress === 'function',
+  );
+  expect(back.findAllByProps({ name: 'arrow-left' }).length).toBeGreaterThan(0);
+
+  await ReactTestRenderer.act(async () => {
+    back.props.onPress();
+  });
+  expect(onBack).toHaveBeenCalledTimes(1);
+});
+
+test('without onBack the same button opens the drawer', async () => {
+  const onMenu = jest.fn();
+  const tree = await render(<AppHeader onMenu={onMenu} />);
+
+  const menu = tree.root.find(
+    n =>
+      n.props?.accessibilityLabel === 'Open navigation' &&
+      typeof n.props?.onPress === 'function',
+  );
+  expect(menu.findAllByProps({ name: 'menu' }).length).toBeGreaterThan(0);
+
+  await ReactTestRenderer.act(async () => {
+    menu.props.onPress();
+  });
+  expect(onMenu).toHaveBeenCalledTimes(1);
+});

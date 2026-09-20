@@ -35,10 +35,11 @@ export default function AppHeader({
   onMenu,
   onHelp = () => {},
   onNotifications = () => {},
-  // No default: a screen that passes nothing leaves the avatar inert, and a
-  // `null` default would narrow the prop's inferred type for TS callers.
+  // No defaults on these two: both are read for truthiness, and a `null`
+  // default would narrow the inferred prop type and reject a TS caller's
+  // handler.
   onProfile,
-  onBack = null,
+  onBack,
   breadcrumbs = [],
 }) {
   return (

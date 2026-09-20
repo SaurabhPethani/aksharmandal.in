@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated } from 'react-native';
+import { Animated, StyleSheet } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -193,4 +193,31 @@ test('UserFormPage renders every step', async () => {
       tab.props.onPress();
     });
   }
+});
+
+test('the selected tab and the field values are bold', async () => {
+  let tree!: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(async () => {
+    tree = ReactTestRenderer.create(wrap(<ProfilePage />));
+  });
+  trees.push(tree);
+  await settle();
+
+  const weightOf = (label: string) => {
+    const node = tree.root.findAll(
+      n =>
+        typeof n.type === 'string' &&
+        n.children.length === 1 &&
+        n.children[0] === label,
+    )[0];
+    return StyleSheet.flatten(node.props.style)?.fontWeight;
+  };
+
+  // Personal is the tab that opens; Sabha Details is a sibling that is not.
+  expect(weightOf('Personal')).toBe('700');
+  expect(weightOf('Sabha Details')).toBe('600');
+
+  // A value on that tab, and its caption for contrast.
+  expect(weightOf('Amit')).toBe('700');
+  expect(weightOf('First Name')).toBeUndefined();
 });

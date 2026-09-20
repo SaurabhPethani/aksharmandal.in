@@ -153,6 +153,7 @@ export default function AppNavigator({
       />
     ) : (
       <HelpPage
+        onBack={goBack}
         onMenu={() => setDrawerOpen(true)}
         onNotifications={() => navigate('notifications')}
         onProfile={openProfile}

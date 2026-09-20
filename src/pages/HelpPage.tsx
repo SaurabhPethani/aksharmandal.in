@@ -793,10 +793,12 @@ export default function HelpPage({
   onMenu = () => {},
   onNotifications = () => {},
   onProfile,
+  onBack,
 }: {
   onMenu?: () => void;
   onNotifications?: () => void;
   onProfile?: () => void;
+  onBack?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const sectionRefs = useRef<Record<string, View | null>>({});
@@ -851,6 +853,7 @@ export default function HelpPage({
         onMenu={onMenu}
         onNotifications={onNotifications}
         onProfile={onProfile}
+        onBack={onBack}
       />
 
       <View style={styles.contentWrap}>
