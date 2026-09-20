@@ -9,9 +9,9 @@
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		2D472C6C5F16C45630742E95 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
-		40495F083F11233AE171163A /* libPods-aksharconnect.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D0F24591007D41C435523E74 /* libPods-aksharconnect.a */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		96D10BB6A43A51D51EBF5862 /* libPods-aksharconnect.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3FD92022020F396EE0D8B3AD /* libPods-aksharconnect.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,12 +19,12 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = aksharconnect/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = aksharconnect/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = aksharconnect/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		4CAE1714D6642C0F6F3B8086 /* Pods-aksharconnect.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-aksharconnect.release.xcconfig"; path = "Target Support Files/Pods-aksharconnect/Pods-aksharconnect.release.xcconfig"; sourceTree = "<group>"; };
+		227E4D39CE45B77094A5DACC /* Pods-aksharconnect.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-aksharconnect.debug.xcconfig"; path = "Target Support Files/Pods-aksharconnect/Pods-aksharconnect.debug.xcconfig"; sourceTree = "<group>"; };
+		3FD92022020F396EE0D8B3AD /* libPods-aksharconnect.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-aksharconnect.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = aksharconnect/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = aksharconnect/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		D0F24591007D41C435523E74 /* libPods-aksharconnect.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-aksharconnect.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		D688A38D916D534281CE4788 /* Pods-aksharconnect.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-aksharconnect.debug.xcconfig"; path = "Target Support Files/Pods-aksharconnect/Pods-aksharconnect.debug.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		F179E2D7E98CBEEF69882C39 /* Pods-aksharconnect.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-aksharconnect.release.xcconfig"; path = "Target Support Files/Pods-aksharconnect/Pods-aksharconnect.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -32,7 +32,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				40495F083F11233AE171163A /* libPods-aksharconnect.a in Frameworks */,
+				96D10BB6A43A51D51EBF5862 /* libPods-aksharconnect.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,7 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				D0F24591007D41C435523E74 /* libPods-aksharconnect.a */,
+				3FD92022020F396EE0D8B3AD /* libPods-aksharconnect.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -92,8 +92,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				D688A38D916D534281CE4788 /* Pods-aksharconnect.debug.xcconfig */,
-				4CAE1714D6642C0F6F3B8086 /* Pods-aksharconnect.release.xcconfig */,
+				227E4D39CE45B77094A5DACC /* Pods-aksharconnect.debug.xcconfig */,
+				F179E2D7E98CBEEF69882C39 /* Pods-aksharconnect.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -105,13 +105,13 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "aksharconnect" */;
 			buildPhases = (
-				D21FCF25FD51D02E9F46ED98 /* [CP] Check Pods Manifest.lock */,
+				CC70D150F417AFB58A987C20 /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				B1FE5473F36DF8E8342E30D6 /* [CP] Embed Pods Frameworks */,
-				C418284079B5F57E4A4A2ABB /* [CP] Copy Pods Resources */,
+				94FDF4B923D683DF6B4CFDB8 /* [CP] Embed Pods Frameworks */,
+				77D78AB7BBCC087D7BB83A43 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -183,28 +183,7 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"\\\"$WITH_ENVIRONMENT\\\" \\\"$REACT_NATIVE_XCODE\\\"\"\n";
 		};
-		B1FE5473F36DF8E8342E30D6 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-aksharconnect/Pods-aksharconnect-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			inputPaths = (
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-aksharconnect/Pods-aksharconnect-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-aksharconnect/Pods-aksharconnect-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		C418284079B5F57E4A4A2ABB /* [CP] Copy Pods Resources */ = {
+		77D78AB7BBCC087D7BB83A43 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -212,20 +191,33 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-aksharconnect/Pods-aksharconnect-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-aksharconnect/Pods-aksharconnect-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-aksharconnect/Pods-aksharconnect-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		D21FCF25FD51D02E9F46ED98 /* [CP] Check Pods Manifest.lock */ = {
+		94FDF4B923D683DF6B4CFDB8 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-aksharconnect/Pods-aksharconnect-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-aksharconnect/Pods-aksharconnect-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-aksharconnect/Pods-aksharconnect-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		CC70D150F417AFB58A987C20 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -263,7 +255,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = D688A38D916D534281CE4788 /* Pods-aksharconnect.debug.xcconfig */;
+			baseConfigurationReference = 227E4D39CE45B77094A5DACC /* Pods-aksharconnect.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -294,7 +286,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4CAE1714D6642C0F6F3B8086 /* Pods-aksharconnect.release.xcconfig */;
+			baseConfigurationReference = F179E2D7E98CBEEF69882C39 /* Pods-aksharconnect.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

@@ -9,4 +9,8 @@
         <item name="android:windowSplashScreenBackground">@color/splash_blue</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/app_icon</item>
     </style>
+
+    <style name="BootTheme" parent="Theme.BootSplash">
+        <item name="darkContentBarsStyle">true</item>
+    </style>
 </resources>

@@ -10,4 +10,7 @@
         <item name="android:windowLightNavigationBar">false</item>
     </style>
 
+    <style name="BootTheme" parent="Theme.BootSplash">
+        <item name="darkContentBarsStyle">true</item>
+    </style>
 </resources>

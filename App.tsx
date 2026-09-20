@@ -26,8 +26,17 @@ import {
 import LoginPage from './src/pages/LoginPage';
 import AppNavigator from './src/navigation/AppNavigator';
 import { useAuth } from './src/hooks/core';
+import BootSplash from "react-native-bootsplash";
+import { useEffect } from 'react';
 
 function App() {
+  useEffect(() => {
+    async function init() {}
+
+    init().finally(async () => {
+      await BootSplash.hide();
+    });
+  }, []);
   return (
     <SafeAreaProvider style={styles.container}>
       <StatusBar barStyle="dark-content" />
