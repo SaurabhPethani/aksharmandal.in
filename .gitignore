@@ -32,6 +32,7 @@ local.properties
 *.hprof
 .cxx/
 *.keystore
+*.jks
 !debug.keystore
 .kotlin/
 gradle-daemon-jvm.properties
@@ -74,3 +75,19 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Environment variables
+.env.local
+.env
+.env.*
+!.env.example
+*.log
+logs/
+
+.vscode/*
+.vscode
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Claude Code
+.claude/
