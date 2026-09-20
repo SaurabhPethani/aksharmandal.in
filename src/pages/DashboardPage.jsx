@@ -1749,6 +1749,7 @@ export default function DashboardPage({
   onOpenUntouchedUsers,
   onOpenEvents,
   onOpenNotifications,
+  onOpenProfile,
   onRoleNameChange,
 }) {
   const { activeUserId } = useAuth();
@@ -1867,6 +1868,7 @@ export default function DashboardPage({
         onMenu={onOpenMenu}
         onHelp={onOpenHelp}
         onNotifications={onOpenNotifications}
+        onProfile={onOpenProfile}
       />
 
       <View style={styles.flex1}>

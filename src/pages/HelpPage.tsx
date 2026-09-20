@@ -792,9 +792,11 @@ function groupSections(sections: SectionEntry[]) {
 export default function HelpPage({
   onMenu = () => {},
   onNotifications = () => {},
+  onProfile,
 }: {
   onMenu?: () => void;
   onNotifications?: () => void;
+  onProfile?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const sectionRefs = useRef<Record<string, View | null>>({});
@@ -845,7 +847,11 @@ export default function HelpPage({
 
   return (
     <View style={styles.screen}>
-      <AppHeader onMenu={onMenu} onNotifications={onNotifications} />
+      <AppHeader
+        onMenu={onMenu}
+        onNotifications={onNotifications}
+        onProfile={onProfile}
+      />
 
       <View style={styles.contentWrap}>
         <ScrollView

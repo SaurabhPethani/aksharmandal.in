@@ -1,0 +1,653 @@
+import React, { useState } from 'react';
+import {
+  Alert,
+  Image,
+  Linking,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
+import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
+import { launchImageLibrary } from 'react-native-image-picker';
+import AppHeader from '../components/AppHeader';
+import SiteFooter from '../components/SiteFooter';
+import { Text } from '../components/Typography';
+import { useAuth, useToast } from '../hooks/core';
+import { useProfile } from '../hooks/useUsers';
+import { useFeatures } from '../hooks/useLookups';
+import {
+  useMyResumes,
+  useProfileImage,
+  useRegenerateQr,
+  useRemoveProfileImage,
+  useResumeMutations,
+  useUploadProfileImage,
+  stampPhotoUrl,
+} from '../hooks/useProfileExtras';
+import {
+  Button,
+  Card,
+  ErrorState,
+  PageLoader,
+  Skeleton,
+} from '../components/ui';
+import ProfileCards, {
+  ProfileHero,
+} from '../components/user-detail/ProfileCards';
+import ImageCropDialog from '../components/ImageCropDialog';
+import { isAttending, statusLabel } from '../utils/memberFlags';
+import { formatDate } from '../utils/format';
+import { pickRows } from '../utils/options';
+import { absoluteUrl } from '../api/client';
+import { profileService } from '../services/profileService';
+import { saveRemoteImage } from '../utils/saveImage';
+import { LOADING } from '../constants/messages';
+import { COLORS, RADII, TEXT, WEIGHT, space } from '../constants/theme';
+
+export default function ProfilePage({
+  onBack,
+  onMenu,
+  onHelp,
+  onNotifications,
+  onEditProfile,
+}) {
+  const { activeUserId: userId } = useAuth();
+  const toast = useToast();
+  const [tabKey, setTabKey] = useState('Personal');
+
+  const { data, isLoading, isError, error, refetch, isFetching } =
+    useProfile(userId);
+
+  const featuresQ = useFeatures();
+  const resumeEnabled = featuresQ.data?.resume === true;
+
+  const resumesQ = useMyResumes(resumeEnabled && tabKey === 'resume');
+  const imageQ = useProfileImage(userId);
+  const resumeMutations = useResumeMutations();
+  const uploadPhoto = useUploadProfileImage(userId);
+  const removePhoto = useRemoveProfileImage(userId);
+  const regenerateQr = useRegenerateQr(userId);
+  // Only a genuinely UPLOADED photo can be removed — the fallback initials
+  // avatar has nothing to delete.
+  const hasPhoto = Boolean(imageQ.data?.image_url);
+
+  const [qrNonce, setQrNonce] = useState(0);
+  const [qrMissing, setQrMissing] = useState(false);
+  // Not a mutation — nothing is written — so it carries its own pending flag.
+  const [qrSaving, setQrSaving] = useState(false);
+  const qrSrc = `${profileService.qrCodeUrl(userId)}${qrNonce ? `?v=${qrNonce}` : ''}`;
+
+  const name = data?.user_name || 'User';
+  const role = data?.role_name;
+  const attending = isAttending(data?.status);
+  // The fallback is stamped as well: it is the same file at the same address, so
+  // an unstamped `photo_url` would put the pre-upload image back on screen for
+  // as long as the photo query is still in flight.
+  const photo =
+    imageQ.data?.image_url ||
+    stampPhotoUrl(absoluteUrl(data?.photo_url), userId);
+
+  // Picking a photo opens the crop dialog; the cropped square is what gets
+  // uploaded.
+  const [cropFile, setCropFile] = useState(null);
+
+  const choosePhoto = async () => {
+    const res = await launchImageLibrary({
+      mediaType: 'photo',
+      selectionLimit: 1,
+    });
+    if (res.didCancel) return;
+    if (res.errorCode) {
+      toast.error(res.errorMessage || 'Could not open your photos.');
+      return;
+    }
+    const asset = res.assets?.[0];
+    if (asset?.uri) setCropFile(asset);
+  };
+
+  const uploadCropped = async cropped => {
+    try {
+      const res = await uploadPhoto.mutateAsync(cropped);
+      toast.success(res?.detail || 'Profile photo updated.');
+      setCropFile(null);
+    } catch (err) {
+      toast.error(err?.message);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    Alert.alert(
+      'Remove photo',
+      'Remove your profile photo? Your initials will show instead.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await removePhoto.mutateAsync();
+              toast.success(res?.detail || 'Profile photo removed.');
+            } catch (err) {
+              toast.error(err?.message || 'Could not remove the photo.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const generateResume = async () => {
+    try {
+      const res = await resumeMutations.create.mutateAsync();
+      toast.success(res?.detail || 'Resume generated.');
+      // The backend says so itself when it built something thin — no education,
+      // no jobs — rather than refusing to build at all.
+      if (res?.data?.warning) toast.warning(res.data.warning);
+    } catch (err) {
+      toast.error(err?.message);
+    }
+  };
+
+  const downloadQr = async () => {
+    setQrSaving(true);
+    const cleaned = String(name)
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\\/:*?"<>|\x00-\x1f]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const res = await saveRemoteImage(
+      qrSrc,
+      `${cleaned || 'Akshar Connect'} QR.jpeg`,
+    );
+    setQrSaving(false);
+
+    if (res.ok) {
+      toast.success(
+        res.mode === 'share' ? 'QR code shared.' : 'QR code downloaded.',
+      );
+      return;
+    }
+    // Dismissing the share sheet is a decision, and gets no toast at all.
+    if (res.reason !== 'cancelled') toast.error(res.reason);
+  };
+
+  const generateQr = async () => {
+    try {
+      const res = await regenerateQr.mutateAsync();
+      setQrMissing(false);
+      setQrNonce(Date.now());
+      toast.success(res?.detail || 'QR code generated.');
+    } catch (err) {
+      toast.error(err?.message);
+    }
+  };
+
+  const deleteResume = async id => {
+    try {
+      const res = await resumeMutations.remove.mutateAsync(id);
+      toast.success(res?.detail || 'Resume deleted.');
+    } catch (err) {
+      toast.error(err?.message);
+    }
+  };
+
+  const shell = children => (
+    <View style={styles.safe}>
+      <AppHeader
+        onBack={onBack}
+        onMenu={onMenu}
+        onHelp={onHelp}
+        onNotifications={onNotifications}
+      />
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} />
+        }
+      >
+        {children}
+      </ScrollView>
+      <SiteFooter />
+    </View>
+  );
+
+  if (isLoading) return shell(<PageLoader label={LOADING.page} />);
+  if (isError) {
+    return shell(
+      <Card>
+        <ErrorState
+          error={error}
+          onRetry={refetch}
+          title="Could not load your profile"
+        />
+      </Card>,
+    );
+  }
+
+  return shell(
+    <View style={styles.stack}>
+      <ProfileHero
+        photo={photo}
+        name={name}
+        meta={[
+          data?.mobile_number,
+          [data?.sabha_name, data?.mandal_name].filter(Boolean).join(' · '),
+        ]}
+        photoSlot={
+          <>
+            {/* Your own photo is yours to change, whatever the edit grant says
+                about the record's fields. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Change profile photo"
+              onPress={choosePhoto}
+              disabled={uploadPhoto.isPending || removePhoto.isPending}
+              style={({ pressed }) => [
+                styles.photoBtn,
+                styles.photoChange,
+                pressed && styles.photoPressed,
+                (uploadPhoto.isPending || removePhoto.isPending) &&
+                  styles.photoDisabled,
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="camera"
+                size={space(4)}
+                color={COLORS.white}
+              />
+            </Pressable>
+
+            {/* Remove — only when there is an uploaded photo to take down. Sits
+                opposite the change button so the two do not crowd. */}
+            {hasPhoto && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Remove profile photo"
+                onPress={handleRemovePhoto}
+                disabled={uploadPhoto.isPending || removePhoto.isPending}
+                style={({ pressed }) => [
+                  styles.photoBtn,
+                  styles.photoRemove,
+                  pressed && styles.photoPressed,
+                  (uploadPhoto.isPending || removePhoto.isPending) &&
+                    styles.photoDisabled,
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="trash-can-outline"
+                  size={space(4)}
+                  color={COLORS.white}
+                />
+              </Pressable>
+            )}
+          </>
+        }
+        chips={
+          <>
+            {role ? (
+              <View style={styles.roleChip}>
+                <Text style={styles.roleChipText}>{role}</Text>
+              </View>
+            ) : null}
+            {data?.status != null && data.status !== '' ? (
+              <View
+                style={[
+                  styles.statusChip,
+                  attending ? styles.statusOk : styles.statusBad,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+                    attending ? styles.dotOk : styles.dotBad,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.statusText,
+                    attending ? styles.statusTextOk : styles.statusTextBad,
+                  ]}
+                >
+                  {statusLabel(data.status)}
+                </Text>
+              </View>
+            ) : null}
+          </>
+        }
+        actions={
+          <Button variant="accent" onPress={onEditProfile}>
+            Edit Profile
+          </Button>
+        }
+      />
+
+      <ProfileCards
+        user={data}
+        userId={userId}
+        onTabChange={setTabKey}
+        omitTabs={['family']}
+        extraTabs={[
+          ...(resumeEnabled
+            ? [
+                {
+                  key: 'resume',
+                  label: 'Resume',
+                  render: () => (
+                    <View style={styles.stack}>
+                      <View style={styles.builder}>
+                        <Text style={styles.sectionTitle}>Resume Builder</Text>
+                        <Text style={styles.builderCopy}>
+                          Generate a PDF resume from your profile, education and
+                          job details. Each resume is a frozen snapshot — later
+                          profile edits won’t change resumes you’ve already
+                          created.
+                        </Text>
+                        <Button
+                          variant="accent"
+                          style={styles.builderBtn}
+                          onPress={generateResume}
+                          busy={resumeMutations.create.isPending}
+                        >
+                          Generate Resume
+                        </Button>
+                      </View>
+
+                      <ResumeList
+                        query={resumesQ}
+                        onDelete={deleteResume}
+                        busy={resumeMutations.remove.isPending}
+                      />
+                    </View>
+                  ),
+                },
+              ]
+            : []),
+          {
+            key: 'qr',
+            label: 'My QR Code',
+            render: () => (
+              <Card style={styles.qrCard}>
+                {qrMissing ? (
+                  <View style={styles.qrEmpty}>
+                    <Text style={styles.muted}>
+                      No QR code has been generated for your account yet.
+                    </Text>
+                    <Button
+                      variant="accent"
+                      style={styles.qrEmptyBtn}
+                      onPress={generateQr}
+                      busy={regenerateQr.isPending}
+                    >
+                      Generate QR code
+                    </Button>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.qrFrame}>
+                      <Image
+                        key={qrNonce}
+                        source={{ uri: qrSrc }}
+                        accessibilityLabel="Your attendance QR code"
+                        resizeMode="contain"
+                        style={styles.qrImage}
+                        onError={() => setQrMissing(true)}
+                      />
+                    </View>
+                    <Text style={[styles.muted, styles.qrHint]}>
+                      Show this at Sabha to mark your attendance
+                    </Text>
+                    <View style={styles.qrActions}>
+                      <Button
+                        variant="accent"
+                        onPress={downloadQr}
+                        busy={qrSaving}
+                      >
+                        <MaterialCommunityIcons
+                          name="download"
+                          size={space(4)}
+                        />
+                        Download QR Code
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onPress={generateQr}
+                        busy={regenerateQr.isPending}
+                      >
+                        <MaterialCommunityIcons
+                          name="refresh"
+                          size={space(4)}
+                        />
+                        Regenerate QR Code
+                      </Button>
+                    </View>
+                  </>
+                )}
+              </Card>
+            ),
+          },
+        ]}
+      />
+
+      {/* Crop-and-zoom before upload — opens when a photo is picked, uploads
+          the cropped square on Save. */}
+      <ImageCropDialog
+        file={cropFile}
+        busy={uploadPhoto.isPending}
+        onCancel={() => setCropFile(null)}
+        onCropped={uploadCropped}
+        onError={err => toast.error(err?.message)}
+      />
+    </View>,
+  );
+}
+
+function ResumeList({ query, onDelete, busy }) {
+  if (query.isLoading) {
+    return (
+      <View style={styles.resumeSkeletons}>
+        {[0, 1].map(i => (
+          <Skeleton key={i} style={styles.resumeSkeleton} />
+        ))}
+      </View>
+    );
+  }
+  if (query.error) {
+    return (
+      <Card>
+        <ErrorState
+          error={query.error}
+          onRetry={query.refetch}
+          title="Could not load your resumes"
+        />
+      </Card>
+    );
+  }
+
+  const rows = pickRows(query.data);
+  if (!rows.length) {
+    return (
+      <Card>
+        <Text style={[styles.muted, styles.resumeEmpty]}>
+          No resumes yet. Generate your first resume above.
+        </Text>
+      </Card>
+    );
+  }
+
+  return (
+    <View style={styles.resumeList}>
+      {rows.map(r => (
+        <View key={r.id} style={styles.resumeRow}>
+          <View style={styles.resumeCopy}>
+            <Text numberOfLines={1} style={styles.resumeVersion}>
+              Version {r.version}
+            </Text>
+            {r.created_at ? (
+              <Text style={styles.resumeDate}>{formatDate(r.created_at)}</Text>
+            ) : null}
+          </View>
+          <View style={styles.resumeActions}>
+            {r.resume_path ? (
+              <Text
+                accessibilityRole="link"
+                onPress={() => Linking.openURL(r.resume_path)}
+                style={styles.resumeOpen}
+              >
+                Open
+              </Text>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Delete version ${r.version}`}
+              onPress={() => onDelete(r.id)}
+              disabled={busy}
+              style={({ pressed }) => [
+                styles.resumeDelete,
+                pressed && styles.resumeDeletePressed,
+                busy && styles.photoDisabled,
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="trash-can-outline"
+                size={space(4)}
+                color={COLORS.dangerFg}
+              />
+            </Pressable>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: COLORS.bg },
+  flex: { flex: 1 },
+  content: { padding: space(4) },
+  stack: { gap: space(5) },
+  muted: { fontSize: TEXT.sm, color: COLORS.textMuted },
+
+  photoBtn: {
+    position: 'absolute',
+    bottom: 0,
+    width: space(9),
+    height: space(9),
+    borderRadius: RADII.full,
+    borderWidth: 4,
+    borderColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoChange: { right: 0, backgroundColor: COLORS.accent },
+  photoRemove: { left: 0, backgroundColor: COLORS.dangerFg },
+  photoPressed: { transform: [{ scale: 1.05 }] },
+  photoDisabled: { opacity: 0.6 },
+
+  roleChip: {
+    borderRadius: RADII.full,
+    backgroundColor: COLORS.primary50,
+    paddingHorizontal: space(3),
+    paddingVertical: space(1),
+  },
+  roleChipText: {
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.primary,
+  },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(1.5),
+    borderRadius: RADII.full,
+    paddingHorizontal: space(3),
+    paddingVertical: space(1),
+  },
+  statusOk: { backgroundColor: COLORS.successBg },
+  statusBad: { backgroundColor: COLORS.dangerBg },
+  statusDot: { width: space(1.5), height: space(1.5), borderRadius: RADII.full },
+  dotOk: { backgroundColor: COLORS.successFg },
+  dotBad: { backgroundColor: COLORS.dangerFg },
+  statusText: { fontSize: TEXT.xs, fontWeight: WEIGHT.semibold },
+  statusTextOk: { color: COLORS.successFg },
+  statusTextBad: { color: COLORS.dangerFg },
+
+  builder: {
+    borderRadius: RADII.card,
+    borderWidth: 1,
+    borderColor: COLORS.lineSoft,
+    backgroundColor: COLORS.bg,
+    padding: space(5),
+  },
+  sectionTitle: {
+    fontSize: TEXT.lg,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.primary,
+  },
+  builderCopy: {
+    marginTop: space(1),
+    fontSize: TEXT.sm,
+    lineHeight: TEXT.sm * 1.5,
+    color: COLORS.textMuted,
+  },
+  builderBtn: { marginTop: space(4), alignSelf: 'flex-start' },
+
+  qrCard: { alignItems: 'center' },
+  qrEmpty: { alignItems: 'center', paddingVertical: space(10) },
+  qrEmptyBtn: { marginTop: space(4) },
+  qrFrame: {
+    borderRadius: RADII.card,
+    borderWidth: 1,
+    borderColor: COLORS.lineSoft,
+    padding: space(6),
+  },
+  qrImage: { width: 224, height: 224 },
+  qrHint: { marginTop: space(4), textAlign: 'center' },
+  qrActions: {
+    marginTop: space(4),
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space(2),
+  },
+
+  resumeSkeletons: { gap: space(2) },
+  resumeSkeleton: { height: space(16), width: '100%' },
+  resumeEmpty: { paddingVertical: space(6), textAlign: 'center' },
+  resumeList: { gap: space(2) },
+  resumeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space(3),
+    borderRadius: RADII.card,
+    borderWidth: 1,
+    borderColor: COLORS.lineSoft,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: space(5),
+    paddingVertical: space(4),
+  },
+  resumeCopy: { flex: 1 },
+  resumeVersion: {
+    fontSize: TEXT.sm,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.primary,
+  },
+  resumeDate: { fontSize: TEXT.xs, color: COLORS.textMuted },
+  resumeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(3),
+  },
+  resumeOpen: {
+    fontSize: TEXT.sm,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.primary,
+  },
+  resumeDelete: { borderRadius: RADII.lg, padding: space(2) },
+  resumeDeletePressed: { backgroundColor: COLORS.dangerBg },
+});

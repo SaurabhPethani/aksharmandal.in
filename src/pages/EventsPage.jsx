@@ -111,6 +111,7 @@ export default function EventsPage({
   onMenu,
   onHelp,
   onNotifications,
+  onProfile,
 }) {
   // Mobile currently has no PermissionProvider. Keep the read-only event
   // surface available, while hiding web-only organizer and registration
@@ -193,6 +194,7 @@ export default function EventsPage({
         onMenu={onMenu}
         onHelp={onHelp}
         onNotifications={onNotifications}
+        onProfile={onProfile}
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Events']}
       />

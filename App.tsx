@@ -23,6 +23,7 @@ import {
   OverlayProvider,
   useOverlayOpen,
 } from './src/contexts/OverlayContext';
+import { ToastProvider } from './src/contexts/ToastContext';
 import LoginPage from './src/pages/LoginPage';
 import AppNavigator from './src/navigation/AppNavigator';
 import { useAuth } from './src/hooks/core';
@@ -35,7 +36,9 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <OverlayProvider>
-            <AppContent />
+            <ToastProvider>
+              <AppContent />
+            </ToastProvider>
           </OverlayProvider>
         </AuthProvider>
       </QueryClientProvider>

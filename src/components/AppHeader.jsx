@@ -1,7 +1,9 @@
-import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useContext } from 'react';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from './Typography';
+import { AuthContext } from '../contexts/AuthContext';
+import { useProfileImage } from '../hooks/useProfileExtras';
 
 const COLORS = {
   navy: '#003158',
@@ -9,10 +11,33 @@ const COLORS = {
   surface: '#FFFFFF',
 };
 
+function HeaderAvatar() {
+  const auth = useContext(AuthContext);
+  const userId = auth?.activeUserId ?? null;
+  const { data } = useProfileImage(userId, Boolean(userId));
+  const photo = data?.image_url;
+
+  if (photo) {
+    return (
+      <Image
+        source={{ uri: photo }}
+        style={styles.avatarImage}
+        accessibilityIgnoresInvertColors
+      />
+    );
+  }
+  return (
+    <MaterialCommunityIcons name="account" size={22} color={COLORS.surface} />
+  );
+}
+
 export default function AppHeader({
   onMenu,
   onHelp = () => {},
   onNotifications = () => {},
+  // No default: a screen that passes nothing leaves the avatar inert, and a
+  // `null` default would narrow the prop's inferred type for TS callers.
+  onProfile,
   onBack = null,
   breadcrumbs = [],
 }) {
@@ -57,15 +82,16 @@ export default function AppHeader({
             />
           </Pressable>
           <Pressable
+            onPress={onProfile ?? undefined}
+            disabled={!onProfile}
             accessibilityRole="button"
             accessibilityLabel="Profile"
-            style={styles.avatar}
+            style={({ pressed }) => [
+              styles.avatar,
+              pressed && onProfile && styles.avatarPressed,
+            ]}
           >
-            <MaterialCommunityIcons
-              name="account"
-              size={22}
-              color={COLORS.surface}
-            />
+            <HeaderAvatar />
           </Pressable>
         </View>
       </View>
@@ -127,10 +153,14 @@ const styles = StyleSheet.create({
   },
   breadcrumb: { color: '#7894AA', fontSize: 12, fontWeight: '600' },
   breadcrumbCurrent: { color: COLORS.navy, fontWeight: '800' },
+  avatarPressed: { opacity: 0.8 },
+  avatarImage: { width: '100%', height: '100%' },
   avatar: {
     width: 38,
     height: 38,
     borderRadius: 19,
+    // Android does not clip a child to a rounded parent without this.
+    overflow: 'hidden',
     backgroundColor: COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',

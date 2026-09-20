@@ -31,7 +31,12 @@ const C = {
   accent: '#FF862A',
 };
 
-export default function NotificationsPage({ onBack, onMenu, onHelp }) {
+export default function NotificationsPage({
+  onBack,
+  onMenu,
+  onHelp,
+  onProfile,
+}) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -75,6 +80,7 @@ export default function NotificationsPage({ onBack, onMenu, onHelp }) {
         onBack={onBack}
         onMenu={onMenu}
         onHelp={onHelp}
+        onProfile={onProfile}
         breadcrumbs={['Dashboard', 'Notifications']}
       />
       <ScrollView

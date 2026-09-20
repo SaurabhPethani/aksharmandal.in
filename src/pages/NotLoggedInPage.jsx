@@ -32,6 +32,7 @@ export default function NotLoggedInPage({
   onOpenMenu,
   onOpenHelp,
   onNotifications,
+  onProfile,
 }) {
   const query = useNotLoggedIn(true);
   const members = useMemo(
@@ -66,6 +67,7 @@ export default function NotLoggedInPage({
         onMenu={onOpenMenu}
         onHelp={onOpenHelp}
         onNotifications={onNotifications}
+        onProfile={onProfile}
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Not Login']}
       />

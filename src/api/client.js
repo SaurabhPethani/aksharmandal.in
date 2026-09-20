@@ -14,6 +14,21 @@ import { API_BASE } from '../config/appConfig';
 
 export const apiUrl = path => `${API_BASE}${path}`;
 
+/**
+ * A URL the API handed back, made loadable by `<Image>`.
+ *
+ * The browser resolves a relative path against the origin it loaded from; the
+ * app has no origin, so a relative `image_url` renders as nothing at all.
+ * Already-absolute URLs pass through untouched.
+ */
+export const absoluteUrl = url => {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed;
+  return `${API_BASE}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
+};
+
 export const AUTH_PATHS = {
   loginInit: '/api/v1/auth/login-init',
   loginPassword: '/api/v1/auth/login/password',

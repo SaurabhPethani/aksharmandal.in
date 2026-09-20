@@ -209,7 +209,13 @@ function Fact({ label, value, danger, color }) {
   );
 }
 
-export default function YuvaSevaPage({ onBack, onMenu, onHelp, onNotifications }) {
+export default function YuvaSevaPage({
+  onBack,
+  onMenu,
+  onHelp,
+  onNotifications,
+  onProfile,
+}) {
   const canAdd = true;
   const [rows, setRows] = useState([]);
   const [totals, setTotals] = useState({});
@@ -322,6 +328,7 @@ export default function YuvaSevaPage({ onBack, onMenu, onHelp, onNotifications }
         onMenu={onMenu}
         onHelp={onHelp}
         onNotifications={onNotifications}
+        onProfile={onProfile}
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Yuva Seva']}
       />

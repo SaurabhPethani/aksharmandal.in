@@ -620,6 +620,7 @@ export default function BirthdaysPage({
   onMenu,
   onHelp,
   onNotifications,
+  onProfile,
 }) {
   const [tab, setTab] = useState('send');
 
@@ -639,6 +640,7 @@ export default function BirthdaysPage({
         onMenu={onMenu}
         onHelp={onHelp}
         onNotifications={onNotifications}
+        onProfile={onProfile}
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Birthdays']}
       />

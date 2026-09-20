@@ -36,6 +36,8 @@
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Akshar Connect lets you choose a photo for your profile.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Akshar Connect saves Today's Thought images to your photos.</string>
 	<key>UIAppFonts</key>

@@ -7,6 +7,8 @@ import NotLoggedInPage from '../pages/NotLoggedInPage';
 import EventsPage from '../pages/EventsPage';
 import YuvaSevaPage from '../pages/YuvaSevaPage';
 import NotificationsPage from '../pages/NotificationsPage';
+import ProfilePage from '../pages/ProfilePage';
+import UserFormPage from '../pages/UserFormPage';
 import { useAuth } from '../hooks/core';
 
 type RouteName =
@@ -16,7 +18,9 @@ type RouteName =
   | 'not-logged-in'
   | 'events'
   | 'yuva-seva'
-  | 'notifications';
+  | 'notifications'
+  | 'profile'
+  | 'profile-edit';
 
 type AppNavigatorProps = {
   initialRoute?: RouteName;
@@ -44,6 +48,10 @@ export default function AppNavigator({
   const navigate = (nextRoute: RouteName) => {
     setHistory(previous => [...previous, nextRoute]);
   };
+
+  // The header avatar, on every screen. Re-entering from the profile itself
+  // would stack a second copy, so it is not offered there.
+  const openProfile = () => navigate('profile');
 
   const goBack = () => {
     setHistory(previous =>
@@ -83,6 +91,7 @@ export default function AppNavigator({
         onOpenEvents={() => navigate('events')}
         onOpenUntouchedUsers={() => navigate('yuva-seva')}
         onOpenNotifications={() => navigate('notifications')}
+        onOpenProfile={openProfile}
         onRoleNameChange={setRoleName}
       />
     ) : route === 'birthdays' ? (
@@ -92,6 +101,7 @@ export default function AppNavigator({
         onMenu={() => setDrawerOpen(true)}
         onHelp={() => navigate('help')}
         onNotifications={() => navigate('notifications')}
+        onProfile={openProfile}
       />
     ) : route === 'not-logged-in' ? (
       <NotLoggedInPage
@@ -99,6 +109,7 @@ export default function AppNavigator({
         onOpenMenu={() => setDrawerOpen(true)}
         onOpenHelp={() => navigate('help')}
         onNotifications={() => navigate('notifications')}
+        onProfile={openProfile}
       />
     ) : route === 'events' ? (
       <EventsPage
@@ -106,6 +117,7 @@ export default function AppNavigator({
         onMenu={() => setDrawerOpen(true)}
         onHelp={() => navigate('help')}
         onNotifications={() => navigate('notifications')}
+        onProfile={openProfile}
       />
     ) : route === 'yuva-seva' ? (
       <YuvaSevaPage
@@ -113,17 +125,37 @@ export default function AppNavigator({
         onMenu={() => setDrawerOpen(true)}
         onHelp={() => navigate('help')}
         onNotifications={() => navigate('notifications')}
+        onProfile={openProfile}
       />
     ) : route === 'notifications' ? (
       <NotificationsPage
         onBack={goBack}
         onMenu={() => setDrawerOpen(true)}
         onHelp={() => navigate('help')}
+        onProfile={openProfile}
+      />
+    ) : route === 'profile' ? (
+      <ProfilePage
+        onBack={goBack}
+        onMenu={() => setDrawerOpen(true)}
+        onHelp={() => navigate('help')}
+        onNotifications={() => navigate('notifications')}
+        onEditProfile={() => navigate('profile-edit')}
+      />
+    ) : route === 'profile-edit' ? (
+      <UserFormPage
+        onBack={goBack}
+        onMenu={() => setDrawerOpen(true)}
+        onHelp={() => navigate('help')}
+        onNotifications={() => navigate('notifications')}
+        onProfile={goBack}
+        onSaved={goBack}
       />
     ) : (
       <HelpPage
         onMenu={() => setDrawerOpen(true)}
         onNotifications={() => navigate('notifications')}
+        onProfile={openProfile}
       />
     );
 
