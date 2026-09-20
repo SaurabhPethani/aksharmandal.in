@@ -615,7 +615,12 @@ const TABS = [
   { value: 'received', label: 'My Wishes' },
 ];
 
-export default function BirthdaysPage({ onBack, onMenu, onHelp }) {
+export default function BirthdaysPage({
+  onBack,
+  onMenu,
+  onHelp,
+  onNotifications,
+}) {
   const [tab, setTab] = useState('send');
 
   // Android's back button goes where the breadcrumb does.
@@ -630,7 +635,13 @@ export default function BirthdaysPage({ onBack, onMenu, onHelp }) {
   return (
     <View style={styles.screen}>
       {/* The app's own bar, as every registered screen carries it. */}
-      <AppHeader onMenu={onMenu} onHelp={onHelp} />
+      <AppHeader
+        onMenu={onMenu}
+        onHelp={onHelp}
+        onNotifications={onNotifications}
+        onBack={onBack}
+        breadcrumbs={['Dashboard', 'Birthdays']}
+      />
 
       <ScrollView
         style={styles.page}

@@ -170,12 +170,60 @@ const SECTIONS: SectionEntry[] = [
     title: 'The roles covered in this manual',
     text: 'roles mandal head sabha yuva seva yuvak nimit sevak overview',
     rows: [
-      { label: 'Mandal Head', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
-      { label: 'Mandal DB Manager', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
-      { label: 'Sabha Head', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
-      { label: 'Sabha DB Manager', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
-      { label: 'Yuva Seva', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
-      { label: 'Yuvak (member)', mh: 'no', mdb: 'no', sh: 'no', sdb: 'no', ys: 'no', yv: 'yes' },
+      {
+        label: 'Mandal Head',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Mandal DB Manager',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Sabha Head',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Sabha DB Manager',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Yuva Seva',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Yuvak (member)',
+        mh: 'no',
+        mdb: 'no',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'yes',
+      },
     ],
   },
   {
@@ -185,12 +233,60 @@ const SECTIONS: SectionEntry[] = [
     title: 'Who can add, edit, and manage Yuvaks?',
     text: 'add new yuvak edit profile role permission follow-up qr bulk status user management',
     rows: [
-      { label: 'Add a new Yuvak', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
-      { label: "Edit a Yuvak's profile", mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'limited', yv: 'approval' },
-      { label: 'Change a Yuvak role', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'no', ys: 'no', yv: 'no' },
-      { label: 'Assign follow-up person', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
-      { label: 'Generate or regenerate QR', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
-      { label: 'Bulk activate or deactivate Yuvaks', mh: 'no', mdb: 'no', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
+      {
+        label: 'Add a new Yuvak',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: "Edit a Yuvak's profile",
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'limited',
+        yv: 'approval',
+      },
+      {
+        label: 'Change a Yuvak role',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Assign follow-up person',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Generate or regenerate QR',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Bulk activate or deactivate Yuvaks',
+        mh: 'no',
+        mdb: 'no',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
     ],
     notes: [
       'A new Yuvak is created immediately without approval. The assigned Yuva Seva or a higher Nimit Sevak can approve profile changes, and the hierarchy rules are enforced by the system.',
@@ -203,12 +299,60 @@ const SECTIONS: SectionEntry[] = [
     title: 'Which Yuvak details are visible to which role?',
     text: 'visible view scope access yuvak visibility mandal sabha yuva seva',
     rows: [
-      { label: 'Mandal Head', mh: 'yes', mdb: 'no', sh: 'no', sdb: 'no', ys: 'no', yv: 'no' },
-      { label: 'Mandal DB Manager', mh: 'no', mdb: 'yes', sh: 'no', sdb: 'no', ys: 'no', yv: 'no' },
-      { label: 'Sabha Head', mh: 'no', mdb: 'no', sh: 'yes', sdb: 'no', ys: 'no', yv: 'no' },
-      { label: 'Sabha DB Manager', mh: 'no', mdb: 'no', sh: 'no', sdb: 'yes', ys: 'no', yv: 'no' },
-      { label: 'Yuva Seva', mh: 'no', mdb: 'no', sh: 'no', sdb: 'no', ys: 'yes', yv: 'no' },
-      { label: 'Yuvak', mh: 'no', mdb: 'no', sh: 'no', sdb: 'no', ys: 'no', yv: 'yes' },
+      {
+        label: 'Mandal Head',
+        mh: 'yes',
+        mdb: 'no',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Mandal DB Manager',
+        mh: 'no',
+        mdb: 'yes',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Sabha Head',
+        mh: 'no',
+        mdb: 'no',
+        sh: 'yes',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Sabha DB Manager',
+        mh: 'no',
+        mdb: 'no',
+        sh: 'no',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Yuva Seva',
+        mh: 'no',
+        mdb: 'no',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Yuvak',
+        mh: 'no',
+        mdb: 'no',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'yes',
+      },
     ],
   },
   {
@@ -218,11 +362,51 @@ const SECTIONS: SectionEntry[] = [
     title: 'Sabhas, Mandals, and Pradeshs',
     text: 'organisation structure pradesh mandal sabha hierarchy view add edit',
     rows: [
-      { label: 'See the org structure', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
-      { label: 'Add a new Pradesh', mh: 'no', mdb: 'no', sh: 'no', sdb: 'no', ys: 'no', yv: 'no' },
-      { label: 'Add a new Mandal', mh: 'no', mdb: 'no', sh: 'no', sdb: 'no', ys: 'no', yv: 'no' },
-      { label: 'Add a new Sabha', mh: 'yes', mdb: 'yes', sh: 'no', sdb: 'no', ys: 'no', yv: 'no' },
-      { label: 'Edit an existing Sabha', mh: 'yes', mdb: 'yes', sh: 'no', sdb: 'no', ys: 'no', yv: 'no' },
+      {
+        label: 'See the org structure',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Add a new Pradesh',
+        mh: 'no',
+        mdb: 'no',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Add a new Mandal',
+        mh: 'no',
+        mdb: 'no',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Add a new Sabha',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Edit an existing Sabha',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
     ],
   },
   {
@@ -232,9 +416,33 @@ const SECTIONS: SectionEntry[] = [
     title: 'Transfers and approvals',
     text: 'transfer move sabha request submit accept reject cancel pending approval',
     rows: [
-      { label: 'View transfers', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
-      { label: 'Submit a transfer request', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
-      { label: 'Accept or reject transfer', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
+      {
+        label: 'View transfers',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Submit a transfer request',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Accept or reject transfer',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
     ],
     notes: [
       'Every Sabha transfer requires approval from the receiving side. A request is effective only once the receiving head or DB Manager accepts it, and the submitter can cancel it while it remains pending.',
@@ -247,9 +455,33 @@ const SECTIONS: SectionEntry[] = [
     title: 'Events',
     text: 'events create edit register attendance programme',
     rows: [
-      { label: 'See events', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'yes' },
-      { label: 'Create or edit events', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
-      { label: 'Register Yuvak for an event', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'yes' },
+      {
+        label: 'See events',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'yes',
+      },
+      {
+        label: 'Create or edit events',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Register Yuvak for an event',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'yes',
+      },
     ],
     notes: ['Events go live immediately and do not require approval.'],
   },
@@ -260,11 +492,37 @@ const SECTIONS: SectionEntry[] = [
     title: 'Jobs and the maker-checker flow',
     text: 'jobs job portal pending approve pause reject close maker checker',
     rows: [
-      { label: 'See job posts', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'yes' },
-      { label: 'Create a job post', mh: 'approval', mdb: 'approval', sh: 'approval', sdb: 'approval', ys: 'approval', yv: 'approval' },
-      { label: 'Approve or reject job post', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'no', ys: 'no', yv: 'no' },
+      {
+        label: 'See job posts',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'yes',
+      },
+      {
+        label: 'Create a job post',
+        mh: 'approval',
+        mdb: 'approval',
+        sh: 'approval',
+        sdb: 'approval',
+        ys: 'approval',
+        yv: 'approval',
+      },
+      {
+        label: 'Approve or reject job post',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
     ],
-    notes: ['A new post stays pending until a Sabha Head, Mandal DB Manager, or Mandal Head approves it.'],
+    notes: [
+      'A new post stays pending until a Sabha Head, Mandal DB Manager, or Mandal Head approves it.',
+    ],
   },
   {
     id: 'attendance',
@@ -273,9 +531,33 @@ const SECTIONS: SectionEntry[] = [
     title: 'Attendance',
     text: 'attendance present absent mark update correct records',
     rows: [
-      { label: 'See attendance records', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
-      { label: 'Mark attendance', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
-      { label: 'Correct attendance entry', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'no', yv: 'no' },
+      {
+        label: 'See attendance records',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Mark attendance',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
+      {
+        label: 'Correct attendance entry',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'no',
+        yv: 'no',
+      },
     ],
   },
   {
@@ -285,10 +567,28 @@ const SECTIONS: SectionEntry[] = [
     title: 'Reports and downloads',
     text: 'reports view export download performance attendance trend',
     rows: [
-      { label: 'View performance reports', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'limited', yv: 'limited' },
-      { label: 'Download or export reports', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
+      {
+        label: 'View performance reports',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'limited',
+        yv: 'limited',
+      },
+      {
+        label: 'Download or export reports',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
     ],
-    notes: ['Yuva Seva sees only reports for assigned Yuvaks, and Yuvaks see only their own report data.'],
+    notes: [
+      'Yuva Seva sees only reports for assigned Yuvaks, and Yuvaks see only their own report data.',
+    ],
   },
   {
     id: 'ys-register',
@@ -297,9 +597,19 @@ const SECTIONS: SectionEntry[] = [
     title: 'Yuva Seva register',
     text: 'yuva seva register interaction calls visits meetings notes',
     rows: [
-      { label: 'Add or edit a Yuva Seva interaction record', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
+      {
+        label: 'Add or edit a Yuva Seva interaction record',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
     ],
-    notes: ['A record can be created only for a Yuvak whose follow-up person is set to you.'],
+    notes: [
+      'A record can be created only for a Yuvak whose follow-up person is set to you.',
+    ],
   },
   {
     id: 'master-data',
@@ -308,8 +618,24 @@ const SECTIONS: SectionEntry[] = [
     title: 'System or master data',
     text: 'master data dropdown values education industry state city country job',
     rows: [
-      { label: 'View system data', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
-      { label: 'Add or edit system data', mh: 'yes', mdb: 'yes', sh: 'no', sdb: 'no', ys: 'no', yv: 'no' },
+      {
+        label: 'View system data',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Add or edit system data',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'no',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
     ],
   },
   {
@@ -319,8 +645,24 @@ const SECTIONS: SectionEntry[] = [
     title: 'Role and access management',
     text: 'role access permissions admin menu top-level container',
     rows: [
-      { label: 'Access the Admin menu', mh: 'yes', mdb: 'no', sh: 'yes', sdb: 'yes', ys: 'yes', yv: 'no' },
-      { label: 'Add or edit access roles', mh: 'yes', mdb: 'yes', sh: 'yes', sdb: 'no', ys: 'no', yv: 'no' },
+      {
+        label: 'Access the Admin menu',
+        mh: 'yes',
+        mdb: 'no',
+        sh: 'yes',
+        sdb: 'yes',
+        ys: 'yes',
+        yv: 'no',
+      },
+      {
+        label: 'Add or edit access roles',
+        mh: 'yes',
+        mdb: 'yes',
+        sh: 'yes',
+        sdb: 'no',
+        ys: 'no',
+        yv: 'no',
+      },
     ],
     notes: ['Per-user access overrides are handled by SuperAdmin only.'],
   },
@@ -449,8 +791,10 @@ function groupSections(sections: SectionEntry[]) {
 
 export default function HelpPage({
   onMenu = () => {},
+  onNotifications = () => {},
 }: {
   onMenu?: () => void;
+  onNotifications?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const sectionRefs = useRef<Record<string, View | null>>({});
@@ -465,7 +809,12 @@ export default function HelpPage({
         section.group,
         section.text,
         section.notes?.join(' '),
-        section.faqs?.map(item => `${item.q} ${item.answer ?? ''} ${item.steps?.join(' ') ?? ''}`).join(' '),
+        section.faqs
+          ?.map(
+            item =>
+              `${item.q} ${item.answer ?? ''} ${item.steps?.join(' ') ?? ''}`,
+          )
+          .join(' '),
       ]
         .filter(Boolean)
         .join(' ');
@@ -484,7 +833,10 @@ export default function HelpPage({
         (globalThis as any).requestAnimationFrame(() => {
           const scrollView = (sectionRefs.current as any).__scrollView;
           if (scrollView && typeof scrollView.scrollTo === 'function') {
-            scrollView.scrollTo({ y: Math.max(pageY - 120, 0), animated: true });
+            scrollView.scrollTo({
+              y: Math.max(pageY - 120, 0),
+              animated: true,
+            });
           }
         });
       }
@@ -493,7 +845,7 @@ export default function HelpPage({
 
   return (
     <View style={styles.screen}>
-      <AppHeader onMenu={onMenu} />
+      <AppHeader onMenu={onMenu} onNotifications={onNotifications} />
 
       <View style={styles.contentWrap}>
         <ScrollView
@@ -507,16 +859,27 @@ export default function HelpPage({
           <View style={styles.headerCard}>
             <View style={styles.headerRow}>
               <View style={styles.headerIconWrap}>
-                <MaterialCommunityIcons name="book-open-page-variant" size={22} color={COLORS.navy} />
+                <MaterialCommunityIcons
+                  name="book-open-page-variant"
+                  size={22}
+                  color={COLORS.navy}
+                />
               </View>
               <View style={styles.headerTextWrap}>
                 <Text style={styles.headerTitle}>Help & FAQ</Text>
-                <Text style={styles.headerSubtitle}>Who can do what — a plain-English guide.</Text>
+                <Text style={styles.headerSubtitle}>
+                  Who can do what — a plain-English guide.
+                </Text>
               </View>
             </View>
 
             <View style={styles.searchBox}>
-              <MaterialCommunityIcons name="magnify" size={18} color={COLORS.muted} style={styles.searchIcon} />
+              <MaterialCommunityIcons
+                name="magnify"
+                size={18}
+                color={COLORS.muted}
+                style={styles.searchIcon}
+              />
               <RNTextInput
                 value={query}
                 onChangeText={setQuery}
@@ -534,23 +897,41 @@ export default function HelpPage({
                   accessibilityLabel="Clear search"
                   style={styles.clearButton}
                 >
-                  <MaterialCommunityIcons name="close" size={15} color={COLORS.muted} />
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={15}
+                    color={COLORS.muted}
+                  />
                 </Pressable>
               ) : null}
             </View>
 
             <View style={styles.legendRow}>
-              <View style={styles.legendItem}><Cell value="yes" /><Text style={styles.legendText}>Yes</Text></View>
-              <View style={styles.legendItem}><Cell value="no" /><Text style={styles.legendText}>No</Text></View>
-              <View style={styles.legendItem}><Cell value="limited" /><Text style={styles.legendText}>Limited</Text></View>
-              <View style={styles.legendItem}><Cell value="approval" /><Text style={styles.legendText}>Needs approval</Text></View>
+              <View style={styles.legendItem}>
+                <Cell value="yes" />
+                <Text style={styles.legendText}>Yes</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <Cell value="no" />
+                <Text style={styles.legendText}>No</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <Cell value="limited" />
+                <Text style={styles.legendText}>Limited</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <Cell value="approval" />
+                <Text style={styles.legendText}>Needs approval</Text>
+              </View>
             </View>
           </View>
 
           <View style={styles.sidebarWrap}>
             {grouped.length === 0 ? (
               <View style={styles.emptyStateBox}>
-                <Text style={styles.emptyStateText}>No sections match “{query}”.</Text>
+                <Text style={styles.emptyStateText}>
+                  No sections match “{query}”.
+                </Text>
               </View>
             ) : (
               grouped.map(group => (
@@ -594,7 +975,10 @@ export default function HelpPage({
                 {section.notes?.length ? (
                   <View style={styles.callout}>
                     {section.notes.map((note, index) => (
-                      <Text key={`${section.id}-note-${index}`} style={styles.calloutText}>
+                      <Text
+                        key={`${section.id}-note-${index}`}
+                        style={styles.calloutText}
+                      >
                         {note}
                       </Text>
                     ))}
@@ -603,25 +987,28 @@ export default function HelpPage({
 
                 {section.rows ? <RoleMatrix rows={section.rows} /> : null}
 
-                {section.faqs ? (
-                  section.faqs.map(item => (
-                    <View key={item.q} style={styles.faqBlock}>
-                      <Q>{item.q}</Q>
-                      {item.steps ? <Steps items={item.steps} /> : null}
-                      {item.answer ? <A>{item.answer}</A> : null}
-                      {item.bullets ? (
-                        <View style={styles.bulletList}>
-                          {item.bullets.map((bullet, index) => (
-                            <View key={`${bullet}-${index}`} style={styles.bulletRow}>
-                              <Text style={styles.bulletDot}>•</Text>
-                              <Text style={styles.bulletText}>{bullet}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      ) : null}
-                    </View>
-                  ))
-                ) : null}
+                {section.faqs
+                  ? section.faqs.map(item => (
+                      <View key={item.q} style={styles.faqBlock}>
+                        <Q>{item.q}</Q>
+                        {item.steps ? <Steps items={item.steps} /> : null}
+                        {item.answer ? <A>{item.answer}</A> : null}
+                        {item.bullets ? (
+                          <View style={styles.bulletList}>
+                            {item.bullets.map((bullet, index) => (
+                              <View
+                                key={`${bullet}-${index}`}
+                                style={styles.bulletRow}
+                              >
+                                <Text style={styles.bulletDot}>•</Text>
+                                <Text style={styles.bulletText}>{bullet}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
+                      </View>
+                    ))
+                  : null}
               </View>
             ))
           )}

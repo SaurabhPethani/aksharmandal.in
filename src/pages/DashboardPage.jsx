@@ -11,12 +11,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import Svg, {
-  Circle,
-  G,
-  Polyline,
-  Text as SvgText,
-} from 'react-native-svg';
+import Svg, { Circle, G, Polyline, Text as SvgText } from 'react-native-svg';
 import { useQueryClient } from '@tanstack/react-query';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
@@ -37,7 +32,6 @@ import {
   saveRemoteImage,
   shareRemoteImageOnWhatsApp,
 } from '../utils/saveImage';
-import drawerLogo from '../assets/logo-square.png';
 
 const COLORS = {
   navy: '#003158',
@@ -119,9 +113,12 @@ function formatSabhaAge(age) {
 
 function formatLastSabhaDay(dateStr) {
   if (!dateStr) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr));
-  if (!m) return dateStr;
-  return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}`;
+  const value = String(dateStr).trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (iso) return `${Number(iso[3])} ${MONTHS[Number(iso[2]) - 1]}`;
+  const indian = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
+  if (indian) return `${Number(indian[1])} ${MONTHS[Number(indian[2]) - 1]}`;
+  return value;
 }
 
 function readClock(value) {
@@ -208,7 +205,9 @@ const PRESENT_COLOUR = '#15803D';
 const ABSENT_COLOUR = '#E9878A';
 
 /** `label: 'Sabha'` pairs with the Present/Absent wording in the tooltip. */
-const SELF_SERIES = [{ key: 'present', label: 'Sabha', color: COLORS.chartBlue }];
+const SELF_SERIES = [
+  { key: 'present', label: 'Sabha', color: COLORS.chartBlue },
+];
 
 /** "13 (31.0%)" — the count with the share the API reported for it. */
 const countWithShare = (count, percentage) =>
@@ -275,6 +274,8 @@ export function Drawer({
   onClose,
   onSignOut,
   onDashboard,
+  onOpenEvents,
+  onOpenNotifications,
   activeRoute = 'dashboard',
   roleName,
 }) {
@@ -328,12 +329,14 @@ export function Drawer({
         style={[styles.drawer, { transform: [{ translateX: slide }] }]}
       >
         <View style={styles.drawerHeader}>
-          <Image
-            source={drawerLogo}
-            style={styles.drawerLogo}
-            resizeMode="contain"
-            fadeDuration={0}
-          />
+          <View style={styles.drawerLogoFrame}>
+            <Image
+              source={require('../assets/logo-square.png')}
+              style={styles.drawerLogo}
+              resizeMode="contain"
+              fadeDuration={0}
+            />
+          </View>
           <Pressable onPress={onClose} style={styles.drawerClose}>
             <MaterialCommunityIcons
               name="close"
@@ -350,37 +353,43 @@ export function Drawer({
         </View>
 
         <ScrollView style={styles.flex1} showsVerticalScrollIndicator={false}>
-          {[['view-dashboard-outline', 'Dashboard', activeRoute === 'dashboard']].map(
-            ([icon, label, active]) => (
-              <Pressable
-                key={label}
-                onPress={() => {
-                  onDashboard?.();
-                  onClose();
-                }}
-                style={[styles.drawerItem, active && styles.drawerItemActive]}
+          {[
+            [
+              'view-dashboard-outline',
+              'Dashboard',
+              activeRoute === 'dashboard',
+            ],
+            ['calendar-star', 'Events', activeRoute === 'events'],
+          ].map(([icon, label, active]) => (
+            <Pressable
+              key={label}
+              onPress={() => {
+                if (label === 'Dashboard') onDashboard?.();
+                else if (label === 'Events') onOpenEvents?.();
+                onClose();
+              }}
+              style={[styles.drawerItem, active && styles.drawerItemActive]}
+            >
+              <MaterialCommunityIcons
+                name={icon}
+                size={20}
+                color={active ? COLORS.navy : '#C5D8E8'}
+              />
+              <Text
+                style={[
+                  styles.drawerItemText,
+                  active && styles.drawerItemTextActive,
+                ]}
               >
-                <MaterialCommunityIcons
-                  name={icon}
-                  size={20}
-                  color={active ? COLORS.navy : '#C5D8E8'}
-                />
-                <Text
-                  style={[
-                    styles.drawerItemText,
-                    active && styles.drawerItemTextActive,
-                  ]}
-                >
-                  {label}
-                </Text>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={18}
-                  color={active ? COLORS.navy : '#7EA1BA'}
-                />
-              </Pressable>
-            ),
-          )}
+                {label}
+              </Text>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={18}
+                color={active ? COLORS.navy : '#7EA1BA'}
+              />
+            </Pressable>
+          ))}
         </ScrollView>
 
         <Pressable onPress={onSignOut} style={[styles.drawerItem]}>
@@ -547,9 +556,17 @@ function SevaRing() {
   );
 }
 
-function NotLoginCard() {
+function NotLoginCard({ onPress }) {
   return (
-    <Pressable style={styles.notLoginCard}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.notLoginCard,
+        pressed && styles.metricCardPressed,
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="View members who have not logged in"
+    >
       <View style={styles.notLoginIcon}>
         <MaterialCommunityIcons
           name="account-remove-outline"
@@ -901,7 +918,7 @@ function FriendsCard({ me, title = 'My Spiritual Friend' }) {
   );
 }
 
-function EventsCard({ events }) {
+function EventsCard({ events, onViewAll }) {
   const upcoming = (Array.isArray(events) ? events : [])
     .filter(
       event =>
@@ -914,7 +931,9 @@ function EventsCard({ events }) {
     <View style={styles.sectionPanel}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Upcoming Events</Text>
-        <Text style={styles.sectionLink}>View All</Text>
+        <Pressable onPress={onViewAll} hitSlop={8}>
+          <Text style={styles.sectionLink}>View All</Text>
+        </Pressable>
       </View>
       {upcoming.length ? (
         upcoming.map(event => (
@@ -1313,7 +1332,13 @@ function YearAttendance({ year, title = 'My Last 52 Weeks' }) {
   );
 }
 
-function OverallDashboard({ data, live, birthdays, onOpenBirthdays }) {
+function OverallDashboard({
+  data,
+  live,
+  birthdays,
+  onOpenBirthdays,
+  onOpenUntouchedUsers,
+}) {
   const lastWeek = data?.attendance_last_4_week?.at(-1);
   const todayBirthdaysCount = (birthdays?.users || []).filter(
     user => user?.contact,
@@ -1400,6 +1425,7 @@ function OverallDashboard({ data, live, birthdays, onOpenBirthdays }) {
           detail="Follow up"
           tone="orange"
           action
+          onPress={onOpenUntouchedUsers}
         />
         <MetricCard
           icon="cake-variant"
@@ -1430,6 +1456,7 @@ function SelfDashboard({
   thought,
   onOpenBirthdays,
   onPickMember,
+  onOpenEvents,
 }) {
   const attendance = data?.total_sabha_present;
   const recent = data?.present_in_last_4w;
@@ -1564,7 +1591,7 @@ function SelfDashboard({
         />
       </View>
 
-      <EventsCard events={events} />
+      <EventsCard events={events} onViewAll={onOpenEvents} />
       <FriendsCard me={me} />
       <WeeklyAttendanceCard weeks={data?.last_8w} title="My Last 8 Weeks" />
       <YearAttendance year={data?.last_52w} />
@@ -1594,7 +1621,7 @@ function friendlyMemberError(error) {
  * Built from the same cards as SelfDashboard, minus the self-only ones
  * (birthdays, upcoming Sabha, events, today's thought).
  */
-function MemberStatsDialog({ userId, isOpen, onClose }) {
+export function MemberStatsDialog({ userId, isOpen, onClose }) {
   // Only fetch while open, and re-fetch per member (the hook keys on userId).
   const query = useMemberStats(userId, isOpen);
   const d = query.data;
@@ -1670,19 +1697,23 @@ function MemberStatsDialog({ userId, isOpen, onClose }) {
             />
             <MetricCard
               icon={
-                lastSabha?.attended ? 'check-circle-outline' : 'close-circle-outline'
+                lastSabha?.attended
+                  ? 'check-circle-outline'
+                  : 'close-circle-outline'
               }
               label="Last Sabha"
               value={
                 lastSabha ? (
-                  <Text numberOfLines={2}>
-                    <Text style={styles.metricValue}>
+                  <View style={styles.lastSabhaValue}>
+                    <Text style={styles.metricValue} numberOfLines={1}>
                       {lastSabha.attended ? 'Attended' : 'Not Attended'}
                     </Text>
                     {lastSabhaDay ? (
-                      <Text style={styles.metricDateSub}> · {lastSabhaDay}</Text>
+                      <Text style={styles.metricDateSub} numberOfLines={1}>
+                        {lastSabhaDay}
+                      </Text>
                     ) : null}
-                  </Text>
+                  </View>
                 ) : (
                   '—'
                 )
@@ -1714,6 +1745,10 @@ export default function DashboardPage({
   onOpenHelp,
   onOpenMenu,
   onOpenBirthdays,
+  onOpenNotLoggedIn,
+  onOpenUntouchedUsers,
+  onOpenEvents,
+  onOpenNotifications,
   onRoleNameChange,
 }) {
   const { activeUserId } = useAuth();
@@ -1753,7 +1788,7 @@ export default function DashboardPage({
         dashboardService.presentAbsent(),
         dashboardService.me(),
         dashboardService.birthdays(),
-        dashboardService.events(),
+        dashboardService.events('active'),
         dashboardService.todayThought(),
       ]);
 
@@ -1828,7 +1863,11 @@ export default function DashboardPage({
 
   return (
     <View style={styles.safe}>
-      <AppHeader onMenu={onOpenMenu} onHelp={onOpenHelp} />
+      <AppHeader
+        onMenu={onOpenMenu}
+        onHelp={onOpenHelp}
+        onNotifications={onOpenNotifications}
+      />
 
       <View style={styles.flex1}>
         <ScrollView
@@ -1866,7 +1905,9 @@ export default function DashboardPage({
           {/* Seva */}
           <SevaRing />
 
-          {canSeeNotLoggedIn(roleId) ? <NotLoginCard /> : null}
+          {canSeeNotLoggedIn(roleId) ? (
+            <NotLoginCard onPress={onOpenNotLoggedIn} />
+          ) : null}
 
           {mayReadOverall ? (
             <View style={styles.tabs}>
@@ -1915,6 +1956,7 @@ export default function DashboardPage({
               live={live}
               birthdays={birthdays}
               onOpenBirthdays={onOpenBirthdays}
+              onOpenUntouchedUsers={onOpenUntouchedUsers}
             />
           ) : (
             <SelfDashboard
@@ -1925,6 +1967,7 @@ export default function DashboardPage({
               thought={thought}
               onOpenBirthdays={onOpenBirthdays}
               onPickMember={setStatsUserId}
+              onOpenEvents={onOpenEvents}
             />
           )}
 
@@ -1980,15 +2023,15 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     width: '100%',
   },
-  drawerLogo: {
+  drawerLogoFrame: {
     width: 80,
     height: 80,
     borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: COLORS.navy,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
-
-    // Subtle white shadow
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -1996,9 +2039,11 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.35,
     shadowRadius: 4,
-
-    // Android
     elevation: 8,
+  },
+  drawerLogo: {
+    width: 64,
+    height: 64,
   },
   drawerLogoText: {
     color: COLORS.accent,
@@ -2259,6 +2304,9 @@ const styles = StyleSheet.create({
   },
   metricValueContainer: {
     marginVertical: 2,
+  },
+  lastSabhaValue: {
+    minWidth: 0,
   },
   metricValue: {
     color: COLORS.navy,

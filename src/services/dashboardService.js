@@ -27,12 +27,36 @@ export const dashboardService = {
   me: () => api.get('/api/v1/users/me'),
   birthdays: () => api.get('/api/v1/users/today-birthdays'),
   members: params => api.get('/api/v1/users/list', { params }),
-  memberStats: userId =>
-    api.get(`/api/v1/dashboard-overview/member/${userId}`),
+  yuvaSevaReport: params =>
+    api.get('/api/v1/reports/yuva-seva-report', {
+      params,
+      envelope: true,
+    }),
+  yuvaSevaMemberHistory: (userId, limit = 3) =>
+    api.get('/api/v1/yuva-seva/member-history', {
+      params: { user_id: userId, limit },
+    }),
+  addYuvaSeva: payload =>
+    api.post('/api/v1/yuva-seva', payload, { envelope: true }),
+  notLoggedIn: () => api.get('/api/v1/users/not-logged-in'),
+  memberStats: userId => api.get(`/api/v1/dashboard-overview/member/${userId}`),
   myBirthdayWishes: () => api.get('/api/v1/users/my-birthday-wishes'),
   sendBirthdayWish: ({ userId, message }) =>
     api.post('/api/v1/users/send-birthday-wish', { user_id: userId, message }),
-  events: () => api.get('/api/v1/events', { params: { status: 'active' } }),
+  events: status =>
+    api.get('/api/v1/events', {
+      params: status ? { status } : undefined,
+    }),
+  eventRegistrations: () => api.get('/api/v1/register-for-events'),
+  eventDataEvents: () => api.get('/api/v1/events/registration-data'),
+  eventDataRegistrations: eventId =>
+    api.get(`/api/v1/events/${eventId}/registration-data`),
+  notificationPendingTransfers: () =>
+    api.get('/api/v1/notifications/transfer/pending'),
+  notificationMyTransfers: () =>
+    api.get('/api/v1/notifications/transfer/my-requests'),
+  notificationInfoRequests: params =>
+    api.get('/api/v1/information-requests', { params }),
   todayThought: async () => {
     try {
       const res = await api.get('/api/v1/thoughts/today-image');
