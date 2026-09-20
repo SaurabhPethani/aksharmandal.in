@@ -11,6 +11,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { useState } from 'react';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -26,6 +27,7 @@ import {
 import LoginPage from './src/pages/LoginPage';
 import AppNavigator from './src/navigation/AppNavigator';
 import { useAuth } from './src/hooks/core';
+import LegalPage from './src/pages/LegalPage';
 
 function App() {
   return (
@@ -48,6 +50,9 @@ function App() {
 function AppContent() {
   const insets = useSafeAreaInsets();
   const { status } = useAuth();
+  const [legalPage, setLegalPage] = useState<
+    'privacy' | 'terms' | 'delete' | null
+  >(null);
   // A modal is drawn in its own window, so the screen behind it is blurred
   // here (see contexts/OverlayContext). `filter` blur is Android 12+ only;
   // elsewhere the modal's dimmed backdrop is all that shows.
@@ -76,7 +81,15 @@ function AppContent() {
         {status === 'booting' ? (
           <ActivityIndicator size="large" color="#003158" />
         ) : status !== 'authed' ? (
-          <LoginPage />
+          legalPage ? (
+            <LegalPage type={legalPage} onBack={() => setLegalPage(null)} />
+          ) : (
+            <LoginPage
+              onOpenPrivacy={() => setLegalPage('privacy')}
+              onOpenTerms={() => setLegalPage('terms')}
+              onOpenDeleteAccount={() => setLegalPage('delete')}
+            />
+          )
         ) : (
           <AppNavigator />
         )}

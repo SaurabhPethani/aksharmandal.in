@@ -1,9 +1,15 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './Typography';
 import { APP_VERSION } from '../config/appConfig';
 
-export default function SiteFooter({ transparent = false, light = false }) {
+export default function SiteFooter({
+  transparent = false,
+  light = false,
+  onPrivacy = null,
+  onTerms = null,
+  onDeleteAccount = null,
+}) {
   const background = light
     ? styles.bgLight
     : transparent
@@ -25,12 +31,30 @@ export default function SiteFooter({ transparent = false, light = false }) {
           <Text style={styles.version}>{` · v${APP_VERSION}`}</Text>
         ) : null}
       </Text>
+      {onPrivacy || onTerms || onDeleteAccount ? (
+        <View style={styles.links}>
+          <Pressable onPress={onPrivacy} disabled={!onPrivacy}>
+            <Text style={[styles.link, textColor]}>Privacy Policy</Text>
+          </Pressable>
+          <Text style={[styles.linkSeparator, textColor]}> · </Text>
+          <Pressable onPress={onTerms} disabled={!onTerms}>
+            <Text style={[styles.link, textColor]}>Terms & Conditions</Text>
+          </Pressable>
+          <Text style={[styles.linkSeparator, textColor]}> · </Text>
+          <Pressable onPress={onDeleteAccount} disabled={!onDeleteAccount}>
+            <Text style={[styles.link, textColor]}>Delete Account</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   footer: { paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
+  links: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginTop: 6 },
+  link: { fontSize: 12, textDecorationLine: 'underline' },
+  linkSeparator: { fontSize: 12 },
   bgTransparent: { backgroundColor: 'transparent' },
   bgSolid: { backgroundColor: '#003158' },
   bgLight: { backgroundColor: '#E6EEF5' },

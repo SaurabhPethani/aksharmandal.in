@@ -24,7 +24,11 @@ import TrendChart from '../components/charts/TrendChart';
 import { dashboardService } from '../services/dashboardService';
 import { API_BASE } from '../config/appConfig';
 import { useAuth } from '../hooks/core';
-import { canReadOverallDashboard, canSeeNotLoggedIn } from '../constants/roles';
+import {
+  canReadHelp,
+  canReadOverallDashboard,
+  canSeeNotLoggedIn,
+} from '../constants/roles';
 import { nextWeekdayDate, readWeekDate } from '../utils/dates';
 import { useMyKhardo } from '../hooks/useKhardo';
 import { useMemberStats } from '../hooks/useMemberStats';
@@ -1750,6 +1754,7 @@ export default function DashboardPage({
   onOpenEvents,
   onOpenNotifications,
   onRoleNameChange,
+  onRoleIdChange,
 }) {
   const { activeUserId } = useAuth();
   const queryClient = useQueryClient();
@@ -1768,7 +1773,8 @@ export default function DashboardPage({
 
   useEffect(() => {
     if (me?.role_name) onRoleNameChange?.(me.role_name);
-  }, [me?.role_name, onRoleNameChange]);
+    if (me?.role_id != null) onRoleIdChange?.(me.role_id);
+  }, [me?.role_id, me?.role_name, onRoleIdChange, onRoleNameChange]);
   /** The member whose stats modal is open, if any. */
   const [statsUserId, setStatsUserId] = useState(null);
 
@@ -1865,7 +1871,7 @@ export default function DashboardPage({
     <View style={styles.safe}>
       <AppHeader
         onMenu={onOpenMenu}
-        onHelp={onOpenHelp}
+        onHelp={canReadHelp(roleId) ? onOpenHelp : null}
         onNotifications={onOpenNotifications}
       />
 

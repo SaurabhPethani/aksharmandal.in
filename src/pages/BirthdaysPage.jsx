@@ -772,6 +772,8 @@ const styles = StyleSheet.create({
   legendText: { fontSize: TEXT.xs, color: COLORS.textMuted },
 
   noBirthdays: {
+    width: '100%',
+    position: 'relative',
     alignItems: 'center',
     overflow: 'hidden',
     borderRadius: RADII.card,

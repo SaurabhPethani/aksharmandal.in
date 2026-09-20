@@ -11,7 +11,7 @@ const COLORS = {
 
 export default function AppHeader({
   onMenu,
-  onHelp = () => {},
+  onHelp = null,
   onNotifications = () => {},
   onBack = null,
   breadcrumbs = [],
@@ -32,18 +32,20 @@ export default function AppHeader({
           />
         </Pressable>
         <View style={styles.topActions}>
-          <Pressable
-            onPress={onHelp}
-            accessibilityRole="button"
-            accessibilityLabel="Help and FAQ"
-            style={styles.topButton}
-          >
-            <MaterialCommunityIcons
-              name="book-open-page-variant"
-              size={22}
-              color={COLORS.surface}
-            />
-          </Pressable>
+          {onHelp ? (
+            <Pressable
+              onPress={onHelp}
+              accessibilityRole="button"
+              accessibilityLabel="Help and FAQ"
+              style={styles.topButton}
+            >
+              <MaterialCommunityIcons
+                name="book-open-page-variant"
+                size={22}
+                color={COLORS.surface}
+              />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={onNotifications}
             accessibilityRole="button"

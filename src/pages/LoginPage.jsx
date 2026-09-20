@@ -251,7 +251,7 @@ function CodeInput({
   );
 }
 
-export default function LoginPage() {
+export default function LoginPage({ onOpenPrivacy, onOpenTerms, onOpenDeleteAccount }) {
   const auth = useAuth();
   const [step, setStep] = useState('main');
   const [tab, setTab] = useState('pin');
@@ -772,7 +772,12 @@ export default function LoginPage() {
             ) : null}
           </View>
         </ScrollView>
-        <SiteFooter light />
+        <SiteFooter
+          light
+          onPrivacy={onOpenPrivacy}
+          onTerms={onOpenTerms}
+          onDeleteAccount={onOpenDeleteAccount}
+        />
       </KeyboardAvoidingView>
     </View>
   );

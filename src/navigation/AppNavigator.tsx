@@ -8,6 +8,7 @@ import EventsPage from '../pages/EventsPage';
 import YuvaSevaPage from '../pages/YuvaSevaPage';
 import NotificationsPage from '../pages/NotificationsPage';
 import { useAuth } from '../hooks/core';
+import { canReadHelp } from '../constants/roles';
 
 type RouteName =
   | 'dashboard'
@@ -28,9 +29,13 @@ export default function AppNavigator({
   const [history, setHistory] = useState<RouteName[]>([initialRoute]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [roleName, setRoleName] = useState('');
+  const [roleId, setRoleId] = useState<number | null>(null);
   const { signOut } = useAuth();
   const transition = useRef(new Animated.Value(1)).current;
   const route = history[history.length - 1];
+  const canOpenHelp = canReadHelp(roleId);
+  const openHelp = canOpenHelp ? () => navigate('help') : undefined;
+  const displayedRoute = route === 'help' && !canOpenHelp ? 'dashboard' : route;
 
   useEffect(() => {
     transition.setValue(0);
@@ -74,9 +79,9 @@ export default function AppNavigator({
   }, [drawerOpen, history.length]);
 
   const screen =
-    route === 'dashboard' ? (
+    displayedRoute === 'dashboard' ? (
       <DashboardPage
-        onOpenHelp={() => navigate('help')}
+        onOpenHelp={openHelp}
         onOpenMenu={() => setDrawerOpen(true)}
         onOpenBirthdays={() => navigate('birthdays')}
         onOpenNotLoggedIn={() => navigate('not-logged-in')}
@@ -84,41 +89,42 @@ export default function AppNavigator({
         onOpenUntouchedUsers={() => navigate('yuva-seva')}
         onOpenNotifications={() => navigate('notifications')}
         onRoleNameChange={setRoleName}
+        onRoleIdChange={setRoleId}
       />
-    ) : route === 'birthdays' ? (
+    ) : displayedRoute === 'birthdays' ? (
       // Opened from the dashboard's birthday tiles; back returns there.
       <BirthdaysPage
         onBack={goBack}
         onMenu={() => setDrawerOpen(true)}
-        onHelp={() => navigate('help')}
+        onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
       />
-    ) : route === 'not-logged-in' ? (
+    ) : displayedRoute === 'not-logged-in' ? (
       <NotLoggedInPage
         onBack={goBack}
         onOpenMenu={() => setDrawerOpen(true)}
-        onOpenHelp={() => navigate('help')}
+        onOpenHelp={openHelp}
         onNotifications={() => navigate('notifications')}
       />
-    ) : route === 'events' ? (
+    ) : displayedRoute === 'events' ? (
       <EventsPage
         onBack={goBack}
         onMenu={() => setDrawerOpen(true)}
-        onHelp={() => navigate('help')}
+        onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
       />
-    ) : route === 'yuva-seva' ? (
+    ) : displayedRoute === 'yuva-seva' ? (
       <YuvaSevaPage
         onBack={goBack}
         onMenu={() => setDrawerOpen(true)}
-        onHelp={() => navigate('help')}
+        onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
       />
-    ) : route === 'notifications' ? (
+    ) : displayedRoute === 'notifications' ? (
       <NotificationsPage
         onBack={goBack}
         onMenu={() => setDrawerOpen(true)}
-        onHelp={() => navigate('help')}
+        onHelp={openHelp}
       />
     ) : (
       <HelpPage
@@ -130,7 +136,7 @@ export default function AppNavigator({
   return (
     <View style={styles.container}>
       <Animated.View
-        key={route}
+        key={displayedRoute}
         style={[
           styles.screen,
           {
