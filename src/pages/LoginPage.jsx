@@ -770,14 +770,16 @@ export default function LoginPage({ onOpenPrivacy, onOpenTerms, onOpenDeleteAcco
             {busy ? (
               <ActivityIndicator color="#FF862A" style={styles.loader} />
             ) : null}
+            <View style={styles.footerBleed}>
+              <SiteFooter
+                light
+                onPrivacy={onOpenPrivacy}
+                onTerms={onOpenTerms}
+                onDeleteAccount={onOpenDeleteAccount}
+              />
+            </View>
           </View>
         </ScrollView>
-        <SiteFooter
-          light
-          onPrivacy={onOpenPrivacy}
-          onTerms={onOpenTerms}
-          onDeleteAccount={onOpenDeleteAccount}
-        />
       </KeyboardAvoidingView>
     </View>
   );
@@ -791,6 +793,7 @@ const styles = StyleSheet.create({
     paddingTop: 22,
     paddingBottom: 8,
   },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -20, paddingTop: 14 },
   appLogo: {
     width: 78,
     height: 78,

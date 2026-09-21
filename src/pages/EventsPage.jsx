@@ -111,6 +111,9 @@ export default function EventsPage({
   onMenu,
   onHelp,
   onNotifications,
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
 }) {
   // Mobile currently has no PermissionProvider. Keep the read-only event
   // surface available, while hiding web-only organizer and registration
@@ -366,8 +369,14 @@ export default function EventsPage({
             }
           />
         )}
+        <View style={styles.footerBleed}>
+          <SiteFooter
+            onPrivacy={onOpenPrivacy}
+            onTerms={onOpenTerms}
+            onDeleteAccount={onOpenDeleteAccount}
+          />
+        </View>
       </ScrollView>
-      <SiteFooter />
     </View>
   );
 }
@@ -384,7 +393,8 @@ function Empty({ title, hint }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.background },
   flex: { flex: 1 },
-  content: { padding: 18, gap: 12 },
+  content: { flexGrow: 1, padding: 18, gap: 12 },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
   title: { color: C.navy, fontSize: 26, fontWeight: '800' },
   subtitle: { color: C.muted, lineHeight: 20 },
   tabs: { flexDirection: 'row', gap: 4 },

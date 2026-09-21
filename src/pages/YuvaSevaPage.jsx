@@ -209,7 +209,15 @@ function Fact({ label, value, danger, color }) {
   );
 }
 
-export default function YuvaSevaPage({ onBack, onMenu, onHelp, onNotifications }) {
+export default function YuvaSevaPage({
+  onBack,
+  onMenu,
+  onHelp,
+  onNotifications,
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
+}) {
   const canAdd = true;
   const [rows, setRows] = useState([]);
   const [totals, setTotals] = useState({});
@@ -432,8 +440,14 @@ export default function YuvaSevaPage({ onBack, onMenu, onHelp, onNotifications }
             )}
           </>
         )}
+        <View style={styles.footerBleed}>
+          <SiteFooter
+            onPrivacy={onOpenPrivacy}
+            onTerms={onOpenTerms}
+            onDeleteAccount={onOpenDeleteAccount}
+          />
+        </View>
       </ScrollView>
-      <SiteFooter />
       <Modal
         isOpen={Boolean(openHistory)}
         onClose={() => {
@@ -568,7 +582,8 @@ export default function YuvaSevaPage({ onBack, onMenu, onHelp, onNotifications }
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.background },
   flex: { flex: 1 },
-  content: { padding: 18, gap: 12 },
+  content: { flexGrow: 1, padding: 18, gap: 12 },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
   title: { color: C.navy, fontSize: 26, fontWeight: '800' },
   subtitle: { color: C.muted, lineHeight: 20 },
   scopeToggle: {

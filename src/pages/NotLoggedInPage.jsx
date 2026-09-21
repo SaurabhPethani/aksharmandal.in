@@ -32,6 +32,9 @@ export default function NotLoggedInPage({
   onOpenMenu,
   onOpenHelp,
   onNotifications,
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
 }) {
   const query = useNotLoggedIn(true);
   const members = useMemo(
@@ -192,8 +195,14 @@ export default function NotLoggedInPage({
             ))}
           </View>
         )}
+        <View style={styles.footerBleed}>
+          <SiteFooter
+            onPrivacy={onOpenPrivacy}
+            onTerms={onOpenTerms}
+            onDeleteAccount={onOpenDeleteAccount}
+          />
+        </View>
       </ScrollView>
-      <SiteFooter />
       <MemberStatsDialog
         userId={statsUserId}
         isOpen={statsUserId != null}
@@ -206,7 +215,8 @@ export default function NotLoggedInPage({
 const styles = StyleSheet.create({
   flex1: { flex: 1 },
   safe: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { padding: 16, paddingBottom: 24 },
+  scroll: { flexGrow: 1, padding: 16, paddingBottom: 24 },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -16, paddingTop: 14 },
   pageHeader: { marginBottom: 16 },
   backButton: {
     flexDirection: 'row',

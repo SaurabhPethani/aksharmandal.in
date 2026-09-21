@@ -31,7 +31,14 @@ const C = {
   accent: '#FF862A',
 };
 
-export default function NotificationsPage({ onBack, onMenu, onHelp }) {
+export default function NotificationsPage({
+  onBack,
+  onMenu,
+  onHelp,
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
+}) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -138,15 +145,22 @@ export default function NotificationsPage({ onBack, onMenu, onHelp }) {
             <Text style={styles.detail}>No new notifications.</Text>
           </View>
         )}
+        <View style={styles.footerBleed}>
+          <SiteFooter
+            onPrivacy={onOpenPrivacy}
+            onTerms={onOpenTerms}
+            onDeleteAccount={onOpenDeleteAccount}
+          />
+        </View>
       </ScrollView>
-      <SiteFooter />
     </View>
   );
 }
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   flex: { flex: 1 },
-  content: { padding: 18, gap: 10 },
+  content: { flexGrow: 1, padding: 18, gap: 10 },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',

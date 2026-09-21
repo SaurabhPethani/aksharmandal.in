@@ -1755,6 +1755,9 @@ export default function DashboardPage({
   onOpenNotifications,
   onRoleNameChange,
   onRoleIdChange,
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
 }) {
   const { activeUserId } = useAuth();
   const queryClient = useQueryClient();
@@ -1978,7 +1981,11 @@ export default function DashboardPage({
           )}
 
           <View style={styles.footerBleed}>
-            <SiteFooter />
+            <SiteFooter
+              onPrivacy={onOpenPrivacy}
+              onTerms={onOpenTerms}
+              onDeleteAccount={onOpenDeleteAccount}
+            />
           </View>
         </ScrollView>
       </View>
@@ -2110,8 +2117,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   drawerLogoutText: { color: '#FFD0B0', fontSize: 14, fontWeight: '800' },
-  scroll: { padding: 16, paddingTop: 16, paddingBottom: 0 },
-  footerBleed: { marginHorizontal: -16, paddingTop: 14 },
+  scroll: { flexGrow: 1, padding: 16, paddingTop: 16, paddingBottom: 0 },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -16, paddingTop: 14 },
   header: { marginBottom: 16 },
   title: { color: COLORS.navy, fontSize: 24, fontWeight: '800' },
   qrBar: {

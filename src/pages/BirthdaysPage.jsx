@@ -420,30 +420,14 @@ function SendWishes() {
       </Card>
     );
   } else if (users.length === 0) {
-    // The most common view, most days — so it least deserves to look like a
-    // failed request.
     content = (
-      <View style={styles.noBirthdays}>
-        <LinearFill
-          id="no-birthdays"
-          stops={[
-            [0, '#FEF3C7'],
-            [0.5, '#FFEDD5'],
-            [1, '#FFE4CC'],
-          ]}
+      <Card>
+        <EmptyState
+          icon="cake-variant-outline"
+          title="No birthdays today"
+          hint="Nobody in your Mandal is celebrating today — check back tomorrow."
         />
-        <View style={styles.noBirthdaysIcon}>
-          <MaterialCommunityIcons
-            name="cake-variant-outline"
-            size={space(7)}
-            color="#B45309"
-          />
-        </View>
-        <Text style={styles.noBirthdaysTitle}>No birthdays today</Text>
-        <Text style={styles.noBirthdaysText}>
-          Nobody in your Mandal is celebrating today — check back tomorrow.
-        </Text>
-      </View>
+      </Card>
     );
   } else {
     content = (
@@ -620,6 +604,9 @@ export default function BirthdaysPage({
   onMenu,
   onHelp,
   onNotifications,
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
 }) {
   const [tab, setTab] = useState('send');
 
@@ -666,7 +653,11 @@ export default function BirthdaysPage({
         </View>
 
         <View style={styles.footerBleed}>
-          <SiteFooter />
+          <SiteFooter
+            onPrivacy={onOpenPrivacy}
+            onTerms={onOpenTerms}
+            onDeleteAccount={onOpenDeleteAccount}
+          />
         </View>
       </ScrollView>
     </View>
@@ -770,37 +761,6 @@ const styles = StyleSheet.create({
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: space(1.5) },
   legendText: { fontSize: TEXT.xs, color: COLORS.textMuted },
-
-  noBirthdays: {
-    width: '100%',
-    position: 'relative',
-    alignItems: 'center',
-    overflow: 'hidden',
-    borderRadius: RADII.card,
-    paddingHorizontal: space(6),
-    paddingVertical: space(12),
-  },
-  noBirthdaysIcon: {
-    width: space(14),
-    height: space(14),
-    borderRadius: RADII['2xl'],
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noBirthdaysTitle: {
-    marginTop: space(4),
-    fontSize: TEXT.base,
-    fontWeight: WEIGHT.bold,
-    color: '#7C2D12',
-    textAlign: 'center',
-  },
-  noBirthdaysText: {
-    marginTop: space(1),
-    fontSize: TEXT.sm,
-    color: '#9A3412',
-    textAlign: 'center',
-  },
 
   wishCount: {
     backgroundColor: '#FFF7ED',

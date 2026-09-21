@@ -792,9 +792,15 @@ function groupSections(sections: SectionEntry[]) {
 export default function HelpPage({
   onMenu = () => {},
   onNotifications = () => {},
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
 }: {
   onMenu?: () => void;
   onNotifications?: () => void;
+  onOpenPrivacy?: () => void;
+  onOpenTerms?: () => void;
+  onOpenDeleteAccount?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const sectionRefs = useRef<Record<string, View | null>>({});
@@ -1012,10 +1018,15 @@ export default function HelpPage({
               </View>
             ))
           )}
+          <View style={styles.footerBleed}>
+            <SiteFooter
+              onPrivacy={onOpenPrivacy}
+              onTerms={onOpenTerms}
+              onDeleteAccount={onOpenDeleteAccount}
+            />
+          </View>
         </ScrollView>
       </View>
-
-      <SiteFooter />
     </View>
   );
 }
@@ -1032,10 +1043,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingTop: 14,
     paddingBottom: 20,
     paddingHorizontal: 14,
   },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -14, paddingTop: 14 },
   headerCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 18,
