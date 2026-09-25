@@ -22,8 +22,12 @@ export const masterDataService = {
   checkMobile: mobileNumber =>
     api.get(`/api/v1/users/check-mobile/${mobileNumber}`),
 
+  // The collection filtered by PIN code, NOT `/address-master/pincode/{pin}/areas`
+  // — that nested route 404s against the live API, while this is what the web
+  // has always called. Its rows nest suburbs, which nest areas; see
+  // `toAddressRows`, which is what flattens them into one row per area.
   addressByPincode: pincode =>
-    api.get(`/api/v1/address-master/pincode/${pincode}/areas`),
+    api.get('/api/v1/address-master', { params: { pincode } }),
 
   addressMaster: ({ includeInactive } = {}) =>
     api.get('/api/v1/address-master', {

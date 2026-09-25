@@ -28,8 +28,20 @@
 // fixed option lists because those values were specified directly rather than
 // exposed by an endpoint — they are the only hardcoded options in the form.
 
-import { RULES, buildPayload, isBlank, validateField, validateFields } from './validation';
-import { DOING_POOJA_LABEL, NIMIT_SEVAK_LABEL, SWAYAM_SEVAK_LABEL, ambrishLabel, readMemberField } from './memberFlags';
+import {
+  RULES,
+  buildPayload,
+  isBlank,
+  validateField,
+  validateFields,
+} from './validation';
+import {
+  DOING_POOJA_LABEL,
+  NIMIT_SEVAK_LABEL,
+  SWAYAM_SEVAK_LABEL,
+  ambrishLabel,
+  readMemberField,
+} from './memberFlags';
 
 // Rules and payload building are shared with the other schema-driven forms; they
 // live in utils/validation.js. Re-exported so existing importers of this module
@@ -46,7 +58,16 @@ export const GENDER_OPTIONS = [
   { value: 'Female', label: 'Female' },
 ];
 
-export const BLOOD_GROUP_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((g) => ({
+export const BLOOD_GROUP_OPTIONS = [
+  'A+',
+  'A-',
+  'B+',
+  'B-',
+  'AB+',
+  'AB-',
+  'O+',
+  'O-',
+].map(g => ({
   value: g,
   label: g,
 }));
@@ -84,10 +105,28 @@ export const TABS = [
       {
         cols: 3,
         fields: [
-          { name: 'first_name', label: 'First Name', type: 'text', placeholder: 'Enter first name', rules: ['required'] },
+          {
+            name: 'first_name',
+            label: 'First Name',
+            type: 'text',
+            placeholder: 'Enter first name',
+            rules: ['required'],
+          },
           // Required by both UserCreate and UserUpdate, not optional as it reads.
-          { name: 'middle_name', label: 'Middle Name', type: 'text', placeholder: 'Enter middle name', rules: ['required'] },
-          { name: 'last_name', label: 'Last Name', type: 'text', placeholder: 'Enter surname', rules: ['required'] },
+          {
+            name: 'middle_name',
+            label: 'Middle Name',
+            type: 'text',
+            placeholder: 'Enter middle name',
+            rules: ['required'],
+          },
+          {
+            name: 'last_name',
+            label: 'Last Name',
+            type: 'text',
+            placeholder: 'Enter surname',
+            rules: ['required'],
+          },
         ],
       },
       {
@@ -97,24 +136,76 @@ export const TABS = [
           // `readOnlyOnEdit` freezes a field once the member exists. The mobile number
           // is the login identity and the Sampark ID is externally issued — neither is
           // this form's to change.
-          { name: 'mobile_number', label: 'Mobile Number', type: 'tel', placeholder: '10-digit mobile number', inputMode: 'numeric', maxLength: 10, digitsOnly: true, readOnlyOnEdit: true, hiddenForChild: true, rules: ['required', 'mobile'] },
-          { name: 'mobile_secondary', label: 'Secondary Mobile', type: 'tel', placeholder: '10-digit mobile number', inputMode: 'numeric', maxLength: 10, digitsOnly: true, hiddenForChild: true, rules: ['mobile', 'notPrimaryMobile'] },
+          {
+            name: 'mobile_number',
+            label: 'Mobile Number',
+            type: 'tel',
+            placeholder: '10-digit mobile number',
+            inputMode: 'numeric',
+            maxLength: 10,
+            digitsOnly: true,
+            readOnlyOnEdit: true,
+            hiddenForChild: true,
+            rules: ['required', 'mobile'],
+          },
+          {
+            name: 'mobile_secondary',
+            label: 'Secondary Mobile',
+            type: 'tel',
+            placeholder: '10-digit mobile number',
+            inputMode: 'numeric',
+            maxLength: 10,
+            digitsOnly: true,
+            hiddenForChild: true,
+            rules: ['mobile', 'notPrimaryMobile'],
+          },
           // Separate WhatsApp number for members whose WhatsApp is on a
           // different SIM than the one they call from. Blank = same as the
           // Mobile Number (the backend falls OTP + notifications back to it).
           // `lockedForSelf`: a member may see it but never edit their own — only
           // rank >= 30 (Sabha DB Manager+) manages it (enforced on the backend).
-          { name: 'whatsapp_number', label: 'WhatsApp Number', type: 'tel', placeholder: '10-digit WhatsApp number', inputMode: 'numeric', maxLength: 10, digitsOnly: true, lockedForSelf: true, hiddenForChild: true, rules: ['mobile'], hint: 'Leave blank if same as Mobile Number.' },
-          { name: 'email', label: 'Email', type: 'email', placeholder: 'name@example.com', rules: ['email'] },
+          {
+            name: 'whatsapp_number',
+            label: 'WhatsApp Number',
+            type: 'tel',
+            placeholder: '10-digit WhatsApp number',
+            inputMode: 'numeric',
+            maxLength: 10,
+            digitsOnly: true,
+            lockedForSelf: true,
+            hiddenForChild: true,
+            rules: ['mobile'],
+            hint: 'Leave blank if same as Mobile Number.',
+          },
+          {
+            name: 'email',
+            label: 'Email',
+            type: 'email',
+            placeholder: 'name@example.com',
+            rules: ['email'],
+          },
           // Gender, then the two dates — read in that order because the pair of
           // dates belong together and a select between them split them apart.
-          { name: 'gender', label: 'Gender', type: 'select', placeholder: 'Select gender', options: GENDER_OPTIONS, rules: ['required'] },
+          {
+            name: 'gender',
+            label: 'Gender',
+            type: 'select',
+            placeholder: 'Select gender',
+            options: GENDER_OPTIONS,
+            rules: ['required'],
+          },
           // type=date renders the platform picker and ignores placeholder.
           // `max: 'today'` greys out every future day in that picker; the
           // `notFuture` rule is what actually rejects one, since the attribute
           // only constrains the calendar and not a typed or pasted value. Both
           // dates below carry the pair.
-          { name: 'dob', label: 'Date of Birth', type: 'date', max: 'today', rules: ['required', 'date', 'notFuture'] },
+          {
+            name: 'dob',
+            label: 'Date of Birth',
+            type: 'date',
+            max: 'today',
+            rules: ['required', 'date', 'notFuture'],
+          },
           /**
            * When the member joined — required, and never in the future, for the
            * same reason a date of birth is not: a joining date the org has not
@@ -133,9 +224,28 @@ export const TABS = [
            * be accepted by the form, dropped by PATCH /users/me and read as
            * saved. Someone who may edit your record still sets it normally.
            */
-          { name: 'date_of_joining', label: 'Date of Joining', type: 'date', max: 'today', lockedForSelf: true, rules: ['required', 'date', 'notFuture'] },
-          { name: 'blood_group', label: 'Blood Group', type: 'select', placeholder: 'Select blood group', options: BLOOD_GROUP_OPTIONS },
-          { name: 'marital_status', label: 'Marital Status', type: 'select', placeholder: 'Select marital status', options: MARITAL_STATUS_OPTIONS },
+          {
+            name: 'date_of_joining',
+            label: 'Date of Joining',
+            type: 'date',
+            max: 'today',
+            lockedForSelf: true,
+            rules: ['required', 'date', 'notFuture'],
+          },
+          {
+            name: 'blood_group',
+            label: 'Blood Group',
+            type: 'select',
+            placeholder: 'Select blood group',
+            options: BLOOD_GROUP_OPTIONS,
+          },
+          {
+            name: 'marital_status',
+            label: 'Marital Status',
+            type: 'select',
+            placeholder: 'Select marital status',
+            options: MARITAL_STATUS_OPTIONS,
+          },
           /**
            * `lockedForSelf`: a member sees their Category but may never change
            * their own — which category someone belongs to (Yuvak, Yuvati, Bal,
@@ -153,14 +263,34 @@ export const TABS = [
            * dropdown, and the Add form is untouched — `lockedForSelf` applies
            * only when the record being edited is the caller's own.
            */
-          { name: 'category_id', label: 'Category', type: 'select', placeholder: 'Select category', lookup: 'categories', lockedForSelf: true, rules: ['required'] },
+          {
+            name: 'category_id',
+            label: 'Category',
+            type: 'select',
+            placeholder: 'Select category',
+            lookup: 'categories',
+            lockedForSelf: true,
+            rules: ['required'],
+          },
           // `hiddenOnEdit` — drawn on the ADD form only. `UserCreate` REQUIRES
           // sampark_id, so the field cannot simply go: without it every member
           // creation comes back 422 and `npm run verify:contract` fails. On an
           // edit it was a disabled box restating a number nobody can change, so
           // that is what was removed. The value still rides along in `values`
           // and is dropped by `UserUpdate` exactly as before.
-          { name: 'sampark_id', label: 'Sampark ID', type: 'text', placeholder: 'e.g. 12345', inputMode: 'numeric', maxLength: 7, digitsOnly: true, readOnlyOnEdit: true, hiddenOnEdit: true, rules: ['required', 'samparkId'], hint: '3 to 7 digits.' },
+          {
+            name: 'sampark_id',
+            label: 'Sampark ID',
+            type: 'text',
+            placeholder: 'e.g. 12345',
+            inputMode: 'numeric',
+            maxLength: 7,
+            digitsOnly: true,
+            readOnlyOnEdit: true,
+            hiddenOnEdit: true,
+            rules: ['required', 'samparkId'],
+            hint: '3 to 7 digits.',
+          },
         ],
       },
       {
@@ -192,7 +322,7 @@ export const TABS = [
           {
             name: 'is_ambrish',
             label: 'Ambrish',
-            labelFor: (values) => ambrishLabel(values?.gender),
+            labelFor: values => ambrishLabel(values?.gender),
             type: 'checkbox',
             lockedForSelf: true,
             minRank: 30,
@@ -201,10 +331,22 @@ export const TABS = [
           // `is_karya_karta`. Spelled out rather than taken from the constant so
           // scripts/verify-contract can still find it: that script reads this
           // file as text. See utils/memberFlags.js.
-          { name: 'is_nimit_sevak', label: NIMIT_SEVAK_LABEL, type: 'checkbox', lockedForSelf: true, minRank: 30 },
+          {
+            name: 'is_nimit_sevak',
+            label: NIMIT_SEVAK_LABEL,
+            type: 'checkbox',
+            lockedForSelf: true,
+            minRank: 30,
+          },
           // Swayam Sevak — a special standing (ready for other Seva). Admin-
           // conferred like the two above, so `lockedForSelf` + `minRank: 30`.
-          { name: 'is_swayam_sevak', label: SWAYAM_SEVAK_LABEL, type: 'checkbox', lockedForSelf: true, minRank: 30 },
+          {
+            name: 'is_swayam_sevak',
+            label: SWAYAM_SEVAK_LABEL,
+            type: 'checkbox',
+            lockedForSelf: true,
+            minRank: 30,
+          },
           // Deliberately NOT `lockedForSelf`. A daily pooja is the member's own
           // practice rather than a standing conferred on them, so
           // `UserSelfUpdate` declares it and PATCH /users/me writes it — see
@@ -234,7 +376,16 @@ export const TABS = [
           // `searchable`: a type-to-filter Combobox (like the Change-Follow-up
           // dialog), because `mandalUsers` can be a long list of every member in
           // the Mandal — scrolling a plain select to find one is painful.
-          { name: 'reference_by_id', label: 'Reference Person', type: 'select', searchable: true, placeholder: 'Search reference person', lookup: 'mandalUsers', readOnlyOnEdit: true, rules: ['required'] },
+          {
+            name: 'reference_by_id',
+            label: 'Reference Person',
+            type: 'select',
+            searchable: true,
+            placeholder: 'Search reference person',
+            lookup: 'mandalUsers',
+            readOnlyOnEdit: true,
+            rules: ['required'],
+          },
           //
           // Role is the ONE Sabha detail an edit may change — everything else on
           // this step is fixed once the member exists. It does not travel in the
@@ -276,10 +427,30 @@ export const TABS = [
         fields: [
           // Optional, as UserCreate and UserUpdate both declare it — the form
           // used to demand it and was stricter than the API.
-          { name: 'flat_no', label: 'Flat No.', type: 'text', placeholder: 'Flat / house number' },
-          { name: 'building_name', label: 'Building', type: 'text', placeholder: 'Building or society name' },
-          { name: 'street_name', label: 'Street', type: 'text', placeholder: 'Street or road' },
-          { name: 'landmark', label: 'Landmark', type: 'text', placeholder: 'Nearby landmark' },
+          {
+            name: 'flat_no',
+            label: 'Flat No.',
+            type: 'text',
+            placeholder: 'Flat / house number',
+          },
+          {
+            name: 'building_name',
+            label: 'Building',
+            type: 'text',
+            placeholder: 'Building or society name',
+          },
+          {
+            name: 'street_name',
+            label: 'Street',
+            type: 'text',
+            placeholder: 'Street or road',
+          },
+          {
+            name: 'landmark',
+            label: 'Landmark',
+            type: 'text',
+            placeholder: 'Nearby landmark',
+          },
         ],
       },
       // PIN code drives Area / Suburb / City / State / Country.
@@ -291,7 +462,8 @@ export const TABS = [
     key: 'followup',
     label: 'Followup',
     heading: 'Assign Followup',
-    description: 'Select a Nimit Sevak who will be responsible for following up with this user.',
+    description:
+      'Select a Nimit Sevak who will be responsible for following up with this user.',
     optional: true,
     sections: [
       {
@@ -337,10 +509,37 @@ export const TABS = [
         // is required by the API; the institute stays required here as a UX
         // choice, since an entry with no name is not worth storing.
         itemFields: [
-          { name: 'education_level_id', label: 'Education Level', type: 'select', placeholder: 'Select education level', lookup: 'educationLevels', rules: ['required'] },
-          { name: 'school_college_name', label: 'Institute', type: 'text', placeholder: 'School / college / university', rules: ['required'] },
-          { name: 'study_field', label: 'Specialization', type: 'text', placeholder: 'e.g. Computer Engineering' },
-          { name: 'education_year', label: 'Year of Passing', type: 'text', placeholder: 'e.g. 2018', inputMode: 'numeric', maxLength: 4, digitsOnly: true, rules: ['year'] },
+          {
+            name: 'education_level_id',
+            label: 'Education Level',
+            type: 'select',
+            placeholder: 'Select education level',
+            lookup: 'educationLevels',
+            rules: ['required'],
+          },
+          {
+            name: 'school_college_name',
+            label: 'Institute',
+            type: 'text',
+            placeholder: 'School / college / university',
+            rules: ['required'],
+          },
+          {
+            name: 'study_field',
+            label: 'Specialization',
+            type: 'text',
+            placeholder: 'e.g. Computer Engineering',
+          },
+          {
+            name: 'education_year',
+            label: 'Year of Passing',
+            type: 'text',
+            placeholder: 'e.g. 2018',
+            inputMode: 'numeric',
+            maxLength: 4,
+            digitsOnly: true,
+            rules: ['year'],
+          },
         ],
       },
     ],
@@ -377,11 +576,41 @@ export const TABS = [
             value: 'JOB',
             label: 'Employed / Job',
             itemFields: [
-              { name: 'job_title', label: 'Job Title', type: 'text', placeholder: 'e.g. Software Engineer' },
-              { name: 'company_name', label: 'Company', type: 'text', placeholder: 'Company name', rules: ['required'] },
-              { name: 'job_industry_id', label: 'Industry', type: 'select', placeholder: 'Select', lookup: 'jobIndustries' },
-              { name: 'years_of_experience', label: 'Years of Experience', type: 'text', placeholder: 'e.g. 5', inputMode: 'numeric', maxLength: 2, digitsOnly: true },
-              { name: 'city', label: 'City', type: 'text', placeholder: 'e.g. Mumbai' },
+              {
+                name: 'job_title',
+                label: 'Job Title',
+                type: 'text',
+                placeholder: 'e.g. Software Engineer',
+              },
+              {
+                name: 'company_name',
+                label: 'Company',
+                type: 'text',
+                placeholder: 'Company name',
+                rules: ['required'],
+              },
+              {
+                name: 'job_industry_id',
+                label: 'Industry',
+                type: 'select',
+                placeholder: 'Select',
+                lookup: 'jobIndustries',
+              },
+              {
+                name: 'years_of_experience',
+                label: 'Years of Experience',
+                type: 'text',
+                placeholder: 'e.g. 5',
+                inputMode: 'numeric',
+                maxLength: 2,
+                digitsOnly: true,
+              },
+              {
+                name: 'city',
+                label: 'City',
+                type: 'text',
+                placeholder: 'e.g. Mumbai',
+              },
             ],
           },
           {
@@ -391,7 +620,13 @@ export const TABS = [
             // business is described by its nature, and being asked for both read
             // as the same question twice.
             itemFields: [
-              { name: 'company_name', label: 'Business Name', type: 'text', placeholder: 'Business name', rules: ['required'] },
+              {
+                name: 'company_name',
+                label: 'Business Name',
+                type: 'text',
+                placeholder: 'Business name',
+                rules: ['required'],
+              },
               /**
                * TYPED, NOT PICKED — and it still posts as `nature_of_business_id`.
                *
@@ -414,8 +649,21 @@ export const TABS = [
                 placeholder: 'e.g. Textile trading',
                 readFrom: 'nature_of_business_name',
               },
-              { name: 'years_of_experience', label: 'Years in Business', type: 'text', placeholder: 'e.g. 5', inputMode: 'numeric', maxLength: 2, digitsOnly: true },
-              { name: 'city', label: 'Base Location / Address', type: 'text', placeholder: 'e.g. Mumbai' },
+              {
+                name: 'years_of_experience',
+                label: 'Years in Business',
+                type: 'text',
+                placeholder: 'e.g. 5',
+                inputMode: 'numeric',
+                maxLength: 2,
+                digitsOnly: true,
+              },
+              {
+                name: 'city',
+                label: 'Base Location / Address',
+                type: 'text',
+                placeholder: 'e.g. Mumbai',
+              },
             ],
           },
         ],
@@ -442,6 +690,16 @@ export const TABS = [
 ];
 
 /**
+ * The tabs a member gets when editing their OWN record.
+ *
+ * Family is not among them. A member may SEE their family — the profile's read
+ * view lists it — but the roster is maintained on the Families page under
+ * FAMILY:MANAGE, so offering the tab here would show controls that a member's
+ * own screen has no business carrying.
+ */
+export const SELF_EDIT_TABS = TABS.filter(t => t.key !== 'family');
+
+/**
  * Fields the PIN-code lookup fills. Read-only — they mirror the address master,
  * so their placeholder says where the value will come from rather than inviting
  * input that would be ignored.
@@ -462,7 +720,7 @@ export const HIERARCHY_FIELDS = [
 
 /** Every plain field on a tab — repeatable items are not included. */
 export function fieldsOf(tab) {
-  return (tab.sections ?? []).flatMap((s) => s.fields ?? []);
+  return (tab.sections ?? []).flatMap(s => s.fields ?? []);
 }
 
 /**
@@ -474,11 +732,15 @@ export function fieldsOf(tab) {
  * values to consult.
  */
 export const labelOf = (field, values) =>
-  (typeof field?.labelFor === 'function' ? field.labelFor(values) : null) ?? field?.label ?? '';
+  (typeof field?.labelFor === 'function' ? field.labelFor(values) : null) ??
+  field?.label ??
+  '';
 
 /** Collection keys (`educations`, `jobs`) declared by a tab's repeatable sections. */
 export function collectionsOf(tab) {
-  return (tab.sections ?? []).filter((s) => s.kind === 'repeatable').map((s) => s.collection);
+  return (tab.sections ?? [])
+    .filter(s => s.kind === 'repeatable')
+    .map(s => s.collection);
 }
 
 /**
@@ -524,7 +786,8 @@ export function itemDraftFrom(section, item) {
   for (const field of itemFieldsFor(section, item)) {
     if (!field.readFrom) continue;
     const preferred = item?.[field.readFrom];
-    if (preferred != null && String(preferred).trim() !== '') draft[field.name] = preferred;
+    if (preferred != null && String(preferred).trim() !== '')
+      draft[field.name] = preferred;
   }
   return draft;
 }
@@ -546,10 +809,10 @@ function fieldIsFilled(item, field) {
 function distinctiveFields(section, variant) {
   const elsewhere = new Set(
     section.variants
-      .filter((v) => v !== variant)
-      .flatMap((v) => (v.itemFields ?? []).map((f) => f.name))
+      .filter(v => v !== variant)
+      .flatMap(v => (v.itemFields ?? []).map(f => f.name)),
   );
-  return (variant.itemFields ?? []).filter((f) => !elsewhere.has(f.name));
+  return (variant.itemFields ?? []).filter(f => !elsewhere.has(f.name));
 }
 
 /**
@@ -578,13 +841,17 @@ function distinctiveFields(section, variant) {
 export function variantOf(section, item) {
   if (!section?.variants?.length) return null;
 
-  const declared = section.variants.find((v) => v.value === item?.[section.variantField]);
+  const declared = section.variants.find(
+    v => v.value === item?.[section.variantField],
+  );
   if (declared) return declared;
 
   let best = null;
   let bestScore = 0;
   for (const variant of section.variants) {
-    const score = distinctiveFields(section, variant).filter((f) => fieldIsFilled(item, f)).length;
+    const score = distinctiveFields(section, variant).filter(f =>
+      fieldIsFilled(item, f),
+    ).length;
     if (score > bestScore) {
       best = variant;
       bestScore = score;
@@ -620,7 +887,7 @@ export function validateItem(section, item) {
  * them nor the role), so nothing is lost by not checking them.
  */
 function validatableFields(tab, editing, self = false, child = false) {
-  return fieldsOf(tab).filter((f) => {
+  return fieldsOf(tab).filter(f => {
     if (editing && f.readOnlyOnEdit === true) return false;
     if (self && f.lockedForSelf === true) return false;
     // Child registration has no mobile fields — they carry hiddenForChild so
@@ -638,20 +905,31 @@ function validatableFields(tab, editing, self = false, child = false) {
  * `editing` marks the edit form, where the frozen fields above are not checked;
  * `self` marks your own record, where the locked ones are not either.
  */
-export function validateTab(tab, values, { editing = false, self = false, child = false } = {}) {
-  const errors = validateFields(validatableFields(tab, editing, self, child), values);
+export function validateTab(
+  tab,
+  values,
+  { editing = false, self = false, child = false } = {},
+) {
+  const errors = validateFields(
+    validatableFields(tab, editing, self, child),
+    values,
+  );
 
-  if (tab.sections?.some((s) => s.kind === 'hierarchy')) {
+  if (tab.sections?.some(s => s.kind === 'hierarchy')) {
     for (const level of HIERARCHY_FIELDS) {
-      if (isBlank(values[level.name])) errors[level.name] = 'This field is required.';
+      if (isBlank(values[level.name]))
+        errors[level.name] = 'This field is required.';
     }
   }
 
-  if (tab.sections?.some((s) => s.kind === 'pincode')) {
-    const message = RULES.required(values.pincode) ?? RULES.pincode(values.pincode);
+  if (tab.sections?.some(s => s.kind === 'pincode')) {
+    const message =
+      RULES.required(values.pincode) ?? RULES.pincode(values.pincode);
     // Everything except `area` is filled by the lookup; `area` is the member's
     // own pick from the dropdown, so the two are reported separately.
-    const unresolved = PINCODE_FIELDS.filter((f) => f.name !== 'area' && isBlank(values[f.name]));
+    const unresolved = PINCODE_FIELDS.filter(
+      f => f.name !== 'area' && isBlank(values[f.name]),
+    );
 
     if (message) {
       errors.pincode = message;
@@ -673,14 +951,22 @@ export function validateTab(tab, values, { editing = false, self = false, child 
 }
 
 /** Validates every required tab. Optional tabs are format-checked, not required. */
-export function validateAll(values, { editing = false, self = false, child = false } = {}) {
+export function validateAll(
+  values,
+  { editing = false, self = false, child = false } = {},
+) {
   return TABS.reduce((acc, tab) => {
     if (tab.optional) {
       // Skipped tabs still must not carry a malformed value (a half-typed year).
       for (const field of validatableFields(tab, editing, self, child)) {
-        for (const ruleName of (field.rules ?? []).filter((r) => r !== 'required')) {
+        for (const ruleName of (field.rules ?? []).filter(
+          r => r !== 'required',
+        )) {
           const message = RULES[ruleName]?.(values[field.name], values);
-          if (message) { acc[field.name] = message; break; }
+          if (message) {
+            acc[field.name] = message;
+            break;
+          }
         }
       }
       return acc;
@@ -692,15 +978,16 @@ export function validateAll(values, { editing = false, self = false, child = fal
 /** Names of everything a tab requires, including its specially rendered groups. */
 export function requiredNames(tab, editing) {
   const names = validatableFields(tab, editing)
-    .filter((f) => (f.rules ?? []).includes('required'))
-    .map((f) => f.name);
+    .filter(f => (f.rules ?? []).includes('required'))
+    .map(f => f.name);
 
-  if (tab.sections?.some((s) => s.kind === 'hierarchy')) {
-    names.push(...HIERARCHY_FIELDS.map((level) => level.name));
+  if (tab.sections?.some(s => s.kind === 'hierarchy')) {
+    names.push(...HIERARCHY_FIELDS.map(level => level.name));
   }
   // `area` counts as well as `pincode`: it is the member's own choice, so a tab
   // showing 100% while Next still refuses would be the stepper lying.
-  if (tab.sections?.some((s) => s.kind === 'pincode')) names.push('pincode', 'area');
+  if (tab.sections?.some(s => s.kind === 'pincode'))
+    names.push('pincode', 'area');
 
   return names;
 }
@@ -716,13 +1003,14 @@ export function requiredNames(tab, editing) {
  */
 function progressNames(tab, editing) {
   const names = validatableFields(tab, editing)
-    .filter((f) => f.type !== 'checkbox')
-    .map((f) => f.name);
+    .filter(f => f.type !== 'checkbox')
+    .map(f => f.name);
 
-  if (tab.sections?.some((s) => s.kind === 'hierarchy')) {
-    names.push(...HIERARCHY_FIELDS.map((level) => level.name));
+  if (tab.sections?.some(s => s.kind === 'hierarchy')) {
+    names.push(...HIERARCHY_FIELDS.map(level => level.name));
   }
-  if (tab.sections?.some((s) => s.kind === 'pincode')) names.push('pincode', 'area');
+  if (tab.sections?.some(s => s.kind === 'pincode'))
+    names.push('pincode', 'area');
 
   return names;
 }
@@ -730,7 +1018,7 @@ function progressNames(tab, editing) {
 /** The add-many and family sections on a tab, which count one unit each. */
 function progressSections(tab) {
   const keys = collectionsOf(tab);
-  if (tab.sections?.some((s) => s.kind === 'family')) keys.push('family');
+  if (tab.sections?.some(s => s.kind === 'family')) keys.push('family');
   return keys;
 }
 
@@ -756,16 +1044,21 @@ function progressSections(tab) {
  * loads — real data, but not their work, and counting it opened Sabha Details
  * at 60% (three levels of five units) before they had touched anything.
  */
-export function stepProgress(tab, values, { editing = false, filled = {}, ignore = [] } = {}) {
+export function stepProgress(
+  tab,
+  values,
+  { editing = false, filled = {}, ignore = [] } = {},
+) {
   const skip = new Set(ignore);
-  const names = progressNames(tab, editing).filter((name) => !skip.has(name));
+  const names = progressNames(tab, editing).filter(name => !skip.has(name));
   const sections = progressSections(tab);
   const total = names.length + sections.length;
   if (!total) return 0;
 
-  const hasRows = (key) => filled[key] ?? (Array.isArray(values[key]) && values[key].length > 0);
+  const hasRows = key =>
+    filled[key] ?? (Array.isArray(values[key]) && values[key].length > 0);
   const done =
-    names.filter((name) => !isBlank(values[name])).length +
+    names.filter(name => !isBlank(values[name])).length +
     sections.filter(hasRows).length;
 
   return Math.round((done / total) * 100);
@@ -781,13 +1074,14 @@ export function stepProgress(tab, values, { editing = false, filled = {}, ignore
  */
 export function tabIndexOfField(name) {
   if (isBlank(name)) return -1;
-  return TABS.findIndex((tab) => {
-    if (fieldsOf(tab).some((f) => f.name === name)) return true;
-    if (tab.sections?.some((s) => s.kind === 'hierarchy')) {
-      if (HIERARCHY_FIELDS.some((l) => l.name === name)) return true;
+  return TABS.findIndex(tab => {
+    if (fieldsOf(tab).some(f => f.name === name)) return true;
+    if (tab.sections?.some(s => s.kind === 'hierarchy')) {
+      if (HIERARCHY_FIELDS.some(l => l.name === name)) return true;
     }
-    if (tab.sections?.some((s) => s.kind === 'pincode')) {
-      if (name === 'pincode' || PINCODE_FIELDS.some((f) => f.name === name)) return true;
+    if (tab.sections?.some(s => s.kind === 'pincode')) {
+      if (name === 'pincode' || PINCODE_FIELDS.some(f => f.name === name))
+        return true;
     }
     return false;
   });
@@ -797,10 +1091,17 @@ export function tabIndexOfField(name) {
  * The first required tab that does not validate, or -1 when all of them do.
  * Used to refuse a jump forward and to land submit on a fixable tab.
  */
-export function firstInvalidTab(values, before = TABS.length, { editing = false, self = false, child = false } = {}) {
+export function firstInvalidTab(
+  values,
+  before = TABS.length,
+  { editing = false, self = false, child = false } = {},
+) {
   for (let i = 0; i < Math.min(before, TABS.length); i += 1) {
     if (!TABS[i].required) continue;
-    if (Object.keys(validateTab(TABS[i], values, { editing, self, child })).length) return i;
+    if (
+      Object.keys(validateTab(TABS[i], values, { editing, self, child })).length
+    )
+      return i;
   }
   return -1;
 }
@@ -841,7 +1142,7 @@ export function toDateInputValue(raw) {
   // rather than guess if it cannot.
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) return '';
-  const pad = (n) => String(n).padStart(2, '0');
+  const pad = n => String(n).padStart(2, '0');
   return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
 }
 
@@ -856,11 +1157,22 @@ export function toDateInputValue(raw) {
 const FIELD_ALIASES = {
   // The first entry of each list is this form's own former name, kept so a
   // response that still uses the old spelling prefills rather than reading blank.
-  dob: ['date_of_birth', 'birth_date', 'birthdate', 'dateOfBirth', 'date_of_birth_str'],
+  dob: [
+    'date_of_birth',
+    'birth_date',
+    'birthdate',
+    'dateOfBirth',
+    'date_of_birth_str',
+  ],
   // The backend does not declare this one yet, so which spelling it settles on
   // is still open — the three it plausibly picks all prefill the same box.
   date_of_joining: ['joining_date', 'date_of_join', 'dateOfJoining'],
-  mobile_secondary: ['secondary_mobile_number', 'secondary_mobile', 'alternate_mobile_number', 'secondary_number'],
+  mobile_secondary: [
+    'secondary_mobile_number',
+    'secondary_mobile',
+    'alternate_mobile_number',
+    'secondary_number',
+  ],
   street_name: ['street'],
   reference_by_id: ['reference_person_id', 'reference_id'],
   sampark_id: ['sampark_no', 'samparkId'],
@@ -893,10 +1205,13 @@ export function toFormValues(user) {
     }
     for (const key of collectionsOf(tab)) {
       if (!Array.isArray(user[key])) continue;
-      values[key] = user[key].map((item) =>
+      values[key] = user[key].map(item =>
         Object.fromEntries(
-          Object.entries(item ?? {}).map(([k, v]) => [k, v == null ? '' : String(v)])
-        )
+          Object.entries(item ?? {}).map(([k, v]) => [
+            k,
+            v == null ? '' : String(v),
+          ]),
+        ),
       );
     }
   }

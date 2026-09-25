@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Linking,
@@ -424,6 +424,7 @@ export default function ProfileCards({
   omitTabs = [],
   extraTabs = [],
   onTabChange,
+  jumpTo,
 }) {
   const tabs = [
     ...(userId ? SECTION_TABS : SECTION_TABS.filter(t => t.cards)).filter(
@@ -438,6 +439,18 @@ export default function ProfileCards({
     setTabKey(key);
     onTabChange?.(key);
   };
+
+  // A tab opened from OUTSIDE the strip (the hero's Change Password / PIN
+  // button, or returning from an edit). `token` is what makes the same tab
+  // re-openable — the member may have moved away since the last request.
+  const lastJump = useRef(null);
+  useEffect(() => {
+    if (!jumpTo?.key || jumpTo.token === lastJump.current) return;
+    lastJump.current = jumpTo.token;
+    if (tabs.some(t => t.key === jumpTo.key)) openTab(jumpTo.key);
+    // `tabs` is rebuilt every render, so depending on it would re-fire this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTo?.key, jumpTo?.token]);
 
   const educationsQ = useUserEducations(
     userId,

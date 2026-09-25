@@ -64,19 +64,26 @@ const todayLabel = () => {
 const nameOf = row =>
   String(row?.user_name ?? '').trim() || `Member #${row?.user_id ?? ''}`;
 
-/** CSS `linear-gradient(135deg, …)`, painted behind its parent's content. */
-function LinearFill({ id, stops }) {
+function LinearFill({ id, stops, radius = 0 }) {
   return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          {stops.map(([offset, color]) => (
-            <Stop key={offset} offset={offset} stopColor={color} />
-          ))}
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${id})`} />
-    </Svg>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            {stops.map(([offset, color]) => (
+              <Stop key={offset} offset={offset} stopColor={color} />
+            ))}
+          </LinearGradient>
+        </Defs>
+        <Rect
+          width="100%"
+          height="100%"
+          rx={radius}
+          ry={radius}
+          fill={`url(#${id})`}
+        />
+      </Svg>
+    </View>
   );
 }
 
@@ -426,6 +433,7 @@ function SendWishes() {
       <View style={styles.noBirthdays}>
         <LinearFill
           id="no-birthdays"
+          radius={RADII.card}
           stops={[
             [0, '#FEF3C7'],
             [0.5, '#FFEDD5'],
@@ -441,7 +449,7 @@ function SendWishes() {
         </View>
         <Text style={styles.noBirthdaysTitle}>No birthdays today</Text>
         <Text style={styles.noBirthdaysText}>
-          Nobody in your Mandal is celebrating today — check back tomorrow.
+          Nobody in your Mandal is celebrating today, check back tomorrow.
         </Text>
       </View>
     );
@@ -775,15 +783,16 @@ const styles = StyleSheet.create({
 
   noBirthdays: {
     alignItems: 'center',
-    overflow: 'hidden',
     borderRadius: RADII.card,
+    backgroundColor: '#FEF3C7',
     paddingHorizontal: space(6),
     paddingVertical: space(12),
+    ...SHADOWS.card,
   },
   noBirthdaysIcon: {
     width: space(14),
     height: space(14),
-    borderRadius: RADII['2xl'],
+    borderRadius: RADII.full,
     backgroundColor: 'rgba(255,255,255,0.7)',
     alignItems: 'center',
     justifyContent: 'center',

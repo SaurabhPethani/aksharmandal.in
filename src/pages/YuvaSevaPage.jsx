@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -332,114 +333,120 @@ export default function YuvaSevaPage({
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Yuva Seva']}
       />
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => load(true)}
-            tintColor={C.navy}
-          />
-        }
-      >
-        <Text style={styles.title}>Yuva Seva</Text>
-        <Text style={styles.subtitle}>
-          Follow up with members and help them stay connected.
-        </Text>
-        {loading ? (
-          <ActivityIndicator size="large" color={C.navy} />
-        ) : error ? (
-          <View style={styles.state}>
-            <Text style={styles.stateText}>{error}</Text>
-            <Pressable onPress={() => load()}>
-              <Text style={styles.retry}>Retry</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <>
-            {hasOthers ? (
-              <View style={styles.scopeToggle}>
-                {['all', 'mine'].map(value => (
-                  <Pressable
-                    key={value}
-                    onPress={() => setScope(value)}
-                    style={[
-                      styles.scopeOption,
-                      scope === value && styles.scopeSelected,
-                    ]}
-                  >
-                    <Text
+      {/* Edge-to-edge is on (see android/gradle.properties), so the keyboard
+          is drawn OVER the screen rather than resizing it. `padding` measures
+          the real overlap, so it is 0 wherever the window does still resize. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => load(true)}
+              tintColor={C.navy}
+            />
+          }
+        >
+          <Text style={styles.title}>Yuva Seva</Text>
+          <Text style={styles.subtitle}>
+            Follow up with members and help them stay connected.
+          </Text>
+          {loading ? (
+            <ActivityIndicator size="large" color={C.navy} />
+          ) : error ? (
+            <View style={styles.state}>
+              <Text style={styles.stateText}>{error}</Text>
+              <Pressable onPress={() => load()}>
+                <Text style={styles.retry}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              {hasOthers ? (
+                <View style={styles.scopeToggle}>
+                  {['all', 'mine'].map(value => (
+                    <Pressable
+                      key={value}
+                      onPress={() => setScope(value)}
                       style={[
-                        styles.scopeText,
-                        scope === value && styles.scopeTextSelected,
+                        styles.scopeOption,
+                        scope === value && styles.scopeSelected,
                       ]}
                     >
-                      {value === 'all' ? 'All in scope' : 'My follow-ups'}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-            <View style={styles.kpiGrid}>
-              <Kpi
-                label="Total Members"
-                value={stats.members}
-                unit="On follow-up"
-              />
-              <Kpi
-                label="Unique Yuvak · 15 days"
-                value={stats.distinct15}
-                unit="Contacted"
-              />
-              <Kpi
-                label="Unique Yuvak · 30 days"
-                value={stats.distinct30}
-                unit="Contacted"
-              />
-              <Kpi
-                label="Yuva Seva Yesterday"
-                value={stats.yesterday}
-                unit="Follow-up records"
-              />
-              <Kpi
-                label="Yuva Seva On Field"
-                value={totals.total_distinct_followup_yesterday ?? 0}
-                unit="Follow-ups active"
-              />
-              <Kpi
-                label="Yuva Seva Rate"
-                value={`${stats.members ? Math.round((stats.distinct30 / stats.members) * 100) : 0}%`}
-                unit="30-day reach"
-              />
-            </View>
-            {visibleRows.length > 25 ? (
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search member name"
-                placeholderTextColor={C.faint}
-                style={styles.search}
-              />
-            ) : null}
-            {visibleRows.length ? (
-              visibleRows.map(row => (
-                <MemberRow
-                  key={row.user_id || row.user_name}
-                  row={row}
-                  canAdd={canAdd}
-                  showAssigned={hasOthers && scope !== 'mine'}
-                  showSabha={showSabha}
-                  onHistory={() => viewHistory(row)}
-                  onAdd={() => openAdd(row)}
+                      <Text
+                        style={[
+                          styles.scopeText,
+                          scope === value && styles.scopeTextSelected,
+                        ]}
+                      >
+                        {value === 'all' ? 'All in scope' : 'My follow-ups'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+              <View style={styles.kpiGrid}>
+                <Kpi
+                  label="Total Members"
+                  value={stats.members}
+                  unit="On follow-up"
                 />
-              ))
-            ) : (
-              <Text style={styles.stateText}>No members need follow-up.</Text>
-            )}
-          </>
-        )}
-      </ScrollView>
+                <Kpi
+                  label="Unique Yuvak · 15 days"
+                  value={stats.distinct15}
+                  unit="Contacted"
+                />
+                <Kpi
+                  label="Unique Yuvak · 30 days"
+                  value={stats.distinct30}
+                  unit="Contacted"
+                />
+                <Kpi
+                  label="Yuva Seva Yesterday"
+                  value={stats.yesterday}
+                  unit="Follow-up records"
+                />
+                <Kpi
+                  label="Yuva Seva On Field"
+                  value={totals.total_distinct_followup_yesterday ?? 0}
+                  unit="Follow-ups active"
+                />
+                <Kpi
+                  label="Yuva Seva Rate"
+                  value={`${stats.members ? Math.round((stats.distinct30 / stats.members) * 100) : 0}%`}
+                  unit="30-day reach"
+                />
+              </View>
+              {visibleRows.length > 25 ? (
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search member name"
+                  placeholderTextColor={C.faint}
+                  style={styles.search}
+                />
+              ) : null}
+              {visibleRows.length ? (
+                visibleRows.map(row => (
+                  <MemberRow
+                    key={row.user_id || row.user_name}
+                    row={row}
+                    canAdd={canAdd}
+                    showAssigned={hasOthers && scope !== 'mine'}
+                    showSabha={showSabha}
+                    onHistory={() => viewHistory(row)}
+                    onAdd={() => openAdd(row)}
+                  />
+                ))
+              ) : (
+                <Text style={styles.stateText}>No members need follow-up.</Text>
+              )}
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
       <SiteFooter />
       <Modal
         isOpen={Boolean(openHistory)}

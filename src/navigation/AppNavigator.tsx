@@ -8,7 +8,6 @@ import EventsPage from '../pages/EventsPage';
 import YuvaSevaPage from '../pages/YuvaSevaPage';
 import NotificationsPage from '../pages/NotificationsPage';
 import ProfilePage from '../pages/ProfilePage';
-import UserFormPage from '../pages/UserFormPage';
 import { useAuth } from '../hooks/core';
 
 type RouteName =
@@ -19,8 +18,7 @@ type RouteName =
   | 'events'
   | 'yuva-seva'
   | 'notifications'
-  | 'profile'
-  | 'profile-edit';
+  | 'profile';
 
 type AppNavigatorProps = {
   initialRoute?: RouteName;
@@ -140,16 +138,6 @@ export default function AppNavigator({
         onMenu={() => setDrawerOpen(true)}
         onHelp={() => navigate('help')}
         onNotifications={() => navigate('notifications')}
-        onEditProfile={() => navigate('profile-edit')}
-      />
-    ) : route === 'profile-edit' ? (
-      <UserFormPage
-        onBack={goBack}
-        onMenu={() => setDrawerOpen(true)}
-        onHelp={() => navigate('help')}
-        onNotifications={() => navigate('notifications')}
-        onProfile={goBack}
-        onSaved={goBack}
       />
     ) : (
       <HelpPage

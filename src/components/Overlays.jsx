@@ -48,6 +48,7 @@ export function Modal({
   footer,
   size = 'md',
   dismissible = true,
+  scrollable = true,
   children,
 }) {
   const insets = useSafeAreaInsets();
@@ -199,13 +200,21 @@ export function Modal({
             </View>
           </View>
 
-          <ScrollView
-            style={styles.body}
-            contentContainerStyle={styles.bodyContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {children}
-          </ScrollView>
+          {/* A dialog whose content is dragged rather than read opts out: a
+              scroll view competes with the gesture inside it for the
+              responder, and the photo cropper always lost the vertical half
+              of a drag to it. */}
+          {scrollable ? (
+            <ScrollView
+              style={styles.body}
+              contentContainerStyle={styles.bodyContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={[styles.body, styles.bodyContent]}>{children}</View>
+          )}
 
           {/* `flex-wrap`, so two long button labels drop a line on a narrow
               phone instead of pushing the action off the edge. */}

@@ -5,7 +5,6 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -442,9 +441,7 @@ export default function LoginPage() {
       accessibilityLabel={showSetupPin ? 'Hide PIN' : 'Show PIN'}
     >
       <NativeIcon name={showSetupPin ? 'eyeOff' : 'eye'} size={18} />
-      <Text style={styles.pinToggleText}>
-        {showSetupPin ? 'Hide' : 'Show'}
-      </Text>
+      <Text style={styles.pinToggleText}>{showSetupPin ? 'Hide' : 'Show'}</Text>
     </Pressable>
   );
 
@@ -457,10 +454,11 @@ export default function LoginPage() {
 
   return (
     <View style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.safe}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/* `padding` on Android too: edge-to-edge means `adjustResize` no longer
+          shrinks the window, so leaving the behaviour off there left the
+          keyboard sitting on top of the field. The overlap is measured, so it
+          is 0 wherever the window does still resize. */}
+      <KeyboardAvoidingView style={styles.safe} behavior="padding">
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"

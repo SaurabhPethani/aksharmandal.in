@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -856,7 +857,10 @@ export default function HelpPage({
         onBack={onBack}
       />
 
-      <View style={styles.contentWrap}>
+      {/* Edge-to-edge is on (see android/gradle.properties), so the keyboard
+          is drawn OVER the screen rather than resizing it. `padding` measures
+          the real overlap, so it is 0 wherever the window does still resize. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.contentWrap}>
         <ScrollView
           ref={node => {
             (sectionRefs.current as any).__scrollView = node;
@@ -1022,7 +1026,7 @@ export default function HelpPage({
             ))
           )}
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
 
       <SiteFooter />
     </View>

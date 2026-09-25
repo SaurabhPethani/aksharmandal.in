@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   Image,
+  KeyboardAvoidingView,
   Linking,
   Pressable,
   RefreshControl,
@@ -17,6 +19,8 @@ import { Text } from '../components/Typography';
 import { useAuth, useToast } from '../hooks/core';
 import { useProfile } from '../hooks/useUsers';
 import { useFeatures } from '../hooks/useLookups';
+import { useMyGroupLeaderships } from '../hooks/useHierarchy';
+import { useProfileForm } from '../hooks/useProfileForm';
 import {
   useMyResumes,
   useProfileImage,
@@ -36,6 +40,11 @@ import {
 import ProfileCards, {
   ProfileHero,
 } from '../components/user-detail/ProfileCards';
+import ProfileEditor, {
+  readTabForStep,
+  stepForReadTab,
+} from '../components/user-detail/ProfileEditor';
+import SecuritySettings from '../components/user-detail/SecuritySettings';
 import ImageCropDialog from '../components/ImageCropDialog';
 import { isAttending, statusLabel } from '../utils/memberFlags';
 import { formatDate } from '../utils/format';
@@ -51,17 +60,33 @@ export default function ProfilePage({
   onMenu,
   onHelp,
   onNotifications,
-  onEditProfile,
 }) {
   const { activeUserId: userId } = useAuth();
   const toast = useToast();
+  // Mirrors the tab ProfileCards has open, for the one query that is gated on
+  // it — and for handing the editor the tab the member was reading.
   const [tabKey, setTabKey] = useState('Personal');
+  // A request to jump the strip to a tab: the Change Password / PIN button, and
+  // coming back out of the editor. The token lets the same tab be re-requested.
+  const [jumpTo, setJumpTo] = useState(null);
+  // Editing happens HERE, on this screen. There is no separate form route any
+  // more — the same tab strip swaps its read cards for the record's fields.
+  const [editing, setEditing] = useState(false);
 
   const { data, isLoading, isError, error, refetch, isFetching } =
     useProfile(userId);
 
+  // Mounted in read mode too, so it is ready the moment Edit is tapped; every
+  // query inside it is held behind the same `editing` flag.
+  const form = useProfileForm(userId, data, editing);
+
   const featuresQ = useFeatures();
   const resumeEnabled = featuresQ.data?.resume === true;
+
+  // Group leadership — so a member sees at a glance that they are the Head or
+  // DB Manager of a Sabha (or Mandal / Pradesh) group. Auth-only, returns [] for
+  // members who lead nothing (the common case), so nothing renders for them.
+  const groupLeaderships = useMyGroupLeaderships().data ?? [];
 
   const resumesQ = useMyResumes(resumeEnabled && tabKey === 'resume');
   const imageQ = useProfileImage(userId);
@@ -194,6 +219,48 @@ export default function ProfilePage({
     }
   };
 
+  const startEditing = () => {
+    // Open on the tab they were reading, so Edit does not move them.
+    form.setStep(stepForReadTab(tabKey));
+    setEditing(true);
+  };
+
+  const stopEditing = () => {
+    const back = readTabForStep(form.step);
+    setEditing(false);
+    setTabKey(back);
+    setJumpTo({ key: back, token: Date.now() });
+  };
+
+  const cancelEditing = () => {
+    if (!form.isDirty) return stopEditing();
+    return Alert.alert(
+      'Discard changes?',
+      'Your edits on this screen have not been saved.',
+      [
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: stopEditing },
+      ],
+    );
+  };
+
+  const saveEditing = async () => {
+    if (await form.submit()) stopEditing();
+  };
+
+  // Hardware back closes the EDITOR rather than the screen. Registered on the
+  // `editing` flip, which is later than AppNavigator's own subscription, so
+  // this one is asked first and swallows the press.
+  useEffect(() => {
+    if (!editing) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      cancelEditing();
+      return true;
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, form.isDirty, form.step]);
+
   const shell = children => (
     <View style={styles.safe}>
       <AppHeader
@@ -202,15 +269,26 @@ export default function ProfilePage({
         onHelp={onHelp}
         onNotifications={onNotifications}
       />
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} />
-        }
-      >
-        {children}
-      </ScrollView>
+      {/* Edge-to-edge is on (see android/gradle.properties), so `adjustResize`
+          no longer shrinks the window — the keyboard is drawn OVER the screen
+          and would sit on top of the field being typed into. `padding`
+          measures the real overlap, so it comes out as 0 anywhere the window
+          does still resize. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={isFetching && !isLoading}
+              onRefresh={refetch}
+            />
+          }
+        >
+          {children}
+        </ScrollView>
+      </KeyboardAvoidingView>
       <SiteFooter />
     </View>
   );
@@ -316,121 +394,180 @@ export default function ProfilePage({
                 </Text>
               </View>
             ) : null}
+            {/* Group Head / DB Manager, under the profile with the role and
+                attendance chips. Renders nothing for a member who leads no
+                group, which is most of them. */}
+            {groupLeaderships.map(g => (
+              <View
+                key={`${g.group_id}-${g.leader_type}`}
+                style={styles.groupChip}
+              >
+                <MaterialCommunityIcons
+                  name="cube-outline"
+                  size={space(3.5)}
+                  color={GROUP_FG}
+                />
+                <Text style={styles.groupChipText}>
+                  {g.group_name} Group · {groupTypeLabel(g.leader_type)}
+                </Text>
+              </View>
+            ))}
           </>
         }
         actions={
-          <Button variant="accent" onPress={onEditProfile}>
-            Edit Profile
-          </Button>
+          editing ? (
+            <View style={styles.heroButtons}>
+              <Button
+                variant="outline"
+                onPress={cancelEditing}
+                disabled={form.saving}
+              >
+                Cancel
+              </Button>
+              <Button variant="accent" onPress={saveEditing} busy={form.saving}>
+                Save
+              </Button>
+            </View>
+          ) : (
+            <View style={styles.heroButtons}>
+              <Button variant="accent" onPress={startEditing}>
+                Edit Profile
+              </Button>
+              {/* Jumps the strip to Security rather than opening anything. */}
+              <Button
+                variant="outline"
+                onPress={() =>
+                  setJumpTo({ key: 'security', token: Date.now() })
+                }
+              >
+                Change Password / PIN
+              </Button>
+            </View>
+          )
         }
       />
 
-      <ProfileCards
-        user={data}
-        userId={userId}
-        onTabChange={setTabKey}
-        omitTabs={['family']}
-        extraTabs={[
-          ...(resumeEnabled
-            ? [
-                {
-                  key: 'resume',
-                  label: 'Resume',
-                  render: () => (
-                    <View style={styles.stack}>
-                      <View style={styles.builder}>
-                        <Text style={styles.sectionTitle}>Resume Builder</Text>
-                        <Text style={styles.builderCopy}>
-                          Generate a PDF resume from your profile, education and
-                          job details. Each resume is a frozen snapshot — later
-                          profile edits won’t change resumes you’ve already
-                          created.
-                        </Text>
-                        <Button
-                          variant="accent"
-                          style={styles.builderBtn}
-                          onPress={generateResume}
-                          busy={resumeMutations.create.isPending}
-                        >
-                          Generate Resume
-                        </Button>
-                      </View>
+      {editing ? (
+        <ProfileEditor form={form} onSaveAndExit={saveEditing} />
+      ) : (
+        <ProfileCards
+          user={data}
+          userId={userId}
+          onTabChange={setTabKey}
+          jumpTo={jumpTo}
+          // Family is READ-ONLY here (a list of members + relation, no controls) —
+          // a member should be able to SEE their own family, they just cannot
+          // maintain it from their own screen.
+          omitTabs={[]}
+          extraTabs={[
+            {
+              key: 'security',
+              label: 'Security',
+              render: () => <SecuritySettings />,
+            },
+            ...(resumeEnabled
+              ? [
+                  {
+                    key: 'resume',
+                    label: 'Resume',
+                    render: () => (
+                      <View style={styles.stack}>
+                        <View style={styles.builder}>
+                          <Text style={styles.sectionTitle}>
+                            Resume Builder
+                          </Text>
+                          <Text style={styles.builderCopy}>
+                            Generate a PDF resume from your profile, education
+                            and job details. Each resume is a frozen snapshot —
+                            later profile edits won’t change resumes you’ve
+                            already created.
+                          </Text>
+                          <Button
+                            variant="accent"
+                            style={styles.builderBtn}
+                            onPress={generateResume}
+                            busy={resumeMutations.create.isPending}
+                          >
+                            Generate Resume
+                          </Button>
+                        </View>
 
-                      <ResumeList
-                        query={resumesQ}
-                        onDelete={deleteResume}
-                        busy={resumeMutations.remove.isPending}
-                      />
-                    </View>
-                  ),
-                },
-              ]
-            : []),
-          {
-            key: 'qr',
-            label: 'My QR Code',
-            render: () => (
-              <Card style={styles.qrCard}>
-                {qrMissing ? (
-                  <View style={styles.qrEmpty}>
-                    <Text style={styles.muted}>
-                      No QR code has been generated for your account yet.
-                    </Text>
-                    <Button
-                      variant="accent"
-                      style={styles.qrEmptyBtn}
-                      onPress={generateQr}
-                      busy={regenerateQr.isPending}
-                    >
-                      Generate QR code
-                    </Button>
-                  </View>
-                ) : (
-                  <>
-                    <View style={styles.qrFrame}>
-                      <Image
-                        key={qrNonce}
-                        source={{ uri: qrSrc }}
-                        accessibilityLabel="Your attendance QR code"
-                        resizeMode="contain"
-                        style={styles.qrImage}
-                        onError={() => setQrMissing(true)}
-                      />
-                    </View>
-                    <Text style={[styles.muted, styles.qrHint]}>
-                      Show this at Sabha to mark your attendance
-                    </Text>
-                    <View style={styles.qrActions}>
+                        <ResumeList
+                          query={resumesQ}
+                          onDelete={deleteResume}
+                          busy={resumeMutations.remove.isPending}
+                        />
+                      </View>
+                    ),
+                  },
+                ]
+              : []),
+            {
+              key: 'qr',
+              label: 'My QR Code',
+              render: () => (
+                <Card style={styles.qrCard}>
+                  {qrMissing ? (
+                    <View style={styles.qrEmpty}>
+                      <Text style={styles.muted}>
+                        No QR code has been generated for your account yet.
+                      </Text>
                       <Button
                         variant="accent"
-                        onPress={downloadQr}
-                        busy={qrSaving}
-                      >
-                        <MaterialCommunityIcons
-                          name="download"
-                          size={space(4)}
-                        />
-                        Download QR Code
-                      </Button>
-                      <Button
-                        variant="outline"
+                        style={styles.qrEmptyBtn}
                         onPress={generateQr}
                         busy={regenerateQr.isPending}
                       >
-                        <MaterialCommunityIcons
-                          name="refresh"
-                          size={space(4)}
-                        />
-                        Regenerate QR Code
+                        Generate QR code
                       </Button>
                     </View>
-                  </>
-                )}
-              </Card>
-            ),
-          },
-        ]}
-      />
+                  ) : (
+                    <>
+                      <View style={styles.qrFrame}>
+                        <Image
+                          key={qrNonce}
+                          source={{ uri: qrSrc }}
+                          accessibilityLabel="Your attendance QR code"
+                          resizeMode="contain"
+                          style={styles.qrImage}
+                          onError={() => setQrMissing(true)}
+                        />
+                      </View>
+                      <Text style={[styles.muted, styles.qrHint]}>
+                        Show this at Sabha to mark your attendance
+                      </Text>
+                      <View style={styles.qrActions}>
+                        <Button
+                          variant="accent"
+                          onPress={downloadQr}
+                          busy={qrSaving}
+                        >
+                          <MaterialCommunityIcons
+                            name="download"
+                            size={space(4)}
+                          />
+                          Download QR Code
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onPress={generateQr}
+                          busy={regenerateQr.isPending}
+                        >
+                          <MaterialCommunityIcons
+                            name="refresh"
+                            size={space(4)}
+                          />
+                          Regenerate QR Code
+                        </Button>
+                      </View>
+                    </>
+                  )}
+                </Card>
+              ),
+            },
+          ]}
+        />
+      )}
 
       {/* Crop-and-zoom before upload — opens when a photo is picked, uploads
           the cropped square on Save. */}
@@ -524,6 +661,12 @@ function ResumeList({ query, onDelete, busy }) {
   );
 }
 
+const GROUP_BG = '#FFFBEB';
+const GROUP_LINE = '#FCD34D';
+const GROUP_FG = '#B45309';
+
+const groupTypeLabel = t => (t === 'dbm' ? 'DB Manager' : 'Head');
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   flex: { flex: 1 },
@@ -568,12 +711,40 @@ const styles = StyleSheet.create({
   },
   statusOk: { backgroundColor: COLORS.successBg },
   statusBad: { backgroundColor: COLORS.dangerBg },
-  statusDot: { width: space(1.5), height: space(1.5), borderRadius: RADII.full },
+  statusDot: {
+    width: space(1.5),
+    height: space(1.5),
+    borderRadius: RADII.full,
+  },
   dotOk: { backgroundColor: COLORS.successFg },
   dotBad: { backgroundColor: COLORS.dangerFg },
   statusText: { fontSize: TEXT.xs, fontWeight: WEIGHT.semibold },
   statusTextOk: { color: COLORS.successFg },
   statusTextBad: { color: COLORS.dangerFg },
+  groupChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(1.5),
+    borderRadius: RADII.full,
+    borderWidth: 1,
+    borderColor: GROUP_LINE,
+    backgroundColor: GROUP_BG,
+    paddingHorizontal: space(3),
+    paddingVertical: space(1),
+  },
+  groupChipText: {
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.semibold,
+    color: GROUP_FG,
+  },
+
+  heroButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space(2),
+  },
 
   builder: {
     borderRadius: RADII.card,

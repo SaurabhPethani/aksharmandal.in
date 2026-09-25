@@ -37,6 +37,8 @@ export const AUTH_PATHS = {
   setCredentials: '/api/v1/auth/set-credentials',
   refresh: '/api/v1/auth/refresh',
   logout: '/api/v1/auth/logout',
+  changePassword: '/api/v1/auth/change-password',
+  changePin: '/api/v1/auth/change-pin',
   myAccounts: '/api/v1/auth/my-accounts',
   switchAccount: '/api/v1/auth/switch-account',
   me: '/api/v1/users/me',
