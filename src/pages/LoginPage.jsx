@@ -5,8 +5,8 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
+  Platform,
   StyleSheet,
   View,
 } from 'react-native';
@@ -457,9 +457,7 @@ export default function LoginPage({
       accessibilityLabel={showSetupPin ? 'Hide PIN' : 'Show PIN'}
     >
       <NativeIcon name={showSetupPin ? 'eyeOff' : 'eye'} size={18} />
-      <Text style={styles.pinToggleText}>
-        {showSetupPin ? 'Hide' : 'Show'}
-      </Text>
+      <Text style={styles.pinToggleText}>{showSetupPin ? 'Hide' : 'Show'}</Text>
     </Pressable>
   );
 

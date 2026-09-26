@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { hierarchyService } from '../services/hierarchyService';
+import { groupsService } from '../services/groupsService';
 import { HIERARCHY_CACHE } from './cache';
 
 /**
@@ -21,6 +22,18 @@ function useHierarchyLevel(queryKey, queryFn, enabled) {
     // from the backend" apart from "the scope really is empty".
     memberCount: typeof query.data?.member_count === 'number' ? query.data.member_count : null,
   };
+}
+
+export function useMyGroupLeaderships(enabled = true) {
+  return useQuery({
+    queryKey: ['my-group-leaderships'],
+    enabled: Boolean(enabled),
+    ...HIERARCHY_CACHE,
+    queryFn: async () => {
+      const rows = await groupsService.myLeaderships();
+      return Array.isArray(rows) ? rows : [];
+    },
+  });
 }
 
 export function usePradeshList(enabled) {

@@ -36,7 +36,7 @@ export default function SiteFooter({
   return (
     <View style={[styles.footer, background]}>
       <Text style={[styles.text, textColor]}>
-        {'© 2026 Akshar Connect. All rights reserved.'}
+        {`© ${new Date().getFullYear()} Akshar Connect. All rights reserved.`}
         {APP_VERSION ? (
           // Tabular digits, and a non-breaking space so "v" can never wrap
           // away from the number it labels on a narrow phone.
@@ -65,7 +65,7 @@ export default function SiteFooter({
 const styles = StyleSheet.create({
   footer: { paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
   links: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginTop: 6 },
-  link: { fontSize: 12, textDecorationLine: 'underline' },
+  link: { fontSize: 12 },
   linkSeparator: { fontSize: 12 },
   bgTransparent: { backgroundColor: 'transparent' },
   bgSolid: { backgroundColor: '#003158' },

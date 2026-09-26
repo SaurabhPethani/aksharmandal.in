@@ -1,11 +1,22 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { PermissionContext } from '../contexts/PermissionContext';
 import { STORAGE_KEYS } from '../constants/storage';
-import { useInfoRequests, useMyTransferRequests, usePendingTransfers } from './useApprovals';
+import {
+  useInfoRequests,
+  useMyTransferRequests,
+  usePendingTransfers,
+  useMyInfoRequests,
+} from './useApprovals';
 import { ACTIONS, MODULES } from '../constants/permissions';
 import {
-  fromInfoRequests, fromMyTransferRequests, fromPendingTransfers,
-  isUnread, markAllRead, readWatermark, sortByNewest,
+  fromInfoRequests,
+  fromMyTransferRequests,
+  fromPendingTransfers,
+  isUnread,
+  markAllRead,
+  readWatermark,
+  sortByNewest,
+  fromMyInfoRequests,
 } from '../utils/notifications';
 
 function nativeStorage() {
@@ -40,6 +51,8 @@ export function useNotifications() {
   // the provider is available.
   const permissions = useContext(PermissionContext);
 
+  const { userId } = permissions ?? {};
+
   const canReadTransfers =
     !permissions || permissions.can(MODULES.TRANSFER, ACTIONS.READ);
   const canApproveInfo =
@@ -57,7 +70,8 @@ export function useNotifications() {
     let active = true;
     const storage = nativeStorage();
     if (!storage) return undefined;
-    storage.getItem(STORAGE_KEYS.notificationsReadAt)
+    storage
+      .getItem(STORAGE_KEYS.notificationsReadAt)
       .then(raw => {
         if (!active || !raw) return;
         const stored = Date.parse(raw);
@@ -71,27 +85,41 @@ export function useNotifications() {
     };
   }, []);
 
-  const rowsOf = (q) => (Array.isArray(q.data) ? q.data : q.data?.items ?? []);
+  const myInfoQ = useMyInfoRequests(true, userId);
+
+  const rowsOf = q => (Array.isArray(q.data) ? q.data : (q.data?.items ?? []));
 
   const items = useMemo(
-    () => sortByNewest([
-      ...fromPendingTransfers(rowsOf(pendingQ)),
-      ...fromMyTransferRequests(rowsOf(mineQ)),
-      ...fromInfoRequests(rowsOf(infoQ)),
-    ]).map((entry) => ({ ...entry, unread: isUnread(entry, watermark) })),
-    [pendingQ, mineQ, infoQ, watermark]
+    () =>
+      sortByNewest([
+        ...fromPendingTransfers(rowsOf(pendingQ)),
+        ...fromMyTransferRequests(rowsOf(mineQ)),
+        ...fromInfoRequests(rowsOf(infoQ)),
+        ...fromMyInfoRequests(rowsOf(myInfoQ)),
+      ]).map(entry => ({ ...entry, unread: isUnread(entry, watermark) })),
+    [pendingQ, mineQ, infoQ, myInfoQ, watermark],
   );
 
-  const unreadCount = items.filter((i) => i.unread).length;
-  const sourceErrors = [pendingQ.error, mineQ.error, infoQ.error].filter(Boolean);
-  const error = sourceErrors.find((sourceError) => sourceError.status !== 403) ?? null;
+  const unreadCount = items.filter(i => i.unread).length;
+  const sourceErrors = [
+    pendingQ.error,
+    mineQ.error,
+    infoQ.error,
+    myInfoQ.error,
+  ].filter(Boolean);
+  const error =
+    sourceErrors.find(sourceError => sourceError.status !== 403) ?? null;
 
   return {
     items,
     unreadCount,
     // Loading only while something is actually in flight for a source this
     // caller may read — a role with no sources is not "loading", it is empty.
-    isLoading: pendingQ.isLoading || mineQ.isLoading || infoQ.isLoading,
+    isLoading:
+      pendingQ.isLoading ||
+      mineQ.isLoading ||
+      infoQ.isLoading ||
+      myInfoQ.isLoading,
     /**
      * Every source refused. Reported separately from `items` so the UI can say
      * "could not load" instead of "you're all caught up", which would be a lie
@@ -102,18 +130,23 @@ export function useNotifications() {
     // queue is an empty source, not a notification-screen failure.
     error,
     refetch: useCallback(
-      () => Promise.all([pendingQ.refetch(), mineQ.refetch(), infoQ.refetch()]),
-      [pendingQ, mineQ, infoQ],
+      () =>
+        Promise.all([
+          pendingQ.refetch(),
+          mineQ.refetch(),
+          infoQ.refetch(),
+          myInfoQ.refetch(),
+        ]),
+      [pendingQ, mineQ, infoQ, myInfoQ],
     ),
     markAllRead: useCallback(() => {
       const now = markAllRead();
       setWatermark(now);
-      nativeStorage()?.setItem(
-        STORAGE_KEYS.notificationsReadAt,
-        new Date(now).toISOString(),
-      )?.catch(() => {
-        // The in-memory watermark still keeps the current screen consistent.
-      });
+      nativeStorage()
+        ?.setItem(STORAGE_KEYS.notificationsReadAt, new Date(now).toISOString())
+        ?.catch(() => {
+          // The in-memory watermark still keeps the current screen consistent.
+        });
     }, []),
     /**
      * Does this caller have ANY readable source?

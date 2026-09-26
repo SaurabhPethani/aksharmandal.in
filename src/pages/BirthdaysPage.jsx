@@ -64,19 +64,26 @@ const todayLabel = () => {
 const nameOf = row =>
   String(row?.user_name ?? '').trim() || `Member #${row?.user_id ?? ''}`;
 
-/** CSS `linear-gradient(135deg, …)`, painted behind its parent's content. */
-function LinearFill({ id, stops }) {
+function LinearFill({ id, stops, radius = 0 }) {
   return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          {stops.map(([offset, color]) => (
-            <Stop key={offset} offset={offset} stopColor={color} />
-          ))}
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${id})`} />
-    </Svg>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            {stops.map(([offset, color]) => (
+              <Stop key={offset} offset={offset} stopColor={color} />
+            ))}
+          </LinearGradient>
+        </Defs>
+        <Rect
+          width="100%"
+          height="100%"
+          rx={radius}
+          ry={radius}
+          fill={`url(#${id})`}
+        />
+      </Svg>
+    </View>
   );
 }
 
@@ -605,6 +612,7 @@ export default function BirthdaysPage({
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
+  onProfile,
 }) {
   const [tab, setTab] = useState('send');
 
@@ -624,8 +632,9 @@ export default function BirthdaysPage({
         onMenu={onMenu}
         onHelp={onHelp}
         onNotifications={onNotifications}
+        onProfile={onProfile}
         onBack={onBack}
-        breadcrumbs={['Dashboard', 'Birthdays']}
+        // breadcrumbs={['Dashboard', 'Birthdays']}
       />
 
       <ScrollViewWithTop

@@ -1,73 +1,175 @@
-import { createContext, useCallback, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle, Info, X, XCircle } from 'lucide-react';
+import React, {
+  createContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
+import { Text } from '../components/Typography';
+import { COLORS, RADII, SHADOWS, TEXT, WEIGHT, rem, space } from '../constants/theme';
 
 export const ToastContext = createContext(null);
 
-// Solid, high-contrast tones: white text on a filled background, so the outcome
-// reads at a glance without parsing the wording. Warnings are amber rather than
-// red — "you can fix this" should not look like "the server fell over".
 const TONES = {
-  success: { icon: CheckCircle2, cls: 'bg-[#15803D] text-white' },
-  error: { icon: XCircle, cls: 'bg-[#B91C1C] text-white' },
-  warning: { icon: AlertTriangle, cls: 'bg-[#B45309] text-white' },
-  info: { icon: Info, cls: 'bg-primary text-white' },
+  success: { icon: 'check-circle', bg: '#15803D' },
+  error: { icon: 'close-circle', bg: '#B91C1C' },
+  warning: { icon: 'alert', bg: '#B45309' },
+  info: { icon: 'information', bg: COLORS.primary },
 };
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const seq = useRef(0);
+  const timers = useRef(new Map());
 
-  const dismiss = useCallback((id) => {
-    setToasts((list) => list.filter((t) => t.id !== id));
+  const dismiss = useCallback(id => {
+    const timer = timers.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timers.current.delete(id);
+    }
+    setToasts(list => list.filter(t => t.id !== id));
   }, []);
 
-  const push = useCallback((message, { tone = 'info', duration = 4000 } = {}) => {
-    const id = ++seq.current;
-    setToasts((list) => [...list, { id, message, tone }]);
-    if (duration) setTimeout(() => dismiss(id), duration);
-    return id;
-  }, [dismiss]);
+  const push = useCallback(
+    (message, { tone = 'info', duration = 4000 } = {}) => {
+      if (message == null || String(message).trim() === '') return null;
+      const id = ++seq.current;
+      setToasts(list => [...list, { id, message: String(message), tone }]);
+      if (duration) {
+        timers.current.set(
+          id,
+          setTimeout(() => dismiss(id), duration),
+        );
+      }
+      return id;
+    },
+    [dismiss],
+  );
 
-  const value = useMemo(() => ({
-    push,
-    dismiss,
-    success: (m, o) => push(m, { ...o, tone: 'success' }),
-    error: (m, o) => push(m, { ...o, tone: 'error' }),
-    warning: (m, o) => push(m, { ...o, tone: 'warning' }),
-    info: (m, o) => push(m, { ...o, tone: 'info' }),
-  }), [push, dismiss]);
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      pending.forEach(clearTimeout);
+      pending.clear();
+    };
+  }, []);
+
+  const value = useMemo(
+    () => ({
+      push,
+      dismiss,
+      success: (m, o) => push(m, { ...o, tone: 'success' }),
+      error: (m, o) => push(m, { ...o, tone: 'error' }),
+      warning: (m, o) => push(m, { ...o, tone: 'warning' }),
+      info: (m, o) => push(m, { ...o, tone: 'info' }),
+    }),
+    [push, dismiss],
+  );
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {/* Top-right, above modals and drawers. aria-live so an outcome is
-          announced rather than only seen. */}
-      <div
-        aria-live="polite"
-        className="pointer-events-none fixed right-4 top-4 z-[80] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2"
-      >
-        {toasts.map((t) => {
-          const tone = TONES[t.tone] ?? TONES.info;
-          const Icon = tone.icon;
-          return (
-            <div
-              key={t.id}
-              role="status"
-              className={`pointer-events-auto flex items-start gap-3 overflow-hidden rounded-card p-3.5 shadow-lg ${tone.cls}`}
-            >
-              <span className="mt-0.5 shrink-0"><Icon className="h-5 w-5" /></span>
-              <p className="flex-1 text-sm font-medium">{t.message}</p>
-              <button
-                onClick={() => dismiss(t.id)}
-                className="shrink-0 rounded-lg p-1 text-white/75 transition-colors hover:bg-white/20 hover:text-white"
-                aria-label="Dismiss"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          );
-        })}
-      </div>
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </ToastContext.Provider>
   );
 }
+
+function ToastStack({ toasts, onDismiss }) {
+  const insets = useSafeAreaInsets();
+  if (!toasts.length) return null;
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[styles.stack, { top: insets.top + space(4) }]}
+    >
+      {toasts.map(toast => (
+        <ToastRow key={toast.id} toast={toast} onDismiss={onDismiss} />
+      ))}
+    </View>
+  );
+}
+
+function ToastRow({ toast, onDismiss }) {
+  const tone = TONES[toast.tone] ?? TONES.info;
+  const enter = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(enter, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [enter]);
+
+  return (
+    <Animated.View
+      accessibilityLiveRegion="polite"
+      style={[
+        styles.toast,
+        { backgroundColor: tone.bg },
+        {
+          opacity: enter,
+          transform: [
+            {
+              translateY: enter.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-12, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <MaterialCommunityIcons
+        name={tone.icon}
+        size={20}
+        color={COLORS.white}
+        style={styles.toastIcon}
+      />
+      <Text style={styles.toastText}>{toast.message}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+        onPress={() => onDismiss(toast.id)}
+        style={styles.toastClose}
+      >
+        <MaterialCommunityIcons name="close" size={16} color={COLORS.white} />
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  stack: {
+    position: 'absolute',
+    right: space(4),
+    left: space(4),
+    zIndex: 80,
+    alignItems: 'flex-end',
+    gap: space(2),
+  },
+  toast: {
+    maxWidth: rem(24),
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space(3),
+    borderRadius: RADII.card,
+    padding: space(3.5),
+    ...SHADOWS.card,
+  },
+  toastIcon: { marginTop: space(0.5) },
+  toastText: {
+    flex: 1,
+    fontSize: TEXT.sm,
+    fontWeight: WEIGHT.medium,
+    color: COLORS.white,
+  },
+  toastClose: { borderRadius: RADII.lg, padding: space(1) },
+});

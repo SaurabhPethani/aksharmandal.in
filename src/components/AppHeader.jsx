@@ -1,7 +1,11 @@
-import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useContext } from 'react';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from './Typography';
+import { AuthContext } from '../contexts/AuthContext';
+import { useProfileImage } from '../hooks/useProfileExtras';
+import { useNotifications } from '../hooks/useNotifications';
+import { badgeLabel } from '../utils/notifications';
 
 const COLORS = {
   navy: '#003158',
@@ -21,13 +25,41 @@ const COLORS = {
 /**
  * @param {AppHeaderProps} props
  */
+function HeaderAvatar() {
+  const auth = useContext(AuthContext);
+  const userId = auth?.activeUserId ?? null;
+  const { data } = useProfileImage(userId, Boolean(userId));
+  const photo = data?.image_url;
+
+  if (photo) {
+    return (
+      <Image
+        source={{ uri: photo }}
+        style={styles.avatarImage}
+        accessibilityIgnoresInvertColors
+      />
+    );
+  }
+  return (
+    <MaterialCommunityIcons name="account" size={22} color={COLORS.surface} />
+  );
+}
+
 export default function AppHeader({
   onMenu = () => {},
   onHelp,
   onNotifications = () => {},
   onBack,
   breadcrumbs = /** @type {string[]} */ ([]),
+  // No defaults on these two: both are read for truthiness, and a `null`
+  // default would narrow the inferred prop type and reject a TS caller's
+  // handler.
+  onProfile
 }) {
+  const { unreadCount } = useNotifications();
+  const badgeCount = Math.max(0, unreadCount || 0);
+  const showBadge = badgeCount > 0;
+
   return (
     <>
       <View style={styles.topBar}>
@@ -61,25 +93,33 @@ export default function AppHeader({
           <Pressable
             onPress={onNotifications}
             accessibilityRole="button"
-            accessibilityLabel="Notifications"
+            accessibilityLabel={`Notifications${showBadge ? `, ${badgeCount} unread` : ''}`}
             style={styles.topButton}
           >
-            <MaterialCommunityIcons
-              name="bell-outline"
-              size={22}
-              color={COLORS.surface}
-            />
+            <View style={styles.notificationWrap}>
+              <MaterialCommunityIcons
+                name="bell-outline"
+                size={22}
+                color={COLORS.surface}
+              />
+              {showBadge ? (
+                <View style={styles.badge} pointerEvents="none">
+                  <Text style={styles.badgeText}>{badgeLabel(badgeCount)}</Text>
+                </View>
+              ) : null}
+            </View>
           </Pressable>
           <Pressable
+            onPress={onProfile ?? undefined}
+            disabled={!onProfile}
             accessibilityRole="button"
             accessibilityLabel="Profile"
-            style={styles.avatar}
+            style={({ pressed }) => [
+              styles.avatar,
+              pressed && onProfile && styles.avatarPressed,
+            ]}
           >
-            <MaterialCommunityIcons
-              name="account"
-              size={22}
-              color={COLORS.surface}
-            />
+            <HeaderAvatar />
           </Pressable>
         </View>
       </View>
@@ -131,6 +171,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  notificationWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    backgroundColor: '#FF6B15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.navy,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    lineHeight: 12,
+  },
   breadcrumbBar: {
     minHeight: 36,
     paddingHorizontal: 16,
@@ -141,10 +206,14 @@ const styles = StyleSheet.create({
   },
   breadcrumb: { color: '#7894AA', fontSize: 12, fontWeight: '600' },
   breadcrumbCurrent: { color: COLORS.navy, fontWeight: '800' },
+  avatarPressed: { opacity: 0.8 },
+  avatarImage: { width: '100%', height: '100%' },
   avatar: {
     width: 38,
     height: 38,
     borderRadius: 19,
+    // Android does not clip a child to a rounded parent without this.
+    overflow: 'hidden',
     backgroundColor: COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',

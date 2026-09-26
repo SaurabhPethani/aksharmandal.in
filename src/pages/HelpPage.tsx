@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,7 +10,6 @@ import {
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
 import AppHeader from '../components/AppHeader';
-import ScrollViewWithTop from '../components/ScrollToTop';
 import { Text } from '../components/Typography';
 import { searchMatches } from '../utils/options';
 
@@ -806,12 +806,16 @@ export default function HelpPage({
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
+  onProfile,
+  onBack,
 }: {
   onMenu?: () => void;
   onNotifications?: () => void;
   onOpenPrivacy?: () => void;
   onOpenTerms?: () => void;
   onOpenDeleteAccount?: () => void;
+  onProfile?: () => void;
+  onBack?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const sectionRefs = useRef<Record<string, View | null>>({});
@@ -865,11 +869,15 @@ export default function HelpPage({
       <AppHeader
         onMenu={onMenu}
         onNotifications={onNotifications}
-        breadcrumbs={['Dashboard', 'Help']}
+        onProfile={onProfile}
+        onBack={onBack}
       />
 
-      <View style={styles.contentWrap}>
-        <ScrollViewWithTop
+      {/* Edge-to-edge is on (see android/gradle.properties), so the keyboard
+          is drawn OVER the screen rather than resizing it. `padding` measures
+          the real overlap, so it is 0 wherever the window does still resize. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.contentWrap}>
+        <ScrollView
           ref={node => {
             (sectionRefs.current as any).__scrollView = node;
           }}
@@ -1033,6 +1041,7 @@ export default function HelpPage({
               </View>
             ))
           )}
+
           <View style={styles.footerBleed}>
             <SiteFooter
               onPrivacy={onOpenPrivacy}
@@ -1040,8 +1049,8 @@ export default function HelpPage({
               onDeleteAccount={onOpenDeleteAccount}
             />
           </View>
-        </ScrollViewWithTop>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -1063,7 +1072,6 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 14,
   },
-  footerBleed: { marginTop: 'auto', marginHorizontal: -14, paddingTop: 14 },
   headerCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 18,
@@ -1105,6 +1113,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',

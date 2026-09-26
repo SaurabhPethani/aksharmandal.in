@@ -28,7 +28,10 @@ export {
 } from './core';
 export { useNavigation } from './useNavigation';
 
-export { usePradeshList, useMandals, useSabhas, useSabhaById, useMandalById } from './useHierarchy';
+export {
+  usePradeshList, useMandals, useSabhas, useSabhaById, useMandalById,
+  useMyGroupLeaderships,
+} from './useHierarchy';
 
 export {
   useFeatures,

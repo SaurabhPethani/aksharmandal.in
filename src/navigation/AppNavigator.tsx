@@ -8,6 +8,7 @@ import EventsPage from '../pages/EventsPage';
 import YuvaSevaPage from '../pages/YuvaSevaPage';
 import NotificationsPage from '../pages/NotificationsPage';
 import LegalPage from '../pages/LegalPage';
+import ProfilePage from '../pages/ProfilePage';
 import { useAuth } from '../hooks/core';
 import { canReadHelp } from '../constants/roles';
 
@@ -21,7 +22,8 @@ type RouteName =
   | 'notifications'
   | 'legal-privacy'
   | 'legal-terms'
-  | 'legal-delete';
+  | 'legal-delete'
+  | 'profile';
 
 type AppNavigatorProps = {
   initialRoute?: RouteName;
@@ -58,6 +60,10 @@ export default function AppNavigator({
   const navigate = (nextRoute: RouteName) => {
     setHistory(previous => [...previous, nextRoute]);
   };
+
+  // The header avatar, on every screen. Re-entering from the profile itself
+  // would stack a second copy, so it is not offered there.
+  const openProfile = () => navigate('profile');
 
   const goBack = () => {
     setHistory(previous =>
@@ -97,6 +103,7 @@ export default function AppNavigator({
         onOpenEvents={() => navigate('events')}
         onOpenUntouchedUsers={() => navigate('yuva-seva')}
         onOpenNotifications={() => navigate('notifications')}
+        onOpenProfile={openProfile}
         onRoleNameChange={setRoleName}
         onRoleIdChange={setRoleId}
         {...legalLinks}
@@ -108,6 +115,7 @@ export default function AppNavigator({
         onMenu={() => setDrawerOpen(true)}
         onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
+        onProfile={openProfile}
         {...legalLinks}
       />
     ) : displayedRoute === 'not-logged-in' ? (
@@ -117,6 +125,7 @@ export default function AppNavigator({
         onOpenHelp={openHelp}
         onNotifications={() => navigate('notifications')}
         {...legalLinks}
+        onProfile={openProfile}
       />
     ) : displayedRoute === 'events' ? (
       <EventsPage
@@ -125,6 +134,7 @@ export default function AppNavigator({
         onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
         {...legalLinks}
+        onProfile={openProfile}
       />
     ) : displayedRoute === 'yuva-seva' ? (
       <YuvaSevaPage
@@ -133,12 +143,22 @@ export default function AppNavigator({
         onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
         {...legalLinks}
+        onProfile={openProfile}
       />
     ) : displayedRoute === 'notifications' ? (
       <NotificationsPage
         onBack={goBack}
         onMenu={() => setDrawerOpen(true)}
         onHelp={openHelp}
+        {...legalLinks}
+        onProfile={openProfile}
+      />
+    ) : route === 'profile' ? (
+      <ProfilePage
+        onBack={goBack}
+        onMenu={() => setDrawerOpen(true)}
+        onHelp={() => navigate('help')}
+        onNotifications={() => navigate('notifications')}
         {...legalLinks}
       />
     ) : displayedRoute === 'legal-privacy' ? (
@@ -149,9 +169,11 @@ export default function AppNavigator({
       <LegalPage type="delete" onBack={goBack} {...legalLinks} />
     ) : (
       <HelpPage
+        onBack={goBack}
         onMenu={() => setDrawerOpen(true)}
         onNotifications={() => navigate('notifications')}
         {...legalLinks}
+        onProfile={openProfile}
       />
     );
 

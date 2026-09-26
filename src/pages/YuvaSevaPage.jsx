@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -362,18 +362,21 @@ export default function YuvaSevaPage({
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
+  onProfile,
 }) {
   const canAdd = true;
   const [rows, setRows] = useState([]);
-  const [totals, setTotals] = useState({});
   const [scope, setScope] = useState('all');
   const [query, setQuery] = useState('');
   const [area, setArea] = useState(EMPTY_AREA_SELECTION);
   const [areaOptions, setAreaOptions] = useState(null);
   const [pageSize, setPageSize] = useState(25);
   const [loadingMore, setLoadingMore] = useState(false);
-  const sabhaGroupOptions = areaOptions?.sabha_groups || [];
-  const sabhaOptions = areaOptions?.sabhas || [];
+  const sabhaGroupOptions = useMemo(
+    () => areaOptions?.sabha_groups || [],
+    [areaOptions],
+  );
+  const sabhaOptions = useMemo(() => areaOptions?.sabhas || [], [areaOptions]);
   const availableSabhaOptions = useMemo(() => {
     const selectedGroups = new Set((area.sabhaGroupIds || []).map(String));
     if (!selectedGroups.size) return sabhaOptions;
@@ -395,7 +398,10 @@ export default function YuvaSevaPage({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const sabhaIds = computeSabhaIds(area, areaOptions);
+  const sabhaIds = useMemo(
+    () => computeSabhaIds(area, areaOptions),
+    [area, areaOptions],
+  );
   const sabhaNameMap = useMemo(() => {
     const map = new Map();
     (areaOptions?.sabhas || []).forEach(sabha => {
@@ -426,7 +432,7 @@ export default function YuvaSevaPage({
       return candidates.some(value => value != null && allowed.has(String(value))) ||
         (row?.sabha_name != null && allowedNames.has(String(row.sabha_name)));
     });
-  }, [rows, sabhaIds.join(','), sabhaNameMap]);
+  }, [rows, sabhaIds, sabhaNameMap]);
 
   const hasOthers = filteredRows.some(row => !row.is_mine);
   const scopedRows = deriveScopeRows(filteredRows, scope);
@@ -439,18 +445,16 @@ export default function YuvaSevaPage({
   const pagedRows = visibleRows.slice(0, pageSize);
   const displayStats = summary(visibleRows);
   const visibleStats = summary(visibleRows);
-  const matchingCount = visibleRows.length;
   const onFieldCount = new Set(
     visibleRows
       .filter(row => (Number(row.yesterday_count) || 0) > 0)
       .map(row => row.user_id ?? row.user_name),
   ).size;
 
-  const load = async (refresh = false) => {
+  const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     try {
-
       const result = await dashboardService.yuvaSevaReport(
         sabhaIds.length ? { sabha_ids: sabhaIds } : undefined,
       );
@@ -460,10 +464,9 @@ export default function YuvaSevaPage({
           ? result
           : [];
       setRows(nextRows);
-      setTotals(result || {});
       setError('');
-      if (result?.filters?.area && !areaOptions) {
-        setAreaOptions(result.filters.area);
+      if (result?.filters?.area) {
+        setAreaOptions(current => current || result.filters.area);
       }
     } catch (caught) {
       setError(caught?.message || 'Could not load the Yuva Seva report.');
@@ -471,11 +474,11 @@ export default function YuvaSevaPage({
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [sabhaIds]);
 
   useEffect(() => {
     setPageSize(25);
-  }, [scope, query, sabhaIds.join(',')]);
+  }, [scope, query, sabhaIds]);
 
   useEffect(() => {
     if (!areaOptions) return;
@@ -492,7 +495,7 @@ export default function YuvaSevaPage({
 
   useEffect(() => {
     load();
-  }, [sabhaIds.join(',')]);
+  }, [load]);
 
   const viewHistory = async row => {
     setOpenHistory(row);
@@ -546,6 +549,7 @@ export default function YuvaSevaPage({
         onMenu={onMenu}
         onHelp={onHelp}
         onNotifications={onNotifications}
+        onProfile={onProfile}
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Yuva Seva']}
       />

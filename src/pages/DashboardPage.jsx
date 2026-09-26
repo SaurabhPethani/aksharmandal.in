@@ -251,7 +251,7 @@ const CountWithDelta = ({ now, last }) => (
  * web.
  */
 const PairValue = ({ present, absent, presentDelta }) => (
-  <Text numberOfLines={1}>
+  <Text numberOfLines={2}>
     <Text style={styles.greenText}>{numberText(present)}</Text>
     <DeltaBadge delta={presentDelta} />
     <Text style={styles.metricValue}> | </Text>
@@ -336,7 +336,7 @@ export function Drawer({
         <View style={styles.drawerHeader}>
           <View style={styles.drawerLogoFrame}>
             <Image
-              source={require('../assets/logo-square.png')}
+              source={require('../assets/Akshar-Connect-White-logo.png')}
               style={styles.drawerLogo}
               resizeMode="contain"
               fadeDuration={0}
@@ -1754,6 +1754,7 @@ export default function DashboardPage({
   onOpenUntouchedUsers,
   onOpenEvents,
   onOpenNotifications,
+  onOpenProfile,
   onRoleNameChange,
   onRoleIdChange,
   onOpenPrivacy,
@@ -1877,7 +1878,7 @@ export default function DashboardPage({
         onMenu={onOpenMenu}
         onHelp={canReadHelp(roleId) ? onOpenHelp : null}
         onNotifications={onOpenNotifications}
-        breadcrumbs={['Dashboard']}
+        onProfile={onOpenProfile}
       />
 
       <View style={styles.flex1}>
@@ -2120,7 +2121,7 @@ const styles = StyleSheet.create({
   },
   drawerLogoutText: { color: '#FFD0B0', fontSize: 14, fontWeight: '800' },
   scroll: { flexGrow: 1, padding: 16, paddingTop: 16, paddingBottom: 0 },
-  footerBleed: { marginTop: 'auto', marginHorizontal: -16, paddingTop: 14 },
+ footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
   header: { marginBottom: 16 },
   title: { color: COLORS.navy, fontSize: 24, fontWeight: '800' },
   qrBar: {
@@ -2327,6 +2328,8 @@ const styles = StyleSheet.create({
     color: COLORS.navy,
     fontSize: 20,
     fontWeight: '800',
+    flexShrink: 1,
+    includeFontPadding: false,
   },
   metricRatioSub: {
     color: COLORS.faint,
@@ -2605,13 +2608,6 @@ const styles = StyleSheet.create({
   chartRows: { gap: 4 },
   weekRow: { flexDirection: 'row', alignItems: 'center', height: 28 },
   weekLabel: { width: 48, color: COLORS.muted, fontSize: 11 },
-  weekTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E8EFF4',
-    overflow: 'hidden',
-  },
   weekFill: { height: '100%', borderRadius: 4 },
   weekFillAttended: { width: '100%', backgroundColor: COLORS.green },
   weekFillMissed: { width: '12%', backgroundColor: COLORS.softRed },

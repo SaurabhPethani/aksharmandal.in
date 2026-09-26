@@ -1,6 +1,13 @@
 import { STORAGE_KEYS } from '../constants/storage';
 
-const item = ({ id, kind, title, detail, at, href }) => ({ id, kind, title, detail, at, href });
+const item = ({ id, kind, title, detail, at, href }) => ({
+  id,
+  kind,
+  title,
+  detail,
+  at,
+  href,
+});
 
 export function timeOf(value) {
   if (!value) return null;
@@ -8,40 +15,59 @@ export function timeOf(value) {
   return Number.isNaN(ms) ? null : ms;
 }
 
+function normalizeStatus(status) {
+  return String(status ?? '')
+    .trim()
+    .toLowerCase();
+}
+
 function transferOutcome(status) {
-  const s = String(status ?? '').trim().toLowerCase();
-  if (s.startsWith('accept')) return 'was accepted';
-  if (s.startsWith('reject')) return 'was rejected';
-  if (s.startsWith('cancel')) return 'was cancelled';
+  const s = normalizeStatus(status);
+  if (['accept', 'approve', 'approved'].some(prefix => s.startsWith(prefix)))
+    return 'was accepted';
+  if (
+    ['reject', 'decline', 'denied', 'deny'].some(prefix => s.startsWith(prefix))
+  )
+    return 'was rejected';
+  if (['cancel', 'withdraw', 'void'].some(prefix => s.startsWith(prefix)))
+    return 'was cancelled';
   return s ? `is ${s}` : 'was updated';
 }
 
-const isPending = (status) => String(status ?? '').trim().toLowerCase().startsWith('pend');
+const isPending = status => {
+  const s = normalizeStatus(status);
+  return ['pend', 'await', 'wait', 'review', 'under_review', 'in_review'].some(
+    prefix => s.startsWith(prefix),
+  );
+};
 
 function route(row) {
-  const from = row?.from_sabha_name || row?.from_mandal_name || row?.from_pradesh_name;
+  const from =
+    row?.from_sabha_name || row?.from_mandal_name || row?.from_pradesh_name;
   const to = row?.to_sabha_name || row?.to_mandal_name || row?.to_pradesh_name;
   if (from && to) return `${from} → ${to}`;
   return to ? `to ${to}` : from ? `from ${from}` : null;
 }
 
 export function fromPendingTransfers(rows = []) {
-  return (Array.isArray(rows) ? rows : []).map((row) =>
+  return (Array.isArray(rows) ? rows : []).map(row =>
     item({
       id: `transfer-pending-${row.id}`,
       kind: 'transfer',
       title: `Transfer request for ${row.user_name || 'a member'}`,
-      detail: [route(row), 'awaiting your decision'].filter(Boolean).join(' · '),
+      detail: [route(row), 'awaiting your decision']
+        .filter(Boolean)
+        .join(' · '),
       at: timeOf(row.created_at),
       href: '/transfers',
-    })
+    }),
   );
 }
 
 export function fromMyTransferRequests(rows = []) {
   return (Array.isArray(rows) ? rows : [])
-    .filter((row) => !isPending(row.status))
-    .map((row) =>
+    .filter(row => !isPending(row.status))
+    .map(row =>
       item({
         id: `transfer-mine-${row.id}`,
         kind: 'transfer-mine',
@@ -49,13 +75,15 @@ export function fromMyTransferRequests(rows = []) {
         detail: [route(row), row.reason].filter(Boolean).join(' · '),
         at: timeOf(row.updated_at) ?? timeOf(row.created_at),
         href: '/transfers',
-      })
+      }),
     );
 }
 
 export function fromInfoRequests(rows = []) {
-  return (Array.isArray(rows) ? rows : []).map((row) => {
-    const count = Array.isArray(row.fields_changed) ? row.fields_changed.length : 0;
+  return (Array.isArray(rows) ? rows : []).map(row => {
+    const count = Array.isArray(row.fields_changed)
+      ? row.fields_changed.length
+      : 0;
     return item({
       id: `info-${row.id}`,
       kind: 'info',
@@ -63,7 +91,9 @@ export function fromInfoRequests(rows = []) {
       detail: [
         count ? `${count} field${count === 1 ? '' : 's'}` : null,
         'awaiting your approval',
-      ].filter(Boolean).join(' · '),
+      ]
+        .filter(Boolean)
+        .join(' · '),
       at: timeOf(row.created_at),
       href: '/transfers',
     });
@@ -78,12 +108,41 @@ export function sortByNewest(items = []) {
     return b.at - a.at;
   });
 }
-
+export function fromMyInfoRequests(rows = []) {
+  return (Array.isArray(rows) ? rows : []).map(row => {
+    const s = String(row.status ?? '')
+      .trim()
+      .toLowerCase();
+    const outcome = s.startsWith('pend')
+      ? 'is awaiting approval'
+      : s.startsWith('appro')
+        ? 'was approved'
+        : s.startsWith('reject')
+          ? 'was rejected'
+          : s.startsWith('cancel')
+            ? 'was cancelled'
+            : `is ${s || 'updated'}`;
+    return item({
+      id: `info-mine-${row.id}`,
+      kind: 'info-mine',
+      title: `Your profile change ${outcome}`,
+      // The reviewer's name and the reason (for a rejection) — the transparency
+      // the requester was missing. Both are omitted when not set.
+      detail:
+        [row.approved_by_name, row.remarks].filter(Boolean).join(' · ') || null,
+      at: timeOf(row.updated_at) ?? timeOf(row.created_at),
+      href: '/profile',
+    });
+  });
+}
 export function readWatermark() {
   try {
-    const ls = typeof global !== 'undefined' && global.localStorage ? global.localStorage : null;
+    const ls =
+      typeof global !== 'undefined' && global.localStorage
+        ? global.localStorage
+        : null;
     const raw = ls ? ls.getItem(STORAGE_KEYS.notificationsReadAt) : null;
-    return raw ? timeOf(raw) ?? 0 : 0;
+    return raw ? (timeOf(raw) ?? 0) : 0;
   } catch {
     return 0;
   }
@@ -92,16 +151,21 @@ export function readWatermark() {
 export function markAllRead(now = Date.now()) {
   try {
     if (typeof global !== 'undefined' && global.localStorage) {
-      global.localStorage.setItem(STORAGE_KEYS.notificationsReadAt, new Date(now).toISOString());
+      global.localStorage.setItem(
+        STORAGE_KEYS.notificationsReadAt,
+        new Date(now).toISOString(),
+      );
     }
-  } catch { /* private mode */ }
+  } catch {
+    /* private mode */
+  }
   return now;
 }
 
 export const isUnread = (entry, watermark) =>
   entry.at == null ? watermark === 0 : entry.at > watermark;
 
-export const badgeLabel = (count) => (count > 9 ? '9+' : String(count));
+export const badgeLabel = count => (count > 9 ? '9+' : String(count));
 
 export function relativeTime(at, now = Date.now()) {
   if (at == null) return null;
@@ -116,11 +180,19 @@ export function relativeTime(at, now = Date.now()) {
 
 export function dayLabel(at, now = Date.now()) {
   if (at == null) return 'Earlier';
-  const startOf = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const startOf = ms => {
+    const d = new Date(ms);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
   const days = Math.round((startOf(now) - startOf(at)) / 86_400_000);
   if (days <= 0) return 'Today';
   if (days === 1) return 'Yesterday';
-  return new Date(at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(at).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 export function groupByDay(items = [], now = Date.now()) {

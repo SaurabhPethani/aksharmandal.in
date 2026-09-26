@@ -37,6 +37,7 @@ export default function NotLoggedInPage({
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
+  onProfile,
 }) {
   const query = useNotLoggedIn(true);
   const members = useMemo(
@@ -85,12 +86,13 @@ export default function NotLoggedInPage({
         onMenu={onOpenMenu}
         onHelp={onOpenHelp}
         onNotifications={onNotifications}
+        onProfile={onProfile}
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Not Login']}
       />
       <ScrollViewWithTop style={styles.flex1} contentContainerStyle={styles.scroll}>
         <View style={styles.pageHeader}>
-          <Pressable
+          {/* <Pressable
             onPress={onBack}
             style={styles.backButton}
             accessibilityRole="button"
@@ -102,7 +104,7 @@ export default function NotLoggedInPage({
               color={COLORS.navy}
             />
             <Text style={styles.backText}>Dashboard</Text>
-          </Pressable>
+          </Pressable> */}
           <Text style={styles.title}>Not Login</Text>
           <Text style={styles.subtitle}>
             Members in your hierarchy who have not signed in to the Akshar

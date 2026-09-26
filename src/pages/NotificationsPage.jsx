@@ -32,6 +32,7 @@ export default function NotificationsPage({
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
+  onProfile,
 }) {
   const {
     items,
@@ -60,6 +61,7 @@ export default function NotificationsPage({
         onBack={onBack}
         onMenu={onMenu}
         onHelp={onHelp}
+        onProfile={onProfile}
         breadcrumbs={['Dashboard', 'Notifications']}
       />
       <ScrollViewWithTop

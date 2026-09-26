@@ -223,10 +223,13 @@ export function useSendBirthdayWish() {
  */
 export function useProfile(userId) {
   const permissions = useContext(PermissionContext);
+  const { activeUserId } = useAuth();
+  // The permission context carries the signed-in id on the web; the app has the
+  // session instead. Either one answering "this is you" routes to /users/me,
+  // which a member may always read about themselves.
+  const selfId = permissions?.userId ?? activeUserId;
   const isSelf =
-    userId != null
-    && permissions?.userId != null
-    && String(permissions.userId) === String(userId);
+    userId != null && selfId != null && String(selfId) === String(userId);
 
   return useQuery({
     queryKey: ['user', String(userId)],
