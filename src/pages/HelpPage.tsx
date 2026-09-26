@@ -9,6 +9,7 @@ import {
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
 import AppHeader from '../components/AppHeader';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import { Text } from '../components/Typography';
 import { searchMatches } from '../utils/options';
 
@@ -97,29 +98,39 @@ type MatrixRow = {
 
 function RoleMatrix({ rows }: { rows: MatrixRow[] }) {
   return (
-    <View style={styles.matrixWrap}>
-      <View style={styles.matrixHeaderRow}>
-        <Text style={styles.matrixHeaderActivity}>Activity</Text>
-        {ROLE_COLS.map(column => (
-          <View key={column.key} style={styles.matrixHeaderCell}>
-            <Text style={styles.matrixHeaderShort}>{column.short}</Text>
-            <Text style={styles.matrixHeaderLabel}>
-              {column.label.split(' ').slice(-1)[0]}
-            </Text>
-          </View>
-        ))}
-      </View>
-      {rows.map((row, index) => (
-        <View key={`${row.label}-${index}`} style={styles.matrixRow}>
-          <Text style={styles.matrixLabel}>{row.label}</Text>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator
+      nestedScrollEnabled
+      style={styles.matrixScroll}
+    >
+      <View style={styles.matrixWrap}>
+        <View style={styles.matrixHeaderRow}>
+          <Text style={styles.matrixHeaderActivity}>Activity</Text>
           {ROLE_COLS.map(column => (
-            <View key={`${row.label}-${column.key}`} style={styles.matrixCell}>
-              <Cell value={row[column.key as keyof MatrixRow]} />
+            <View key={column.key} style={styles.matrixHeaderCell}>
+              <Text style={styles.matrixHeaderShort}>{column.short}</Text>
+              <Text style={styles.matrixHeaderLabel}>
+                {column.label.split(' ').slice(-1)[0]}
+              </Text>
             </View>
           ))}
         </View>
-      ))}
-    </View>
+        {rows.map((row, index) => (
+          <View key={`${row.label}-${index}`} style={styles.matrixRow}>
+            <Text style={styles.matrixLabel}>{row.label}</Text>
+            {ROLE_COLS.map(column => (
+              <View
+                key={`${row.label}-${column.key}`}
+                style={styles.matrixCell}
+              >
+                <Cell value={row[column.key as keyof MatrixRow]} />
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -851,10 +862,14 @@ export default function HelpPage({
 
   return (
     <View style={styles.screen}>
-      <AppHeader onMenu={onMenu} onNotifications={onNotifications} />
+      <AppHeader
+        onMenu={onMenu}
+        onNotifications={onNotifications}
+        breadcrumbs={['Dashboard', 'Help']}
+      />
 
       <View style={styles.contentWrap}>
-        <ScrollView
+        <ScrollViewWithTop
           ref={node => {
             (sectionRefs.current as any).__scrollView = node;
           }}
@@ -1025,7 +1040,7 @@ export default function HelpPage({
               onDeleteAccount={onOpenDeleteAccount}
             />
           </View>
-        </ScrollView>
+        </ScrollViewWithTop>
       </View>
     </View>
   );
@@ -1207,10 +1222,13 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   matrixWrap: {
+    width: 540,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  matrixScroll: {
     marginTop: 10,
   },
   matrixHeaderRow: {
@@ -1220,14 +1238,15 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   matrixHeaderActivity: {
-    flex: 1.3,
+    width: 150,
     padding: 10,
     color: COLORS.text,
     fontSize: 12,
     fontWeight: '700',
+    lineHeight: 17,
   },
   matrixHeaderCell: {
-    flex: 0.8,
+    width: 65,
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderLeftWidth: 1,
@@ -1252,14 +1271,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   matrixLabel: {
-    flex: 1.3,
+    width: 150,
     padding: 12,
     color: COLORS.text,
     fontSize: 13,
     fontWeight: '600',
+    lineHeight: 18,
   },
   matrixCell: {
-    flex: 0.8,
+    width: 65,
     paddingVertical: 10,
     paddingHorizontal: 6,
     borderLeftWidth: 1,

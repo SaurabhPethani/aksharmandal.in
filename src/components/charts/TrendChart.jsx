@@ -51,6 +51,21 @@ export default function TrendChart({
   /** The card's real width, so a touch can be mapped back into viewBox units. */
   const [width, setWidth] = useState(0);
   const chartWidth = Math.max(width, points.length * MIN_POINT_WIDTH, 360);
+  const tableColumns = useMemo(() => {
+    const valueColumns = [
+      ...(extraColumns ?? []).map(column => column.header),
+      ...series.map(item => item.label),
+    ];
+    const widthFor = label =>
+      Math.max(92, Math.min(180, String(label).length * 8 + 28));
+    return {
+      week: Math.max(
+        112,
+        ...points.map(point => widthFor(point.rangeLabel ?? point.label)),
+      ),
+      values: valueColumns.map(label => widthFor(label)),
+    };
+  }, [extraColumns, points, series]);
 
   const geometry = useMemo(() => {
     if (points.length === 0) return null;
@@ -122,66 +137,99 @@ export default function TrendChart({
    * column is too narrow to be anything but noise beside the figure.
    */
   if (showTable) {
+    const tableWidth =
+      tableColumns.week +
+      tableColumns.values.reduce((sum, value) => sum + value, 0) +
+      space(3) * 2;
+
     return (
       <View style={[styles.table, { maxHeight: height }]}>
-        {/* THE COLUMNS FIT THE CARD — no sideways scrolling. The rows share the
-            width they are given, so nothing is cut off the edge; only the rows
-            scroll, under a heading that stays put. */}
-        <View style={styles.tableHead}>
-          <Text style={[styles.th, styles.weekCell]}>Week</Text>
-          {extraColumns?.map(c => (
-            <Text key={c.header} style={[styles.th, styles.valueCell]}>
-              {c.header}
-            </Text>
-          ))}
-          {series.map(s => (
-            <Text key={s.key} style={[styles.th, styles.valueCell]}>
-              {s.label}
-            </Text>
-          ))}
-        </View>
-
-        <ScrollView
-          nestedScrollEnabled
-          showsVerticalScrollIndicator={false}
-          style={styles.tableBody}
-        >
-          {points.map(p => (
-            <View key={p.sortKey ?? p.label} style={styles.tr}>
-              <Text
-                style={[styles.weekText, styles.weekCell]}
-                numberOfLines={1}
-              >
-                {p.rangeLabel ?? p.label}
+        <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
+          <View style={{ width: tableWidth }}>
+            <View style={styles.tableHead}>
+              <Text style={[styles.th, { width: tableColumns.week }]}>
+                Week
               </Text>
-              {extraColumns?.map(c => (
+              {extraColumns?.map((c, index) => (
                 <Text
                   key={c.header}
-                  style={[styles.cell, styles.valueCell]}
-                  numberOfLines={1}
+                  style={[styles.th, { width: tableColumns.values[index] }]}
                 >
-                  {c.cell(p)}
+                  {c.header}
                 </Text>
               ))}
-              {series.map(s => {
-                const custom = formatSeriesValue?.(p, s);
-                const value = p[s.key];
-                return (
-                  <Text
-                    key={s.key}
-                    style={[styles.cell, styles.valueCell]}
-                    numberOfLines={1}
-                  >
-                    {custom != null
-                      ? custom
-                      : value == null
-                        ? '—'
-                        : `${Number(value).toFixed(1)}%`}
-                  </Text>
-                );
-              })}
+              {series.map((s, index) => (
+                <Text
+                  key={s.key}
+                  style={[
+                    styles.th,
+                    {
+                      width:
+                        tableColumns.values[
+                          (extraColumns?.length ?? 0) + index
+                        ],
+                    },
+                  ]}
+                >
+                  {s.label}
+                </Text>
+              ))}
             </View>
-          ))}
+
+            <ScrollView
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+              style={styles.tableBody}
+            >
+              {points.map(p => (
+                <View key={p.sortKey ?? p.label} style={styles.tr}>
+                  <Text
+                    style={[styles.weekText, { width: tableColumns.week }]}
+                    numberOfLines={2}
+                  >
+                    {p.rangeLabel ?? p.label}
+                  </Text>
+                  {extraColumns?.map((c, index) => (
+                    <Text
+                      key={c.header}
+                      style={[
+                        styles.cell,
+                        { width: tableColumns.values[index] },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {c.cell(p)}
+                    </Text>
+                  ))}
+                  {series.map((s, index) => {
+                    const custom = formatSeriesValue?.(p, s);
+                    const value = p[s.key];
+                    return (
+                      <Text
+                        key={s.key}
+                        style={[
+                          styles.cell,
+                          {
+                            width:
+                              tableColumns.values[
+                                (extraColumns?.length ?? 0) + index
+                              ],
+                          },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {custom != null
+                          ? custom
+                          : value == null
+                            ? '—'
+                            : `${Number(value).toFixed(1)}%`}
+                      </Text>
+                    );
+                  })}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
         </ScrollView>
       </View>
     );
@@ -561,8 +609,8 @@ const styles = StyleSheet.create({
     letterSpacing: TEXT.xs * 0.025,
     textTransform: 'uppercase',
     color: COLORS.textMuted,
+    textAlign: 'center',
   },
-  // Shrinks to the room under the heading, so the card keeps its cap.
   tableBody: { flexGrow: 0, flexShrink: 1 },
   tr: {
     flexDirection: 'row',
@@ -572,15 +620,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: space(3),
     paddingVertical: space(2),
   },
-  // Shares of the card's width rather than fixed pixels: the week takes the
-  // larger share because a full span is the longest thing in a row.
-  weekCell: { flex: 1.3, textAlign: 'left' },
-  valueCell: { flex: 1, textAlign: 'right' },
   weekText: { fontSize: TEXT.sm, color: COLORS.textMuted },
   cell: {
     ...TNUM,
     fontSize: TEXT.sm,
     fontWeight: WEIGHT.semibold,
     color: COLORS.primary,
+    textAlign: 'right',
   },
 });

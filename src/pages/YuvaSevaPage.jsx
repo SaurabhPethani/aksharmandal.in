@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -13,7 +12,10 @@ import AppHeader from '../components/AppHeader';
 import SiteFooter from '../components/SiteFooter';
 import { Modal } from '../components/Overlays';
 import { Text } from '../components/Typography';
+import MultiSelectFilter from '../components/form/MultiSelectFilter';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import { dashboardService } from '../services/dashboardService';
+import { searchMatches } from '../utils/options';
 
 const C = {
   navy: '#003158',
@@ -74,21 +76,164 @@ function summary(rows) {
       const last30 = Number(row.last_1_month) || 0;
       return {
         members: total.members + 1,
+        count15: total.count15 + last15,
         distinct15: total.distinct15 + (last15 > 0 ? 1 : 0),
+        count30: total.count30 + last30,
         distinct30: total.distinct30 + (last30 > 0 ? 1 : 0),
         yesterday: total.yesterday + (Number(row.yesterday_count) || 0),
       };
     },
-    { members: 0, distinct15: 0, distinct30: 0, yesterday: 0 },
+    { members: 0, count15: 0, distinct15: 0, count30: 0, distinct30: 0, yesterday: 0 },
   );
+}
+
+const EMPTY_AREA_SELECTION = {
+  pradeshGroupIds: [],
+  pradeshIds: [],
+  mandalGroupIds: [],
+  mandalIds: [],
+  sabhaGroupIds: [],
+  sabhaIds: [],
+};
+
+const AREA_LEVELS = [
+  { key: 'pradeshGroupIds', opt: 'pradesh_groups', show: 'show_pradesh_group' },
+  { key: 'pradeshIds', opt: 'pradeshes', show: 'show_pradesh' },
+  { key: 'mandalGroupIds', opt: 'mandal_groups', show: 'show_mandal_group' },
+  { key: 'mandalIds', opt: 'mandals', show: 'show_mandal' },
+  { key: 'sabhaGroupIds', opt: 'sabha_groups', show: 'show_sabha_group' },
+  { key: 'sabhaIds', opt: 'sabhas', show: 'show_sabha' },
+];
+
+function asStrSet(values) {
+  return new Set((values || []).map(String));
+}
+
+function optionsAt(levelKey, filters) {
+  return filters?.[AREA_LEVELS.find(level => level.key === levelKey).opt] || [];
+}
+
+function optionCoverage(levelKey, option, filters) {
+  if (
+    levelKey === 'pradeshGroupIds' ||
+    levelKey === 'mandalGroupIds' ||
+    levelKey === 'sabhaGroupIds'
+  ) {
+    return new Set((option?.sabha_ids || []).map(String));
+  }
+  if (levelKey === 'pradeshIds') {
+    return new Set(
+      (filters?.sabhas || [])
+        .filter(item => String(item.pradesh_id) === String(option.id))
+        .map(item => String(item.id)),
+    );
+  }
+  if (levelKey === 'mandalIds') {
+    return new Set(
+      (filters?.sabhas || [])
+        .filter(item => String(item.mandal_id) === String(option.id))
+        .map(item => String(item.id)),
+    );
+  }
+  return new Set([String(option.id)]);
+}
+
+function levelCoverage(levelKey, ids, filters) {
+  if (!ids || !ids.length) return null;
+  const selected = asStrSet(ids);
+  const covered = new Set();
+
+  optionsAt(levelKey, filters)
+    .filter(option => selected.has(String(option.id)))
+    .forEach(option => {
+      optionCoverage(levelKey, option, filters).forEach(id => covered.add(String(id)));
+    });
+
+  return covered;
+}
+
+function intersectSets(a, b) {
+  const result = new Set();
+  a.forEach(value => {
+    if (b.has(value)) result.add(value);
+  });
+  return result;
+}
+
+function ancestorAllowed(idx, selection, filters) {
+  let allowed = null;
+  for (let i = 0; i < idx; i += 1) {
+    const covered = levelCoverage(AREA_LEVELS[i].key, selection[AREA_LEVELS[i].key], filters);
+    if (covered) {
+      allowed = allowed === null ? covered : intersectSets(allowed, covered);
+    }
+  }
+  return allowed;
+}
+
+function availableAt(idx, selection, filters) {
+  const allowed = ancestorAllowed(idx, selection, filters);
+  const options = optionsAt(AREA_LEVELS[idx].key, filters);
+  if (allowed === null) return options;
+  return options.filter(option => {
+    const coverage = optionCoverage(AREA_LEVELS[idx].key, option, filters);
+    for (const value of coverage) {
+      if (allowed.has(value)) return true;
+    }
+    return false;
+  });
+}
+
+function pruneSelection(selection, filters) {
+  const value = { ...EMPTY_AREA_SELECTION, ...(selection || {}) };
+  const next = { ...value };
+
+  for (let i = 0; i < AREA_LEVELS.length; i += 1) {
+    const levelKey = AREA_LEVELS[i].key;
+    const available = new Set(availableAt(i, next, filters).map(option => String(option.id)));
+    next[levelKey] = (next[levelKey] || []).filter(id => available.has(String(id)));
+  }
+
+  return next;
+}
+
+function computeSabhaIds(selection, filters) {
+  if (!filters) return [];
+  const value = { ...EMPTY_AREA_SELECTION, ...(selection || {}) };
+  let allowed = null;
+  let anySelected = false;
+
+  for (const level of AREA_LEVELS) {
+    const covered = levelCoverage(level.key, value[level.key], filters);
+    if (covered) {
+      anySelected = true;
+      allowed = allowed === null ? covered : intersectSets(allowed, covered);
+    }
+  }
+
+  if (!anySelected || !allowed) return [];
+  return [...allowed];
+}
+
+function deriveScopeRows(rows, scope) {
+  if (scope === 'mine') {
+    return rows.filter(row => row.is_mine === true);
+  }
+  return rows;
 }
 
 function Kpi({ label, value, unit }) {
   return (
     <View style={styles.kpi}>
-      <Text style={styles.kpiLabel}>{label}</Text>
-      <Text style={styles.kpiValue}>{value}</Text>
-      <Text style={styles.kpiUnit}>{unit}</Text>
+      {/* Only the header strip is navy, like the web's `bg-primary` band —
+          the body stays white so the figure itself reads clearly. */}
+      <View style={styles.kpiHeader}>
+        <Text style={styles.kpiLabel}>{label}</Text>
+      </View>
+      <View style={styles.kpiBody}>
+        <Text style={styles.kpiValue}>{value}</Text>
+        <Text style={styles.kpiUnit}>{unit}</Text>
+      </View>
     </View>
   );
 }
@@ -223,6 +368,23 @@ export default function YuvaSevaPage({
   const [totals, setTotals] = useState({});
   const [scope, setScope] = useState('all');
   const [query, setQuery] = useState('');
+  const [area, setArea] = useState(EMPTY_AREA_SELECTION);
+  const [areaOptions, setAreaOptions] = useState(null);
+  const [pageSize, setPageSize] = useState(25);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sabhaGroupOptions = areaOptions?.sabha_groups || [];
+  const sabhaOptions = areaOptions?.sabhas || [];
+  const availableSabhaOptions = useMemo(() => {
+    const selectedGroups = new Set((area.sabhaGroupIds || []).map(String));
+    if (!selectedGroups.size) return sabhaOptions;
+    const allowedSabhaIds = new Set();
+    sabhaGroupOptions
+      .filter(group => selectedGroups.has(String(group.id)))
+      .forEach(group => {
+        (group.sabha_ids || []).forEach(id => allowedSabhaIds.add(String(id)));
+      });
+    return sabhaOptions.filter(sabha => allowedSabhaIds.has(String(sabha.id)));
+  }, [area.sabhaGroupIds, sabhaGroupOptions, sabhaOptions]);
   const [openHistory, setOpenHistory] = useState(null);
   const [history, setHistory] = useState(null);
   const [adding, setAdding] = useState(null);
@@ -233,11 +395,65 @@ export default function YuvaSevaPage({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
+  const sabhaIds = computeSabhaIds(area, areaOptions);
+  const sabhaNameMap = useMemo(() => {
+    const map = new Map();
+    (areaOptions?.sabhas || []).forEach(sabha => {
+      map.set(String(sabha.id), sabha.name || sabha.sabha_name || '');
+    });
+    return map;
+  }, [areaOptions?.sabhas]);
+
+  const filteredRows = useMemo(() => {
+    if (!sabhaIds.length) return rows;
+    const allowed = new Set(sabhaIds.map(String));
+    const allowedNames = new Set(
+      [...allowed]
+        .map(id => sabhaNameMap.get(String(id)))
+        .filter(Boolean)
+        .map(String),
+    );
+
+    return rows.filter(row => {
+      const candidates = [
+        row?.sabha_id,
+        row?.sabhaId,
+        row?.sabha?.id,
+        row?.sabha?.sabha_id,
+        row?.sabha?.sabhaId,
+      ];
+
+      return candidates.some(value => value != null && allowed.has(String(value))) ||
+        (row?.sabha_name != null && allowedNames.has(String(row.sabha_name)));
+    });
+  }, [rows, sabhaIds.join(','), sabhaNameMap]);
+
+  const hasOthers = filteredRows.some(row => !row.is_mine);
+  const scopedRows = deriveScopeRows(filteredRows, scope);
+  const showSabha = hasOthers && new Set(filteredRows.map(row => row.sabha_name).filter(Boolean)).size > 1;
+  const showSearch = scopedRows.length > 25;
+  const searchText = showSearch ? query.trim() : '';
+  const visibleRows = searchText
+    ? scopedRows.filter(row => searchMatches(row.user_name, searchText))
+    : scopedRows;
+  const pagedRows = visibleRows.slice(0, pageSize);
+  const displayStats = summary(visibleRows);
+  const visibleStats = summary(visibleRows);
+  const matchingCount = visibleRows.length;
+  const onFieldCount = new Set(
+    visibleRows
+      .filter(row => (Number(row.yesterday_count) || 0) > 0)
+      .map(row => row.user_id ?? row.user_name),
+  ).size;
+
   const load = async (refresh = false) => {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     try {
-      const result = await dashboardService.yuvaSevaReport();
+
+      const result = await dashboardService.yuvaSevaReport(
+        sabhaIds.length ? { sabha_ids: sabhaIds } : undefined,
+      );
       const nextRows = Array.isArray(result?.data)
         ? result.data
         : Array.isArray(result)
@@ -246,6 +462,9 @@ export default function YuvaSevaPage({
       setRows(nextRows);
       setTotals(result || {});
       setError('');
+      if (result?.filters?.area && !areaOptions) {
+        setAreaOptions(result.filters.area);
+      }
     } catch (caught) {
       setError(caught?.message || 'Could not load the Yuva Seva report.');
     } finally {
@@ -255,28 +474,25 @@ export default function YuvaSevaPage({
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    setPageSize(25);
+  }, [scope, query, sabhaIds.join(',')]);
 
-  const hasOthers = rows.some(row => !row.is_mine);
-  const visibleRows = useMemo(() => {
-    const scoped =
-      hasOthers && scope === 'mine' ? rows.filter(row => row.is_mine) : rows;
-    const needle = query.trim().toLowerCase();
-    return needle
-      ? scoped.filter(row =>
-          String(row.user_name || '')
-            .toLowerCase()
-            .includes(needle),
-        )
-      : scoped;
-  }, [hasOthers, query, rows, scope]);
-  const stats = summary(
-    hasOthers && scope === 'mine' ? rows.filter(row => row.is_mine) : rows,
-  );
-  const showSabha =
-    hasOthers &&
-    new Set(rows.map(row => row.sabha_name).filter(Boolean)).size > 1;
+  useEffect(() => {
+    if (!areaOptions) return;
+    const cleaned = pruneSelection(area, areaOptions);
+    const changed = AREA_LEVELS.some(level => {
+      const before = area[level.key] || [];
+      const after = cleaned[level.key] || [];
+      return before.length !== after.length || before.some((id, idx) => String(id) !== String(after[idx]));
+    });
+    if (changed) {
+      setArea(cleaned);
+    }
+  }, [areaOptions, area]);
+
+  useEffect(() => {
+    load();
+  }, [sabhaIds.join(',')]);
 
   const viewHistory = async row => {
     setOpenHistory(row);
@@ -333,7 +549,7 @@ export default function YuvaSevaPage({
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Yuva Seva']}
       />
-      <ScrollView
+      <ScrollViewWithTop
         style={styles.flex}
         contentContainerStyle={styles.content}
         refreshControl={
@@ -359,6 +575,39 @@ export default function YuvaSevaPage({
           </View>
         ) : (
           <>
+            {areaOptions && (areaOptions.show_sabha_group || areaOptions.show_sabha) ? (
+              <View style={styles.filterWrap}>
+                <Text style={styles.filterLabel}>Sabha filter</Text>
+                <View style={styles.filterRow}>
+                  {areaOptions.show_sabha_group && sabhaGroupOptions.length ? (
+                    <MultiSelectFilter
+                      label="Sabha group"
+                      allLabel="All Sabha Groups"
+                      options={sabhaGroupOptions}
+                      value={area.sabhaGroupIds || []}
+                      onChange={ids =>
+                        setArea(value =>
+                          pruneSelection({ ...value, sabhaGroupIds: ids }, areaOptions),
+                        )
+                      }
+                    />
+                  ) : null}
+                  {areaOptions.show_sabha && availableSabhaOptions.length ? (
+                    <MultiSelectFilter
+                      label="Sabha"
+                      allLabel="All Sabhas"
+                      options={availableSabhaOptions}
+                      value={area.sabhaIds || []}
+                      onChange={ids =>
+                        setArea(value =>
+                          pruneSelection({ ...value, sabhaIds: ids }, areaOptions),
+                        )
+                      }
+                    />
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
             {hasOthers ? (
               <View style={styles.scopeToggle}>
                 {['all', 'mine'].map(value => (
@@ -385,58 +634,101 @@ export default function YuvaSevaPage({
             <View style={styles.kpiGrid}>
               <Kpi
                 label="Total Members"
-                value={stats.members}
+                value={displayStats.members}
                 unit="On follow-up"
               />
               <Kpi
                 label="Unique Yuvak · 15 days"
-                value={stats.distinct15}
+                value={displayStats.distinct15}
                 unit="Contacted"
               />
               <Kpi
                 label="Unique Yuvak · 30 days"
-                value={stats.distinct30}
+                value={displayStats.distinct30}
                 unit="Contacted"
               />
               <Kpi
                 label="Yuva Seva Yesterday"
-                value={stats.yesterday}
+                value={displayStats.yesterday}
                 unit="Follow-up records"
               />
               <Kpi
                 label="Yuva Seva On Field"
-                value={totals.total_distinct_followup_yesterday ?? 0}
+                value={onFieldCount}
                 unit="Follow-ups active"
               />
               <Kpi
                 label="Yuva Seva Rate"
-                value={`${stats.members ? Math.round((stats.distinct30 / stats.members) * 100) : 0}%`}
+                value={`${displayStats.members ? Math.round((displayStats.distinct30 / displayStats.members) * 100) : 0}%`}
                 unit="30-day reach"
               />
             </View>
-            {visibleRows.length > 25 ? (
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search member name"
-                placeholderTextColor={C.faint}
-                style={styles.search}
-              />
+            {showSearch ? (
+              <>
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search member by name…"
+                  placeholderTextColor={C.faint}
+                  style={styles.search}
+                  accessibilityLabel="Search members by name"
+                />
+              </>
             ) : null}
             {visibleRows.length ? (
-              visibleRows.map(row => (
-                <MemberRow
-                  key={row.user_id || row.user_name}
-                  row={row}
-                  canAdd={canAdd}
-                  showAssigned={hasOthers && scope !== 'mine'}
-                  showSabha={showSabha}
-                  onHistory={() => viewHistory(row)}
-                  onAdd={() => openAdd(row)}
-                />
-              ))
+              <View style={styles.totalCard}>
+                <Text style={styles.totalCardTitle}>
+                  {visibleStats.members} member{visibleStats.members === 1 ? '' : 's'} on follow-up
+                </Text>
+                <Text style={styles.totalCardMeta}>
+                  <Text style={styles.totalCardMetaStrong}>{visibleStats.count15}</Text> in 15 days ·{' '}
+                  <Text style={styles.totalCardMetaStrong}>{visibleStats.count30}</Text> in 30 days
+                </Text>
+              </View>
+            ) : null}
+            {!visibleRows.length ? (
+              <View style={styles.state}>
+                <Text style={styles.stateText}>
+                  {searchText
+                    ? 'No member matches your search.'
+                    : hasOthers && scope === 'mine'
+                      ? 'None of these members are assigned to you.'
+                      : 'No members need follow-up.'}
+                </Text>
+              </View>
             ) : (
-              <Text style={styles.stateText}>No members need follow-up.</Text>
+              <>
+                {pagedRows.map(row => (
+                  <MemberRow
+                    key={row.user_id || row.user_name}
+                    row={row}
+                    canAdd={canAdd}
+                    showAssigned={hasOthers && scope !== 'mine'}
+                    showSabha={showSabha}
+                    onHistory={() => viewHistory(row)}
+                    onAdd={() => openAdd(row)}
+                  />
+                ))}
+                {pageSize < visibleRows.length ? (
+                  <Pressable
+                    style={styles.loadMoreButton}
+                    disabled={loadingMore}
+                    onPress={() => {
+                      setLoadingMore(true);
+                      setTimeout(() => {
+                        setPageSize(value => value + 25);
+                        setLoadingMore(false);
+                      }, 250);
+                    }}
+                  >
+                    {loadingMore ? (
+                      <ActivityIndicator size="small" color={C.navy} />
+                    ) : (
+                      <Text style={styles.loadMoreText}>Load more</Text>
+                    )}
+                  </Pressable>
+                ) : null}
+              </>
             )}
           </>
         )}
@@ -447,7 +739,7 @@ export default function YuvaSevaPage({
             onDeleteAccount={onOpenDeleteAccount}
           />
         </View>
-      </ScrollView>
+      </ScrollViewWithTop>
       <Modal
         isOpen={Boolean(openHistory)}
         onClose={() => {
@@ -599,19 +891,58 @@ const styles = StyleSheet.create({
   scopeSelected: { backgroundColor: C.navy },
   scopeText: { color: C.muted, fontWeight: '600', fontSize: 13 },
   scopeTextSelected: { color: C.surface },
-  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  // 2 columns x 3 rows for the 6 KPI tiles, like the web's `grid-cols-2`.
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 2,
+  },
+  // Only `kpiHeader` carries the navy fill; the card itself and its body
+  // stay white, matching the web's `bg-surface` tile with a `bg-primary` band.
   kpi: {
-    width: '31%',
-    minWidth: 100,
+    width: '47%',
+    flexGrow: 1,
     backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
     borderRadius: 12,
-    padding: 10,
+    overflow: 'hidden',
   },
-  kpiLabel: { color: C.muted, fontSize: 11, lineHeight: 14 },
-  kpiValue: { color: C.navy, fontSize: 22, fontWeight: '800', marginTop: 6 },
-  kpiUnit: { color: C.faint, fontSize: 10, marginTop: 2 },
+  kpiHeader: {
+    backgroundColor: C.navy,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  kpiLabel: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  kpiBody: { alignItems: 'center', paddingVertical: 14, paddingHorizontal: 10 },
+  kpiValue: { color: C.navy, fontSize: 24, fontWeight: '800' },
+  kpiUnit: { color: C.muted, fontSize: 11, marginTop: 4, textAlign: 'center' },
+  filterWrap: { gap: 8 },
+  filterLabel: { color: C.navy, fontSize: 12, fontWeight: '700' },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  searchMeta: { color: C.muted, fontSize: 12, marginTop: -4 },
+  totalCard: {
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  totalCardTitle: { color: C.navy, fontSize: 13, fontWeight: '800' },
+  totalCardMeta: { color: C.muted, fontSize: 12 },
+  totalCardMetaStrong: { color: C.navy, fontWeight: '700' },
   search: {
     backgroundColor: C.surface,
     borderWidth: 1,
@@ -628,6 +959,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
   },
+  loadMoreButton: {
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  loadMoreText: { color: C.navy, fontWeight: '700' },
   memberHeader: {
     flexDirection: 'row',
     alignItems: 'center',

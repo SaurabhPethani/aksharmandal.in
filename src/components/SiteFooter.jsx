@@ -3,12 +3,24 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './Typography';
 import { APP_VERSION } from '../config/appConfig';
 
+/**
+ * @typedef {Object} SiteFooterProps
+ * @property {boolean} [transparent]
+ * @property {boolean} [light]
+ * @property {(() => void) | undefined} [onPrivacy]
+ * @property {(() => void) | undefined} [onTerms]
+ * @property {(() => void) | undefined} [onDeleteAccount]
+ */
+
+/**
+ * @param {SiteFooterProps} props
+ */
 export default function SiteFooter({
   transparent = false,
   light = false,
-  onPrivacy = null,
-  onTerms = null,
-  onDeleteAccount = null,
+  onPrivacy,
+  onTerms,
+  onDeleteAccount,
 }) {
   const background = light
     ? styles.bgLight

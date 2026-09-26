@@ -1,25 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import AppHeader from '../components/AppHeader';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import SiteFooter from '../components/SiteFooter';
 import { Text } from '../components/Typography';
-import { dashboardService } from '../services/dashboardService';
+import { useNotifications } from '../hooks/useNotifications';
 import {
-  fromInfoRequests,
-  fromMyTransferRequests,
-  fromPendingTransfers,
-  isUnread,
-  markAllRead,
-  readWatermark,
+  groupByDay,
   relativeTime,
-  sortByNewest,
 } from '../utils/notifications';
 
 const C = {
@@ -39,43 +33,27 @@ export default function NotificationsPage({
   onOpenTerms,
   onOpenDeleteAccount,
 }) {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    items,
+    unreadCount,
+    isLoading,
+    error,
+    refetch,
+    markAllRead: markNotificationsRead,
+    canViewAll,
+  } = useNotifications();
   const [refreshing, setRefreshing] = useState(false);
-  const [watermark, setWatermark] = useState(readWatermark);
-  const [error, setError] = useState('');
-  const load = async (refresh = false) => {
-    if (refresh) setRefreshing(true);
-    else setLoading(true);
-    const results = await Promise.allSettled([
-      dashboardService.notificationPendingTransfers(),
-      dashboardService.notificationMyTransfers(),
-      dashboardService.notificationInfoRequests({ status: 'pending' }),
-    ]);
-    const rows = [];
-    const read = result =>
-      Array.isArray(result) ? result : result?.items || [];
-    const failed = results.filter(
-      result => result.status === 'rejected',
-    ).length;
-    setError(
-      failed
-        ? `${failed} notification source${failed === 1 ? '' : 's'} could not be loaded. Pull to retry.`
-        : '',
-    );
-    if (results[0].status === 'fulfilled')
-      rows.push(...fromPendingTransfers(read(results[0].value)));
-    if (results[1].status === 'fulfilled')
-      rows.push(...fromMyTransferRequests(read(results[1].value)));
-    if (results[2].status === 'fulfilled')
-      rows.push(...fromInfoRequests(read(results[2].value)));
-    setItems(sortByNewest(rows));
-    setLoading(false);
-    setRefreshing(false);
+
+  const groups = groupByDay(items);
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
-  useEffect(() => {
-    load();
-  }, []);
+
   return (
     <View style={styles.safe}>
       <AppHeader
@@ -84,65 +62,92 @@ export default function NotificationsPage({
         onHelp={onHelp}
         breadcrumbs={['Dashboard', 'Notifications']}
       />
-      <ScrollView
+      <ScrollViewWithTop
         style={styles.flex}
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => load(true)}
+            onRefresh={refresh}
           />
         }
       >
         <View style={styles.titleRow}>
           <Text style={styles.title}>Notifications</Text>
-          {items.some(item => isUnread(item, watermark)) ? (
+          {unreadCount > 0 ? (
             <Text
               accessibilityRole="button"
-              onPress={() => setWatermark(markAllRead())}
+              onPress={markNotificationsRead}
               style={styles.markRead}
             >
               Mark all read
             </Text>
           ) : null}
         </View>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? (
+        <Text style={styles.subtitle}>
+          Transfer approvals, information-change requests and updates on your requests
+        </Text>
+        {!canViewAll ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>Notifications unavailable</Text>
+            <Text style={styles.detail}>
+              Your role does not grant access to transfer or information-change notifications.
+            </Text>
+          </View>
+        ) : isLoading ? (
           <ActivityIndicator color={C.navy} size="large" />
+        ) : error && !items.length ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>Could not load notifications</Text>
+            <Text style={styles.detail}>{error.message || String(error)}</Text>
+          </View>
         ) : items.length ? (
-          items.map(item => (
-            <View
-              key={item.id}
-              style={[
-                styles.item,
-                isUnread(item, watermark) && styles.unreadItem,
-              ]}
-            >
-              <View style={styles.icon}>
-                <MaterialCommunityIcons
-                  name={
-                    item.kind === 'info' ? 'account-edit' : 'account-switch'
-                  }
-                  size={20}
-                  color={C.accent}
-                />
+          groups.map(group => (
+            <View key={group.label} style={styles.group}>
+              <Text style={styles.groupLabel}>{group.label}</Text>
+              <View style={styles.groupCard}>
+                {group.items.map(item => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.item,
+                      item.unread && styles.unreadItem,
+                    ]}
+                  >
+                    <View style={styles.icon}>
+                      <MaterialCommunityIcons
+                        name={
+                          item.kind === 'info'
+                            ? 'file-edit-outline'
+                            : item.kind === 'transfer-mine'
+                              ? 'send'
+                              : 'arrow-right'
+                        }
+                        size={20}
+                        color={C.navy}
+                      />
+                    </View>
+                    <View style={styles.itemBody}>
+                      <Text style={styles.itemTitle}>{item.title}</Text>
+                      {item.detail ? (
+                        <Text style={styles.detail}>{item.detail}</Text>
+                      ) : null}
+                      {item.at ? (
+                        <Text style={styles.when}>{relativeTime(item.at)}</Text>
+                      ) : null}
+                    </View>
+                    {item.unread ? <View style={styles.unreadDot} /> : null}
+                  </View>
+                ))}
               </View>
-              <View style={styles.itemBody}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                <Text style={styles.detail}>
-                  {item.detail || 'Notification'}{' '}
-                  {relativeTime(item.at) ? `· ${relativeTime(item.at)}` : ''}
-                </Text>
-              </View>
-              {isUnread(item, watermark) ? (
-                <View style={styles.unreadDot} />
-              ) : null}
             </View>
           ))
         ) : (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>You’re all caught up</Text>
-            <Text style={styles.detail}>No new notifications.</Text>
+            <Text style={styles.detail}>
+              Transfer approvals and information-change requests will appear here.
+            </Text>
           </View>
         )}
         <View style={styles.footerBleed}>
@@ -152,7 +157,7 @@ export default function NotificationsPage({
             onDeleteAccount={onOpenDeleteAccount}
           />
         </View>
-      </ScrollView>
+      </ScrollViewWithTop>
     </View>
   );
 }
@@ -167,6 +172,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: { color: C.navy, fontSize: 26, fontWeight: '800', marginBottom: 4 },
+  subtitle: { color: C.muted, fontSize: 13, lineHeight: 18 },
   markRead: { color: C.accent, fontSize: 13, fontWeight: '700' },
   error: {
     color: '#A33A28',
@@ -175,21 +181,34 @@ const styles = StyleSheet.create({
     padding: 10,
     fontSize: 13,
   },
+  group: { gap: 6 },
+  groupLabel: {
+    color: C.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  groupCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+    overflow: 'hidden',
+  },
   item: {
     flexDirection: 'row',
     gap: 12,
     padding: 14,
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
   },
-  unreadItem: { borderColor: C.accent },
+  unreadItem: { backgroundColor: '#FFF8F2' },
   icon: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#FFF0E5',
+    backgroundColor: '#E6EEF5',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -197,6 +216,7 @@ const styles = StyleSheet.create({
   itemBody: { flex: 1, gap: 4 },
   itemTitle: { color: C.navy, fontWeight: '700' },
   detail: { color: C.muted, fontSize: 13 },
+  when: { color: '#7894AA', fontSize: 12, marginTop: 4 },
   unreadDot: {
     width: 8,
     height: 8,

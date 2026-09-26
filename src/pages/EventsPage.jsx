@@ -3,12 +3,12 @@ import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { MaterialDesignIcons as Icon } from '@react-native-vector-icons/material-design-icons/static';
 import AppHeader from '../components/AppHeader';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import SiteFooter from '../components/SiteFooter';
 import { Text } from '../components/Typography';
 import { dashboardService } from '../services/dashboardService';
@@ -199,7 +199,7 @@ export default function EventsPage({
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Events']}
       />
-      <ScrollView
+      <ScrollViewWithTop
         style={styles.flex}
         contentContainerStyle={styles.content}
         refreshControl={
@@ -376,7 +376,7 @@ export default function EventsPage({
             onDeleteAccount={onOpenDeleteAccount}
           />
         </View>
-      </ScrollView>
+      </ScrollViewWithTop>
     </View>
   );
 }

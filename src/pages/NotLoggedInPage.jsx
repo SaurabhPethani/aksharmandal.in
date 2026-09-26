@@ -1,19 +1,21 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import AppHeader from '../components/AppHeader';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import SiteFooter from '../components/SiteFooter';
 import { Text } from '../components/Typography';
 import { useNotLoggedIn } from '../hooks/useNotLoggedIn';
 import { hasMobile, telUrl } from '../utils/contact';
+import { searchMatches } from '../utils/options';
 import { MemberStatsDialog } from './DashboardPage';
 
 const COLORS = {
@@ -45,9 +47,23 @@ export default function NotLoggedInPage({
     [query.data],
   );
   const [statsUserId, setStatsUserId] = useState(null);
+  const [search, setSearch] = useState('');
+  const [pageSize, setPageSize] = useState(25);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const showSearch = members.length > 25;
+  const searchText = showSearch ? search.trim() : '';
+  const visibleMembers = searchText
+    ? members.filter(member => searchMatches(member.full_name, searchText))
+    : members;
+  const pagedMembers = visibleMembers.slice(0, pageSize);
+
+  useEffect(() => {
+    setPageSize(25);
+  }, [search]);
+
   const groups = useMemo(() => {
     const map = new Map();
-    members.forEach(member => {
+    pagedMembers.forEach(member => {
       const key = member.sabha_id ?? member.sabha_name ?? 'unknown';
       if (!map.has(key)) {
         map.set(key, { name: member.sabha_name || 'Sabha', members: [] });
@@ -55,7 +71,7 @@ export default function NotLoggedInPage({
       map.get(key).members.push(member);
     });
     return [...map.values()];
-  }, [members]);
+  }, [pagedMembers]);
 
   const openContact = url => {
     Linking.openURL(url).catch(() => {
@@ -72,7 +88,7 @@ export default function NotLoggedInPage({
         onBack={onBack}
         breadcrumbs={['Dashboard', 'Not Login']}
       />
-      <ScrollView style={styles.flex1} contentContainerStyle={styles.scroll}>
+      <ScrollViewWithTop style={styles.flex1} contentContainerStyle={styles.scroll}>
         <View style={styles.pageHeader}>
           <Pressable
             onPress={onBack}
@@ -132,68 +148,110 @@ export default function NotLoggedInPage({
             </Text>
           </View>
         ) : (
-          <View style={styles.groups}>
-            {groups.map(group => (
-              <View key={group.name} style={styles.group}>
-                <View style={styles.groupHeader}>
-                  <Text style={styles.groupName} numberOfLines={1}>
-                    {group.name}
-                  </Text>
-                  <Text style={styles.groupCount}>
-                    {group.members.length} not logged in
-                  </Text>
-                </View>
-                {group.members.map(member => {
-                  const name = member.full_name || '—';
-                  const mobile = member.mobile_number;
-                  return (
-                    <View key={member.id} style={styles.row}>
-                      <View style={styles.copy}>
-                        <Pressable
-                          onPress={() => setStatsUserId(member.id)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`View ${name}'s attendance`}
-                        >
-                          <Text style={styles.name} numberOfLines={1}>
-                            {name}
-                          </Text>
-                        </Pressable>
-                        {mobile ? (
+          <>
+            {showSearch ? (
+              <>
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search member by name…"
+                  placeholderTextColor={COLORS.muted}
+                  style={styles.search}
+                  accessibilityLabel="Search members by name"
+                />
+                <Text style={styles.searchMeta}>
+                  {visibleMembers.length} member{visibleMembers.length === 1 ? '' : 's'} match{visibleMembers.length === 1 ? 'es' : ''} across all records
+                </Text>
+              </>
+            ) : null}
+            {!visibleMembers.length ? (
+              <View style={styles.state}>
+                <Text style={styles.stateText}>No member matches your search.</Text>
+              </View>
+            ) : (
+              <View style={styles.groups}>
+                {groups.map(group => (
+                  <View key={group.name} style={styles.group}>
+                    <View style={styles.groupHeader}>
+                      <Text style={styles.groupName} numberOfLines={1}>
+                        {group.name}
+                      </Text>
+                      <Text style={styles.groupCount}>
+                        {group.members.length} not logged in
+                      </Text>
+                    </View>
+                    {group.members.map(member => {
+                      const name = member.full_name || '—';
+                      const mobile = member.mobile_number;
+                      return (
+                        <View key={member.id} style={styles.row}>
+                          <View style={styles.copy}>
+                            <Pressable
+                              onPress={() => setStatsUserId(member.id)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`View ${name}'s attendance`}
+                            >
+                              <Text style={styles.name} numberOfLines={1}>
+                                {name}
+                              </Text>
+                            </Pressable>
+                            {mobile ? (
+                              <Pressable
+                                onPress={() => openContact(telUrl(mobile))}
+                                disabled={!hasMobile(mobile)}
+                                style={styles.phoneLink}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Call ${name} on ${mobile}`}
+                              >
+                                <MaterialCommunityIcons
+                                  name="phone"
+                                  size={13}
+                                  color={COLORS.muted}
+                                />
+                                <Text style={styles.meta}>{mobile}</Text>
+                              </Pressable>
+                            ) : null}
+                          </View>
                           <Pressable
-                            onPress={() => openContact(telUrl(mobile))}
-                            disabled={!hasMobile(mobile)}
-                            style={styles.phoneLink}
+                            onPress={() => setStatsUserId(member.id)}
+                            style={styles.statsButton}
                             accessibilityRole="button"
-                            accessibilityLabel={`Call ${name} on ${mobile}`}
+                            accessibilityLabel={`View ${name}'s statistics`}
                           >
                             <MaterialCommunityIcons
-                              name="phone"
-                              size={13}
-                              color={COLORS.muted}
+                              name="chart-bar"
+                              size={17}
+                              color={COLORS.accent}
                             />
-                            <Text style={styles.meta}>{mobile}</Text>
+                            <Text style={styles.statsText}>Stats</Text>
                           </Pressable>
-                        ) : null}
-                      </View>
-                      <Pressable
-                        onPress={() => setStatsUserId(member.id)}
-                        style={styles.statsButton}
-                        accessibilityRole="button"
-                        accessibilityLabel={`View ${name}'s statistics`}
-                      >
-                        <MaterialCommunityIcons
-                          name="chart-bar"
-                          size={17}
-                          color={COLORS.accent}
-                        />
-                        <Text style={styles.statsText}>Stats</Text>
-                      </Pressable>
-                    </View>
-                  );
-                })}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))}
+                {pageSize < visibleMembers.length ? (
+                  <Pressable
+                    style={styles.loadMoreButton}
+                    disabled={loadingMore}
+                    onPress={() => {
+                      setLoadingMore(true);
+                      setTimeout(() => {
+                        setPageSize(value => value + 25);
+                        setLoadingMore(false);
+                      }, 250);
+                    }}
+                  >
+                    {loadingMore ? (
+                      <ActivityIndicator size="small" color={COLORS.navy} />
+                    ) : (
+                      <Text style={styles.loadMoreText}>Load more</Text>
+                    )}
+                  </Pressable>
+                ) : null}
               </View>
-            ))}
-          </View>
+            )}
+          </>
         )}
         <View style={styles.footerBleed}>
           <SiteFooter
@@ -202,7 +260,7 @@ export default function NotLoggedInPage({
             onDeleteAccount={onOpenDeleteAccount}
           />
         </View>
-      </ScrollView>
+      </ScrollViewWithTop>
       <MemberStatsDialog
         userId={statsUserId}
         isOpen={statsUserId != null}
@@ -228,6 +286,27 @@ const styles = StyleSheet.create({
   backText: { color: COLORS.navy, fontSize: 13, fontWeight: '700' },
   title: { color: COLORS.navy, fontSize: 24, fontWeight: '800' },
   subtitle: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 4 },
+  search: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: COLORS.navy,
+    marginBottom: 8,
+  },
+  searchMeta: { color: COLORS.muted, fontSize: 12, marginBottom: 16 },
+  loadMoreButton: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  loadMoreText: { color: COLORS.navy, fontWeight: '700' },
   state: {
     minHeight: 220,
     alignItems: 'center',

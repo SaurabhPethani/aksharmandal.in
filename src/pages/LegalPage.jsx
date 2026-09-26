@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
-import { BackHandler, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { BackHandler, Linking, Pressable,  StyleSheet, View } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from '../components/Typography';
 import SiteFooter from '../components/SiteFooter';
+import ScrollViewWithTop from '../components/ScrollToTop';
 
 const EMAIL = 'aksharconnect369@gmail.com';
 
@@ -95,9 +96,21 @@ function renderParagraph(text, index) {
   );
 }
 
+/**
+ * @typedef {Object} LegalPageProps
+ * @property {'privacy' | 'terms' | 'delete'} [type]
+ * @property {() => void} [onBack]
+ * @property {(() => void) | undefined} [onOpenPrivacy]
+ * @property {(() => void) | undefined} [onOpenTerms]
+ * @property {(() => void) | undefined} [onOpenDeleteAccount]
+ */
+
+/**
+ * @param {LegalPageProps} props
+ */
 export default function LegalPage({
-  type,
-  onBack,
+  type = 'privacy',
+  onBack = () => {},
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
@@ -120,7 +133,12 @@ export default function LegalPage({
         </Pressable>
         <Text style={styles.headerTitle}>{content.title}</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.breadcrumbBar}>
+        <Text style={styles.breadcrumb}>Dashboard</Text>
+        <MaterialCommunityIcons name="chevron-right" size={16} color="#7894AA" />
+        <Text style={styles.breadcrumbCurrent}>{content.title}</Text>
+      </View>
+      <ScrollViewWithTop contentContainerStyle={styles.content}>
         <Text style={styles.pageTitle}>{content.title}</Text>
         {content.intro.map(renderParagraph)}
         {type === 'delete' ? (
@@ -145,7 +163,7 @@ export default function LegalPage({
             onDeleteAccount={onOpenDeleteAccount}
           />
         </View>
-      </ScrollView>
+      </ScrollViewWithTop>
     </View>
   );
 }
@@ -155,6 +173,16 @@ const styles = StyleSheet.create({
   header: { minHeight: 58, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#003158' },
   back: { padding: 10, marginRight: 4 },
   headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  breadcrumbBar: {
+    minHeight: 36,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E6EEF5',
+  },
+  breadcrumb: { color: '#7894AA', fontSize: 12, fontWeight: '600' },
+  breadcrumbCurrent: { color: '#003158', fontSize: 12, fontWeight: '800' },
   content: { flexGrow: 1, padding: 18, paddingBottom: 0 },
   footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
   pageTitle: { color: '#003158', fontSize: 28, fontWeight: '800', marginBottom: 10 },

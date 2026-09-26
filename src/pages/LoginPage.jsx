@@ -7,12 +7,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import SiteFooter from '../components/SiteFooter';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import { Text, TextInput } from '../components/Typography';
 import { useAuth } from '../hooks/core';
 import { AUTH, LOGIN_LOCKOUT_LIMIT } from '../constants/messages';
@@ -251,7 +252,21 @@ function CodeInput({
   );
 }
 
-export default function LoginPage({ onOpenPrivacy, onOpenTerms, onOpenDeleteAccount }) {
+/**
+ * @typedef {Object} LoginPageProps
+ * @property {(() => void) | undefined} [onOpenPrivacy]
+ * @property {(() => void) | undefined} [onOpenTerms]
+ * @property {(() => void) | undefined} [onOpenDeleteAccount]
+ */
+
+/**
+ * @param {LoginPageProps} props
+ */
+export default function LoginPage({
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
+}) {
   const auth = useAuth();
   const [step, setStep] = useState('main');
   const [tab, setTab] = useState('pin');
@@ -457,11 +472,28 @@ export default function LoginPage({ onOpenPrivacy, onOpenTerms, onOpenDeleteAcco
 
   return (
     <View style={styles.safe}>
+      <View pointerEvents="none" style={styles.topGlow}>
+        <Svg width="100%" height="220" viewBox="0 0 360 220">
+          <Defs>
+            <RadialGradient id="login-top-glow" cx="50%" cy="0%" r="72%">
+              <Stop offset="0%" stopColor="#FF862A" stopOpacity="0.34" />
+              <Stop offset="0.55" stopColor="#FF862A" stopOpacity="0.14" />
+              <Stop offset="1" stopColor="#FF862A" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Circle
+            cx="180"
+            cy="0"
+            r="170"
+            fill="url(#login-top-glow)"
+          />
+        </Svg>
+      </View>
       <KeyboardAvoidingView
         style={styles.safe}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
+        <ScrollViewWithTop
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
@@ -478,7 +510,7 @@ export default function LoginPage({ onOpenPrivacy, onOpenTerms, onOpenDeleteAcco
               resizeMode="contain"
             />
           </View>
-          <View style={styles.card}>
+          <View style={styles.content}>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>
               {step === 'otp'
@@ -772,21 +804,20 @@ export default function LoginPage({ onOpenPrivacy, onOpenTerms, onOpenDeleteAcco
             ) : null}
             <View style={styles.footerBleed}>
               <SiteFooter
-                light
                 onPrivacy={onOpenPrivacy}
                 onTerms={onOpenTerms}
                 onDeleteAccount={onOpenDeleteAccount}
               />
             </View>
           </View>
-        </ScrollView>
+        </ScrollViewWithTop>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F0F4F8' },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: 20,
@@ -815,19 +846,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.4,
   },
-  card: {
-    width: '100%',
-    maxWidth: 520,
-    alignSelf: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 22,
-    padding: 22,
-    elevation: 3,
-    shadowColor: '#003158',
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 5 },
+  topGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+    alignItems: 'center',
   },
+  content: { flex: 1, width: '100%' },
   title: {
     color: '#003158',
     fontSize: 25,

@@ -9,12 +9,24 @@ const COLORS = {
   surface: '#FFFFFF',
 };
 
+/**
+ * @typedef {Object} AppHeaderProps
+ * @property {(() => void)} [onMenu]
+ * @property {(() => void)} [onHelp]
+ * @property {(() => void)} [onNotifications]
+ * @property {(() => void)} [onBack]
+ * @property {string[]} [breadcrumbs]
+ */
+
+/**
+ * @param {AppHeaderProps} props
+ */
 export default function AppHeader({
-  onMenu,
-  onHelp = null,
+  onMenu = () => {},
+  onHelp,
   onNotifications = () => {},
-  onBack = null,
-  breadcrumbs = [],
+  onBack,
+  breadcrumbs = /** @type {string[]} */ ([]),
 }) {
   return (
     <>

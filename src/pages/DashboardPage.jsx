@@ -16,6 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
 import AppHeader from '../components/AppHeader';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import { Text } from '../components/Typography';
 import { Modal } from '../components/Overlays';
 import { Skeleton } from '../components/ui';
@@ -1876,10 +1877,11 @@ export default function DashboardPage({
         onMenu={onOpenMenu}
         onHelp={canReadHelp(roleId) ? onOpenHelp : null}
         onNotifications={onOpenNotifications}
+        breadcrumbs={['Dashboard']}
       />
 
       <View style={styles.flex1}>
-        <ScrollView
+        <ScrollViewWithTop
           style={styles.flex1}
           contentContainerStyle={styles.scroll}
           // A tap on a search result must reach it rather than only close the
@@ -1987,7 +1989,7 @@ export default function DashboardPage({
               onDeleteAccount={onOpenDeleteAccount}
             />
           </View>
-        </ScrollView>
+        </ScrollViewWithTop>
       </View>
 
       <MemberStatsDialog
@@ -2281,7 +2283,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   metricCard: {
-    width: '48.2%',
+    width: '48%',
     minHeight: 90,
     backgroundColor: COLORS.surface,
     borderRadius: 16,

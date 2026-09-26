@@ -3,13 +3,13 @@ import {
   BackHandler,
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import AppHeader from '../components/AppHeader';
 import { Text } from '../components/Typography';
 import {
@@ -21,7 +21,7 @@ import {
   Skeleton,
 } from '../components/ui';
 import { Modal } from '../components/Overlays';
-import { Breadcrumbs, Tabs } from '../components/Navigation';
+import { Tabs } from '../components/Navigation';
 import { FormField, Textarea } from '../components/form';
 import {
   useMyBirthdayWishes,
@@ -454,7 +454,6 @@ function SendWishes() {
           <View style={styles.tableClip}>
             <View style={styles.thead}>
               <Text style={styles.th}>Member</Text>
-              <Text style={styles.th}>Wish them</Text>
             </View>
 
             {users.map((row, i) => {
@@ -488,13 +487,12 @@ function SendWishes() {
                         <WhatsAppButton row={row} mobile={mobile} />
                       </View>
                     ) : null}
+                    <WishButton
+                      row={row}
+                      sent={sent.has(row?.user_id)}
+                      onPress={() => setWishing(row)}
+                    />
                   </View>
-
-                  <WishButton
-                    row={row}
-                    sent={sent.has(row?.user_id)}
-                    onPress={() => setWishing(row)}
-                  />
                 </View>
               );
             })}
@@ -630,7 +628,7 @@ export default function BirthdaysPage({
         breadcrumbs={['Dashboard', 'Birthdays']}
       />
 
-      <ScrollView
+      <ScrollViewWithTop
         style={styles.page}
         contentContainerStyle={styles.pageContent}
         keyboardShouldPersistTaps="handled"
@@ -641,9 +639,6 @@ export default function BirthdaysPage({
             tab === 'received'
               ? 'Wishes sent to you'
               : `Everyone celebrating today, ${todayLabel()}`
-          }
-          breadcrumbs={
-            <Breadcrumbs items={[{ label: 'Birthdays' }]} onHome={onBack} />
           }
         />
 
@@ -659,7 +654,7 @@ export default function BirthdaysPage({
             onDeleteAccount={onOpenDeleteAccount}
           />
         </View>
-      </ScrollView>
+      </ScrollViewWithTop>
     </View>
   );
 }
@@ -739,7 +734,11 @@ const styles = StyleSheet.create({
   contact: { flexDirection: 'row', gap: space(2), marginTop: space(2) },
 
   // `!py-2 !text-xs` on the web's Button
-  wishButton: { paddingVertical: space(2) },
+  wishButton: {
+    alignSelf: 'flex-start',
+    marginTop: space(2),
+    paddingVertical: space(2),
+  },
   wishButtonText: { fontSize: TEXT.xs },
 
   roundLink: {

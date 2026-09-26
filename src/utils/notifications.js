@@ -98,7 +98,8 @@ export function markAllRead(now = Date.now()) {
   return now;
 }
 
-export const isUnread = (entry, watermark) => entry.at == null || entry.at > watermark;
+export const isUnread = (entry, watermark) =>
+  entry.at == null ? watermark === 0 : entry.at > watermark;
 
 export const badgeLabel = (count) => (count > 9 ? '9+' : String(count));
 
