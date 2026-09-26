@@ -51,12 +51,14 @@ export default function AppHeader({
   onNotifications = () => {},
   onBack,
   breadcrumbs = /** @type {string[]} */ ([]),
+  notificationCount,
   // No defaults on these two: both are read for truthiness, and a `null`
   // default would narrow the inferred prop type and reject a TS caller's
   // handler.
   onProfile
 }) {
-  const { unreadCount } = useNotifications();
+  const { unreadCount: hookUnreadCount } = useNotifications();
+  const unreadCount = notificationCount ?? hookUnreadCount ?? 0;
   const badgeCount = Math.max(0, unreadCount || 0);
   const showBadge = badgeCount > 0;
 

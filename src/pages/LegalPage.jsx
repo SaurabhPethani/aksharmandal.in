@@ -133,11 +133,6 @@ export default function LegalPage({
         </Pressable>
         <Text style={styles.headerTitle}>{content.title}</Text>
       </View>
-      <View style={styles.breadcrumbBar}>
-        <Text style={styles.breadcrumb}>Dashboard</Text>
-        <MaterialCommunityIcons name="chevron-right" size={16} color="#7894AA" />
-        <Text style={styles.breadcrumbCurrent}>{content.title}</Text>
-      </View>
       <ScrollViewWithTop contentContainerStyle={styles.content}>
         <Text style={styles.pageTitle}>{content.title}</Text>
         {content.intro.map(renderParagraph)}

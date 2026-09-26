@@ -62,6 +62,7 @@ export default function NotificationsPage({
         onMenu={onMenu}
         onHelp={onHelp}
         onProfile={onProfile}
+        notificationCount={unreadCount}
         breadcrumbs={['Dashboard', 'Notifications']}
       />
       <ScrollViewWithTop
