@@ -18,7 +18,8 @@ const COLORS = {
  * @property {(() => void)} [onMenu]
  * @property {(() => void)} [onHelp]
  * @property {(() => void)} [onNotifications]
- * @property {(() => void)} [onBack]
+ * @property {(() => void)} [onBack] — kept for compatibility, but the header
+ * always uses the menu icon to preserve a single app-wide navigation pattern.
  * @property {string[]} [breadcrumbs]
  */
 
@@ -57,6 +58,7 @@ export default function AppHeader({
   // handler.
   onProfile
 }) {
+  const menuAction = onMenu || onBack || (() => {});
   const { unreadCount: hookUnreadCount } = useNotifications();
   const unreadCount = notificationCount ?? hookUnreadCount ?? 0;
   const badgeCount = Math.max(0, unreadCount || 0);
@@ -66,13 +68,13 @@ export default function AppHeader({
     <>
       <View style={styles.topBar}>
         <Pressable
-          onPress={onBack || onMenu}
+          onPress={menuAction}
           accessibilityRole="button"
-          accessibilityLabel={onBack ? 'Go back' : 'Open navigation'}
+          accessibilityLabel="Open navigation"
           style={styles.topButton}
         >
           <MaterialCommunityIcons
-            name={onBack ? 'arrow-left' : 'menu'}
+            name="menu"
             size={24}
             color={COLORS.surface}
           />

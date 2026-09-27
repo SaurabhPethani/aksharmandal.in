@@ -106,6 +106,7 @@ export default function AppNavigator({
         onOpenProfile={openProfile}
         onRoleNameChange={setRoleName}
         onRoleIdChange={setRoleId}
+        onOpenYuvaSeva={() => navigate('yuva-seva')}
         {...legalLinks}
       />
     ) : displayedRoute === 'birthdays' ? (
@@ -205,6 +206,10 @@ export default function AppNavigator({
         onDashboard={() => setHistory(['dashboard'])}
         onOpenEvents={() => {
           navigate('events');
+          setDrawerOpen(false);
+        }}
+        onOpenYuvaSeva={() => {
+          navigate('yuva-seva');
           setDrawerOpen(false);
         }}
         onOpenNotifications={() => {

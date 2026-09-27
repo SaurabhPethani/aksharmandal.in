@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -397,6 +397,7 @@ export default function YuvaSevaPage({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const lastFetchedKeyRef = useRef('');
 
   const sabhaIds = useMemo(
     () => computeSabhaIds(area, areaOptions),
@@ -494,8 +495,11 @@ export default function YuvaSevaPage({
   }, [areaOptions, area]);
 
   useEffect(() => {
+    const key = JSON.stringify(sabhaIds || []);
+    if (lastFetchedKeyRef.current === key) return;
+    lastFetchedKeyRef.current = key;
     load();
-  }, [load]);
+  }, [sabhaIds, load]);
 
   const viewHistory = async row => {
     setOpenHistory(row);

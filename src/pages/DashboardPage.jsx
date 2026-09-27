@@ -280,6 +280,7 @@ export function Drawer({
   onSignOut,
   onDashboard,
   onOpenEvents,
+  onOpenYuvaSeva,
   onOpenNotifications,
   activeRoute = 'dashboard',
   roleName,
@@ -364,13 +365,16 @@ export function Drawer({
               'Dashboard',
               activeRoute === 'dashboard',
             ],
-            ['calendar-star', 'Events', activeRoute === 'events'],
+           
+             ['hand-heart', 'Yuva Seva', activeRoute === 'yuva-seva'], 
+             ['calendar-star', 'Events', activeRoute === 'events'],
           ].map(([icon, label, active]) => (
             <Pressable
               key={label}
               onPress={() => {
                 if (label === 'Dashboard') onDashboard?.();
                 else if (label === 'Events') onOpenEvents?.();
+                else if (label === 'Yuva Seva') onOpenYuvaSeva?.();
                 onClose();
               }}
               style={[styles.drawerItem, active && styles.drawerItemActive]}
@@ -1461,7 +1465,7 @@ function SelfDashboard({
   thought,
   onOpenBirthdays,
   onPickMember,
-  onOpenEvents,
+  onOpenEvents
 }) {
   const attendance = data?.total_sabha_present;
   const recent = data?.present_in_last_4w;
@@ -1760,6 +1764,7 @@ export default function DashboardPage({
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
+  onOpenYuvaSeva
 }) {
   const { activeUserId } = useAuth();
   const queryClient = useQueryClient();

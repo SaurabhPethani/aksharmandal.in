@@ -15,6 +15,7 @@ import SiteFooter from '../components/SiteFooter';
 import { Text } from '../components/Typography';
 import { useNotLoggedIn } from '../hooks/useNotLoggedIn';
 import { hasMobile, telUrl } from '../utils/contact';
+import { NIMIT_SEVAK_LABEL, ambrishLabel } from '../utils/memberFlags';
 import { searchMatches } from '../utils/options';
 import { MemberStatsDialog } from './DashboardPage';
 
@@ -73,6 +74,32 @@ export default function NotLoggedInPage({
     });
     return [...map.values()];
   }, [pagedMembers]);
+
+  const renderMemberTags = member => {
+    const tags = [];
+    if (member.role_name) tags.push({ key: 'role', text: member.role_name, style: styles.roleTag });
+    if (member.is_ambrish) {
+      tags.push({
+        key: 'ambrish',
+        text: ambrishLabel(member.gender),
+        style: styles.flagTag,
+      });
+    }
+    if (member.is_nimit_sevak) {
+      tags.push({ key: 'nimit', text: NIMIT_SEVAK_LABEL, style: styles.flagTag });
+    }
+    if (!tags.length) return null;
+
+    return (
+      <View style={styles.tagsRow}>
+        {tags.map(tag => (
+          <View key={tag.key} style={[styles.tag, tag.style]}>
+            <Text style={styles.tagText}>{tag.text}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
 
   const openContact = url => {
     Linking.openURL(url).catch(() => {
@@ -213,6 +240,7 @@ export default function NotLoggedInPage({
                                 <Text style={styles.meta}>{mobile}</Text>
                               </Pressable>
                             ) : null}
+                            {renderMemberTags(member)}
                           </View>
                           <Pressable
                             onPress={() => setStatsUserId(member.id)}
@@ -379,6 +407,33 @@ const styles = StyleSheet.create({
   copy: { flex: 1, minWidth: 0, marginRight: 10 },
   name: { color: COLORS.navy, fontSize: 15, fontWeight: '800' },
   meta: { color: COLORS.muted, fontSize: 12 },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  tag: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  roleTag: {
+    borderColor: '#D7E4F2',
+    backgroundColor: '#EEF4FF',
+  },
+  flagTag: {
+    borderColor: '#F2D9BF',
+    backgroundColor: '#FFF4E8',
+  },
+  tagText: {
+    color: COLORS.navy,
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
   phoneLink: {
     flexDirection: 'row',
     alignItems: 'center',
