@@ -94,7 +94,7 @@ export default function NotLoggedInPage({
       <View style={styles.tagsRow}>
         {tags.map(tag => (
           <View key={tag.key} style={[styles.tag, tag.style]}>
-            <Text style={styles.tagText}>{tag.text}</Text>
+            <Text style={[styles.tagText, { color: tag.key === 'role' ? COLORS.navy : COLORS.accent }]}>{tag.text}</Text>
           </View>
         ))}
       </View>
@@ -416,20 +416,16 @@ const styles = StyleSheet.create({
   tag: {
     alignSelf: 'flex-start',
     borderRadius: 999,
-    borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   roleTag: {
-    borderColor: '#D7E4F2',
     backgroundColor: '#EEF4FF',
   },
   flagTag: {
-    borderColor: '#F2D9BF',
     backgroundColor: '#FFF4E8',
   },
   tagText: {
-    color: COLORS.navy,
     fontSize: 10,
     fontWeight: '700',
     lineHeight: 14,
