@@ -459,7 +459,7 @@ export default function LoginPage() {
     <View style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.safe}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
           contentContainerStyle={styles.scroll}
