@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { eventsService } from '../services/eventsService';
+import { downloadAndShareFile } from '../utils/fileDownload';
 
 /**
  * `enabled` must be the caller's EVENTS:READ check, not just "the page is open".
@@ -53,23 +54,24 @@ export function useEventRegistrationData(eventId, enabled) {
 }
 
 /**
- * Trigger the Excel download for one event. Reuses the reports blob→anchor
- * pattern; changes nothing server-side so it never refreshes queries.
+ * Fetch one event's registration Excel with the caller's own access token and
+ * hand it to the OS share sheet. The web downloads via a blob→object-URL
+ * anchor click, which has no RN equivalent (no Blob, no DOM) — see
+ * utils/fileDownload.js. Changes nothing server-side so it never refreshes
+ * queries.
  */
 export function useEventDataExport() {
   return useMutation({
     meta: { refreshOnSuccess: false },
     mutationFn: async ({ eventId, filename }) => {
-      const blob = await eventsService.exportEventData(eventId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || 'event-registrations.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      return true;
+      const result = await downloadAndShareFile(
+        eventsService.exportEventDataPath(eventId),
+        filename || 'event-registrations.xlsx',
+      );
+      if (!result.ok && result.reason !== 'cancelled') {
+        throw new Error(result.reason || 'Could not download the file.');
+      }
+      return result;
     },
   });
 }
