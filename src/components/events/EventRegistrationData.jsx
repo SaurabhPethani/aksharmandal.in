@@ -18,10 +18,8 @@ import { COLORS, RADII, TEXT, WEIGHT, space } from '../../constants/theme';
  * export. Distinct from the Registered tab, which is the caller's OWN
  * registrations; here the backend gates access per event (creator-or-higher).
  *
- * One event at a time, chosen from the dropdown. "Download (Excel)" shares the
- * selected event's export through the OS share sheet — there is no "save to
- * Downloads" on a phone the way a browser has one, so this is the mobile
- * equivalent of the web's automatic file download.
+ * One event at a time, chosen from the dropdown. "Download (Excel)" saves the
+ * selected event's export to the phone's Downloads folder.
  */
 function answerText(answers, field) {
   const v = (answers ?? {})[field.id];
@@ -91,7 +89,7 @@ export default function EventRegistrationData({ enabled }) {
 
   const downloadOne = async () => {
     if (!selectedId) return;
-    // Filename = "<Event title>_<ddmmyyyy>.xlsx" — the day the file is shared.
+    // Filename = "<Event title>_<ddmmyyyy>.xlsx" — the day the file is saved.
     const title =
       (selectedEvent?.title || `event-${selectedId}`)
         .replace(/[\\/:*?"<>|]+/g, '')
@@ -101,7 +99,13 @@ export default function EventRegistrationData({ enabled }) {
     const p = n => String(n).padStart(2, '0');
     const datePart = `${p(d.getDate())}${p(d.getMonth() + 1)}${d.getFullYear()}`;
     try {
-      await exportM.mutateAsync({ eventId: selectedId, filename: `${title}_${datePart}.xlsx` });
+      const result = await exportM.mutateAsync({
+        eventId: selectedId,
+        filename: `${title}_${datePart}.xlsx`,
+      });
+      if (result?.mode === 'download') {
+        toast.success('Saved to your Downloads folder.');
+      }
     } catch (err) {
       toast.error(err?.message || 'Could not download the file.');
     }
@@ -142,7 +146,7 @@ export default function EventRegistrationData({ enabled }) {
           disabled={!selectedId || exportM.isPending}
           busy={exportM.isPending}
         >
-          <MaterialCommunityIcons name="file-excel-outline" size={space(4)} />
+          <MaterialCommunityIcons name="microsoft-excel" size={space(5.5)} />
           Download (Excel)
         </Button>
       </View>

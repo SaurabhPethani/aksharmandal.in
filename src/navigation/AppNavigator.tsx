@@ -10,7 +10,7 @@ import NotificationsPage from '../pages/NotificationsPage';
 import LegalPage from '../pages/LegalPage';
 import ProfilePage from '../pages/ProfilePage';
 import { useAuth } from '../hooks/core';
-import { canReadHelp } from '../constants/roles';
+import { canReadHelp, canSeeYuvaSeva } from '../constants/roles';
 
 type RouteName =
   | 'dashboard'
@@ -40,13 +40,17 @@ export default function AppNavigator({
   const transition = useRef(new Animated.Value(1)).current;
   const route = history[history.length - 1];
   const canOpenHelp = canReadHelp(roleId);
+  const canOpenYuvaSeva = canSeeYuvaSeva(roleId);
+  const blocked =
+    (route === 'help' && !canOpenHelp) ||
+    (route === 'yuva-seva' && !canOpenYuvaSeva);
   const openHelp = canOpenHelp ? () => navigate('help') : undefined;
   const legalLinks = {
     onOpenPrivacy: () => navigate('legal-privacy'),
     onOpenTerms: () => navigate('legal-terms'),
     onOpenDeleteAccount: () => navigate('legal-delete'),
   };
-  const displayedRoute = route === 'help' && !canOpenHelp ? 'dashboard' : route;
+  const displayedRoute = blocked ? 'dashboard' : route;
 
   useEffect(() => {
     transition.setValue(0);
@@ -218,6 +222,7 @@ export default function AppNavigator({
         }}
         activeRoute={route}
         roleName={roleName}
+        showYuvaSeva={canOpenYuvaSeva}
       />
     </View>
   );

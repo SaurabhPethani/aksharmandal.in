@@ -18,6 +18,7 @@ import {
   TEXT,
   TNUM,
   WEIGHT,
+  rem,
   space,
 } from '../../constants/theme';
 
@@ -142,18 +143,36 @@ export default function TrendChart({
       tableColumns.values.reduce((sum, value) => sum + value, 0) +
       space(3) * 2;
 
+    // As on the web: the box is the chart's height and the rows scroll inside
+    // it, and the week column takes whatever width is left, so the table spans
+    // the card. It only scrolls sideways when the columns need more than that.
     return (
       <View style={[styles.table, { maxHeight: height }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
-          <View style={{ width: tableWidth }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          nestedScrollEnabled
+          contentContainerStyle={styles.tableContent}
+        >
+          <View style={[styles.tableInner, { minWidth: tableWidth }]}>
             <View style={styles.tableHead}>
-              <Text style={[styles.th, { width: tableColumns.week }]}>
+              <Text
+                style={[
+                  styles.th,
+                  styles.weekColumn,
+                  { minWidth: tableColumns.week },
+                ]}
+              >
                 Week
               </Text>
               {extraColumns?.map((c, index) => (
                 <Text
                   key={c.header}
-                  style={[styles.th, { width: tableColumns.values[index] }]}
+                  style={[
+                    styles.th,
+                    styles.thValue,
+                    { width: tableColumns.values[index] },
+                  ]}
                 >
                   {c.header}
                 </Text>
@@ -163,6 +182,7 @@ export default function TrendChart({
                   key={s.key}
                   style={[
                     styles.th,
+                    styles.thValue,
                     {
                       width:
                         tableColumns.values[
@@ -176,15 +196,15 @@ export default function TrendChart({
               ))}
             </View>
 
-            <ScrollView
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-              style={styles.tableBody}
-            >
+            <ScrollView nestedScrollEnabled style={styles.tableBody}>
               {points.map(p => (
                 <View key={p.sortKey ?? p.label} style={styles.tr}>
                   <Text
-                    style={[styles.weekText, { width: tableColumns.week }]}
+                    style={[
+                      styles.weekText,
+                      styles.weekColumn,
+                      { minWidth: tableColumns.week },
+                    ]}
                     numberOfLines={2}
                   >
                     {p.rangeLabel ?? p.label}
@@ -524,8 +544,10 @@ export default function TrendChart({
 }
 
 const TOOLTIP_W = 180;
-/** The heading's height; the rows take whatever is left of the card. */
-const HEAD_H = 34;
+// The table's row heights are the web's, so the same number of weeks fits in
+// the box and the next one shows part-way, which is what says it scrolls.
+const HEAD_H = 30;
+const ROW_LINE = rem(1.25);
 
 const styles = StyleSheet.create({
   empty: {
@@ -589,7 +611,7 @@ const styles = StyleSheet.create({
   },
 
   table: {
-    borderRadius: RADII.card,
+    borderRadius: RADII.xl,
     borderWidth: 1,
     borderColor: COLORS.lineSoft,
     overflow: 'hidden',
@@ -602,15 +624,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: space(3),
     paddingVertical: space(1),
   },
-  // .table-th
+  tableContent: { flexGrow: 1 },
+  tableInner: { flexGrow: 1 },
+  weekColumn: { flex: 1 },
+  // .table-th — each heading sits over its column's own alignment.
   th: {
     fontSize: TEXT.xs,
     fontWeight: WEIGHT.semibold,
     letterSpacing: TEXT.xs * 0.025,
     textTransform: 'uppercase',
     color: COLORS.textMuted,
-    textAlign: 'center',
   },
+  thValue: { textAlign: 'right' },
   tableBody: { flexGrow: 0, flexShrink: 1 },
   tr: {
     flexDirection: 'row',
@@ -620,11 +645,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: space(3),
     paddingVertical: space(2),
   },
-  weekText: { fontSize: TEXT.sm, color: COLORS.textMuted },
+  weekText: {
+    fontSize: TEXT.sm,
+    lineHeight: ROW_LINE,
+    color: COLORS.textMuted,
+  },
   cell: {
     ...TNUM,
     fontSize: TEXT.sm,
-    fontWeight: WEIGHT.semibold,
+    lineHeight: ROW_LINE,
+    fontWeight: WEIGHT.bold,
     color: COLORS.primary,
     textAlign: 'right',
   },

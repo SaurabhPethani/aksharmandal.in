@@ -63,16 +63,13 @@ export default function NotificationsPage({
         onHelp={onHelp}
         onProfile={onProfile}
         notificationCount={unreadCount}
-        breadcrumbs={['Dashboard', 'Notifications']}
+        // breadcrumbs={['Dashboard', 'Notifications']}
       />
       <ScrollViewWithTop
         style={styles.flex}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={refresh}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} />
         }
       >
         <View style={styles.titleRow}>
@@ -88,13 +85,15 @@ export default function NotificationsPage({
           ) : null}
         </View>
         <Text style={styles.subtitle}>
-          Transfer approvals, information-change requests and updates on your requests
+          Transfer approvals, information-change requests and updates on your
+          requests
         </Text>
         {!canViewAll ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Notifications unavailable</Text>
             <Text style={styles.detail}>
-              Your role does not grant access to transfer or information-change notifications.
+              Your role does not grant access to transfer or information-change
+              notifications.
             </Text>
           </View>
         ) : isLoading ? (
@@ -112,10 +111,7 @@ export default function NotificationsPage({
                 {group.items.map(item => (
                   <View
                     key={item.id}
-                    style={[
-                      styles.item,
-                      item.unread && styles.unreadItem,
-                    ]}
+                    style={[styles.item, item.unread && styles.unreadItem]}
                   >
                     <View style={styles.icon}>
                       <MaterialCommunityIcons
@@ -149,7 +145,8 @@ export default function NotificationsPage({
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>You’re all caught up</Text>
             <Text style={styles.detail}>
-              Transfer approvals and information-change requests will appear here.
+              Transfer approvals and information-change requests will appear
+              here.
             </Text>
           </View>
         )}

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  Keyboard,
   KeyboardAvoidingView,
   PanResponder,
   Pressable,
@@ -67,6 +68,13 @@ export function Modal({
     if (isOpen) drag.setValue(0);
   }, [isOpen, drag]);
 
+  // A card opened over a keyboard would sit behind it: the keyboard wrapper
+  // only learns of a keyboard that opens after it mounts. So the keyboard goes
+  // first, before the card's own fields can take focus.
+  useEffect(() => {
+    if (isOpen) Keyboard.dismiss();
+  }, [isOpen]);
+
   const swipe = useRef(
     PanResponder.create({
       // Only a mostly-vertical pull downward, so a tap still reaches ✕.
@@ -114,112 +122,125 @@ export function Modal({
     <View style={styles.fill}>
       {/* `padding` on both platforms: the overlap is measured, so where the
           window has already been resized for the keyboard it comes out as 0.
-          The layer keeps clear of the status bar and gesture bar, so the card
-          never runs under either. */}
+          It REPLACES this view's own paddingBottom, so the safe-area padding
+          lives on the layer inside; the offset stops the bottom inset being
+          counted a second time while the keyboard is up. */}
       <KeyboardAvoidingView
         behavior="padding"
-        style={[
-          styles.layer,
-          {
-            paddingTop: insets.top + space(4),
-            paddingBottom: insets.bottom + space(4),
-          },
-        ]}
+        keyboardVerticalOffset={-insets.bottom}
+        style={styles.fill}
       >
-        <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
-          <Pressable
-            style={styles.fill}
-            onPress={dismiss}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          />
-        </Animated.View>
+        {/* Keeps clear of the status bar and the navigation bar, so the card
+            never runs under either. */}
+        <View
+          style={[
+            styles.layer,
+            {
+              paddingTop: insets.top + space(4),
+              paddingBottom: insets.bottom + space(4),
+            },
+          ]}
+        >
+          <Animated.View
+            style={[styles.backdrop, { opacity: backdropOpacity }]}
+          >
+            <Pressable
+              style={styles.fill}
+              onPress={dismiss}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            />
+          </Animated.View>
 
-        {/*
+          {/*
           A flex column, and the scroll lives on the body alone: the header and
           footer never shrink, so the confirm button cannot be pushed off the
           bottom of a tall dialog. Capped at MAX_HEIGHT of the screen, and
           shrinks further to the space the layer has left, which is what keeps
           it in view above the keyboard.
         */}
-        <Animated.View
-          accessibilityViewIsModal
-          style={[
-            styles.panel,
-            {
-              maxWidth: SIZES[size] ?? SIZES.md,
-              maxHeight: height * MAX_HEIGHT,
-              transform: [{ translateY: drag }],
-            },
-          ]}
-        >
-          {/* The drag handle: grab bar + title row. */}
-          <View {...(dismissible ? swipe.panHandlers : {})}>
-            {dismissible ? (
+          <Animated.View
+            accessibilityViewIsModal
+            style={[
+              styles.panel,
+              {
+                maxWidth: SIZES[size] ?? SIZES.md,
+                maxHeight: height * MAX_HEIGHT,
+                transform: [{ translateY: drag }],
+              },
+            ]}
+          >
+            {/* The drag handle: grab bar + title row. */}
+            <View {...(dismissible ? swipe.panHandlers : {})}>
+              {dismissible ? (
+                <View
+                  style={styles.grabber}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <View style={styles.grabberBar} />
+                </View>
+              ) : null}
               <View
-                style={styles.grabber}
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
+                style={[
+                  styles.header,
+                  dismissible && styles.headerUnderGrabber,
+                ]}
               >
-                <View style={styles.grabberBar} />
+                <View style={styles.headerCopy}>
+                  <Text
+                    style={[styles.title, titleStyle]}
+                    accessibilityRole="header"
+                  >
+                    {title}
+                  </Text>
+                  {description ? (
+                    <Text style={styles.description}>{description}</Text>
+                  ) : null}
+                </View>
+                {dismissible && (
+                  <Pressable
+                    onPress={onClose}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close"
+                    style={({ pressed }) => [
+                      styles.close,
+                      pressed && styles.closePressed,
+                    ]}
+                  >
+                    {({ pressed }) => (
+                      <MaterialCommunityIcons
+                        name="close"
+                        size={space(5)}
+                        color={pressed ? COLORS.primary : COLORS.textMuted}
+                      />
+                    )}
+                  </Pressable>
+                )}
               </View>
-            ) : null}
-            <View
-              style={[styles.header, dismissible && styles.headerUnderGrabber]}
-            >
-              <View style={styles.headerCopy}>
-                <Text
-                  style={[styles.title, titleStyle]}
-                  accessibilityRole="header"
-                >
-                  {title}
-                </Text>
-                {description ? (
-                  <Text style={styles.description}>{description}</Text>
-                ) : null}
-              </View>
-              {dismissible && (
-                <Pressable
-                  onPress={onClose}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                  style={({ pressed }) => [
-                    styles.close,
-                    pressed && styles.closePressed,
-                  ]}
-                >
-                  {({ pressed }) => (
-                    <MaterialCommunityIcons
-                      name="close"
-                      size={space(5)}
-                      color={pressed ? COLORS.primary : COLORS.textMuted}
-                    />
-                  )}
-                </Pressable>
-              )}
             </View>
-          </View>
 
-          {/* A dialog whose content is dragged rather than read opts out: a
+            {/* A dialog whose content is dragged rather than read opts out: a
               scroll view competes with the gesture inside it for the
               responder, and the photo cropper always lost the vertical half
               of a drag to it. */}
-          {scrollable ? (
-            <ScrollView
-              style={styles.body}
-              contentContainerStyle={styles.bodyContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              {children}
-            </ScrollView>
-          ) : (
-            <View style={[styles.body, styles.bodyContent]}>{children}</View>
-          )}
+            {scrollable ? (
+              <ScrollView
+                style={styles.body}
+                contentContainerStyle={styles.bodyContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                {children}
+              </ScrollView>
+            ) : (
+              <View style={[styles.body, styles.bodyContent]}>{children}</View>
+            )}
 
-          {/* `flex-wrap`, so two long button labels drop a line on a narrow
+            {/* `flex-wrap`, so two long button labels drop a line on a narrow
               phone instead of pushing the action off the edge. */}
-          {footer ? <View style={styles.footer}>{footer}</View> : null}
-        </Animated.View>
+            {footer ? <View style={styles.footer}>{footer}</View> : null}
+          </Animated.View>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );

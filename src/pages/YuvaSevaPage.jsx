@@ -555,7 +555,7 @@ export default function YuvaSevaPage({
         onNotifications={onNotifications}
         onProfile={onProfile}
         onBack={onBack}
-        breadcrumbs={['Dashboard', 'Yuva Seva']}
+        // breadcrumbs={['Dashboard', 'Yuva Seva']}
       />
       <ScrollViewWithTop
         style={styles.flex}
@@ -583,7 +583,8 @@ export default function YuvaSevaPage({
           </View>
         ) : (
           <>
-            {areaOptions && (areaOptions.show_sabha_group || areaOptions.show_sabha) ? (
+            {areaOptions &&
+            (areaOptions.show_sabha_group || areaOptions.show_sabha) ? (
               <View style={styles.filterWrap}>
                 <Text style={styles.filterLabel}>Sabha filter</Text>
                 <View style={styles.filterRow}>
@@ -595,7 +596,10 @@ export default function YuvaSevaPage({
                       value={area.sabhaGroupIds || []}
                       onChange={ids =>
                         setArea(value =>
-                          pruneSelection({ ...value, sabhaGroupIds: ids }, areaOptions),
+                          pruneSelection(
+                            { ...value, sabhaGroupIds: ids },
+                            areaOptions,
+                          ),
                         )
                       }
                     />
@@ -608,7 +612,10 @@ export default function YuvaSevaPage({
                       value={area.sabhaIds || []}
                       onChange={ids =>
                         setArea(value =>
-                          pruneSelection({ ...value, sabhaIds: ids }, areaOptions),
+                          pruneSelection(
+                            { ...value, sabhaIds: ids },
+                            areaOptions,
+                          ),
                         )
                       }
                     />
@@ -686,11 +693,18 @@ export default function YuvaSevaPage({
             {visibleRows.length ? (
               <View style={styles.totalCard}>
                 <Text style={styles.totalCardTitle}>
-                  {visibleStats.members} member{visibleStats.members === 1 ? '' : 's'} on follow-up
+                  {visibleStats.members} member
+                  {visibleStats.members === 1 ? '' : 's'} on follow-up
                 </Text>
                 <Text style={styles.totalCardMeta}>
-                  <Text style={styles.totalCardMetaStrong}>{visibleStats.count15}</Text> in 15 days ·{' '}
-                  <Text style={styles.totalCardMetaStrong}>{visibleStats.count30}</Text> in 30 days
+                  <Text style={styles.totalCardMetaStrong}>
+                    {visibleStats.count15}
+                  </Text>{' '}
+                  in 15 days ·{' '}
+                  <Text style={styles.totalCardMetaStrong}>
+                    {visibleStats.count30}
+                  </Text>{' '}
+                  in 30 days
                 </Text>
               </View>
             ) : null}

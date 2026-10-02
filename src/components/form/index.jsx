@@ -4,6 +4,7 @@ import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vec
 import { Text, TextInput } from '../Typography';
 import { Modal } from '../Overlays';
 import BaseDatePicker from './DatePicker';
+import BaseTimePicker from './TimePicker';
 import { COLORS, RADII, TEXT, WEIGHT, space } from '../../constants/theme';
 
 // The web app's form primitives (components/form/index.jsx), ported as they are
@@ -104,7 +105,7 @@ export function Input({
   );
 }
 
-/** The `.input-field` box as a button — what Select, Combobox and DatePicker sit in. */
+/** The `.input-field` box as a button — what Select, Combobox and the pickers sit in. */
 function FieldTrigger({
   label,
   placeholder,
@@ -337,6 +338,10 @@ export function Checkbox({ label, checked = false, disabled = false, onChange })
 
 export function DatePicker(props) {
   return <BaseDatePicker {...props} trigger={FieldTrigger} />;
+}
+
+export function TimePicker(props) {
+  return <BaseTimePicker {...props} trigger={FieldTrigger} />;
 }
 
 const styles = StyleSheet.create({

@@ -21,7 +21,7 @@ import {
   Skeleton,
 } from '../components/ui';
 import { Modal } from '../components/Overlays';
-import { Tabs } from '../components/Navigation';
+import { Breadcrumbs, Tabs } from '../components/Navigation';
 import { FormField, Textarea } from '../components/form';
 import {
   useMyBirthdayWishes,
@@ -648,6 +648,9 @@ export default function BirthdaysPage({
             tab === 'received'
               ? 'Wishes sent to you'
               : `Everyone celebrating today, ${todayLabel()}`
+          }
+          breadcrumbs={
+            <Breadcrumbs items={[{ label: 'Birthdays' }]} onHome={onBack} />
           }
         />
 

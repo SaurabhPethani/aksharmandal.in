@@ -6,10 +6,10 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Pressable,
-  Platform,
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import SiteFooter from '../components/SiteFooter';
@@ -268,6 +268,7 @@ export default function LoginPage({
   onOpenDeleteAccount,
 }) {
   const auth = useAuth();
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState('main');
   const [tab, setTab] = useState('pin');
   const [mobile, setMobile] = useState('');
@@ -487,9 +488,13 @@ export default function LoginPage({
           />
         </Svg>
       </View>
+      {/* `padding` on Android too: the window is no longer resized for the
+          keyboard there, so the form would sit under it. The screen starts
+          below the status bar, which the offset accounts for. */}
       <KeyboardAvoidingView
         style={styles.safe}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
+        keyboardVerticalOffset={insets.top}
       >
         <ScrollViewWithTop
           contentContainerStyle={styles.scroll}

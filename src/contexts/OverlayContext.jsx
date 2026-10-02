@@ -101,8 +101,16 @@ export function OverlayHost() {
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+      {/* Each overlay gets the whole layer to itself. As plain siblings two
+          open overlays shared the height, one in each half of the screen. */}
       {entries.map(entry => (
-        <React.Fragment key={entry.id}>{entry.content}</React.Fragment>
+        <View
+          key={entry.id}
+          pointerEvents="box-none"
+          style={StyleSheet.absoluteFill}
+        >
+          {entry.content}
+        </View>
       ))}
     </View>
   );

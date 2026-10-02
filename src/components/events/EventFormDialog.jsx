@@ -2,7 +2,14 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import FormDialog from '../FormDialog';
 import { Text } from '../Typography';
-import { DatePicker, FormField, Input, Select, Textarea } from '../form';
+import {
+  DatePicker,
+  FormField,
+  Input,
+  Select,
+  Textarea,
+  TimePicker,
+} from '../form';
 import { Toggle } from '../ui';
 import { RULES, todayISO } from '../../utils/validation';
 import { NIMIT_SEVAK_LABEL, SWAYAM_SEVAK_LABEL, DOING_POOJA_LABEL } from '../../utils/memberFlags';
@@ -68,13 +75,6 @@ function cleanCustomFields(fields) {
     }
   }
   return { fields: out };
-}
-
-/** A best-effort HH:MM (24-hr) mask as the field is typed. */
-function maskTime(raw) {
-  const digits = raw.replace(/\D/g, '').slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
 }
 
 function TargetPill({ label, on, onPress, disabled }) {
@@ -243,13 +243,11 @@ export default function EventFormDialog({ event, categories, isOpen, busy, error
         />
       </FormField>
 
-      <FormField label="Time" hint="24-hour, e.g. 21:00">
-        <Input
+      <FormField label="Time">
+        <TimePicker
           value={form.time}
-          onChangeText={next => set('time', maskTime(next))}
-          placeholder="HH:MM"
-          inputMode="numeric"
-          maxLength={5}
+          placeholder="Select time"
+          onChange={next => set('time', next)}
         />
       </FormField>
 

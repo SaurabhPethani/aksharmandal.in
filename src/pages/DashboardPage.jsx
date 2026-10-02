@@ -284,6 +284,7 @@ export function Drawer({
   onOpenNotifications,
   activeRoute = 'dashboard',
   roleName,
+  showYuvaSeva = true,
 }) {
   const slide = useRef(new Animated.Value(-320)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -365,40 +366,46 @@ export function Drawer({
               'Dashboard',
               activeRoute === 'dashboard',
             ],
-           
-             ['hand-heart', 'Yuva Seva', activeRoute === 'yuva-seva'], 
-             ['calendar-star', 'Events', activeRoute === 'events'],
-          ].map(([icon, label, active]) => (
-            <Pressable
-              key={label}
-              onPress={() => {
-                if (label === 'Dashboard') onDashboard?.();
-                else if (label === 'Events') onOpenEvents?.();
-                else if (label === 'Yuva Seva') onOpenYuvaSeva?.();
-                onClose();
-              }}
-              style={[styles.drawerItem, active && styles.drawerItemActive]}
-            >
-              <MaterialCommunityIcons
-                name={icon}
-                size={20}
-                color={active ? COLORS.navy : '#C5D8E8'}
-              />
-              <Text
-                style={[
-                  styles.drawerItemText,
-                  active && styles.drawerItemTextActive,
-                ]}
+
+            showYuvaSeva && [
+              'hand-heart',
+              'Yuva Seva',
+              activeRoute === 'yuva-seva',
+            ],
+            ['calendar-star', 'Events', activeRoute === 'events'],
+          ]
+            .filter(Boolean)
+            .map(([icon, label, active]) => (
+              <Pressable
+                key={label}
+                onPress={() => {
+                  if (label === 'Dashboard') onDashboard?.();
+                  else if (label === 'Events') onOpenEvents?.();
+                  else if (label === 'Yuva Seva') onOpenYuvaSeva?.();
+                  onClose();
+                }}
+                style={[styles.drawerItem, active && styles.drawerItemActive]}
               >
-                {label}
-              </Text>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={18}
-                color={active ? COLORS.navy : '#7EA1BA'}
-              />
-            </Pressable>
-          ))}
+                <MaterialCommunityIcons
+                  name={icon}
+                  size={20}
+                  color={active ? COLORS.navy : '#C5D8E8'}
+                />
+                <Text
+                  style={[
+                    styles.drawerItemText,
+                    active && styles.drawerItemTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={18}
+                  color={active ? COLORS.navy : '#7EA1BA'}
+                />
+              </Pressable>
+            ))}
         </ScrollView>
 
         <Pressable onPress={onSignOut} style={[styles.drawerItem]}>
@@ -424,7 +431,17 @@ export function Drawer({
 function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
   const image = qrUrl(userId);
   return (
-    <View style={[styles.qrBar, expanded && styles.qrBarExpanded]}>
+    // A tap anywhere on the card shows or hides it. Not `accessible`, so the
+    // two buttons inside stay reachable on their own.
+    <Pressable
+      onPress={onToggle}
+      accessible={false}
+      style={({ pressed }) => [
+        styles.qrBar,
+        expanded && styles.qrBarExpanded,
+        pressed && styles.toggleCardPressed,
+      ]}
+    >
       <View style={styles.qrBarHeader}>
         <Text style={styles.qrBarTitle} numberOfLines={1}>
           My QR Code
@@ -438,12 +455,14 @@ function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
           >
             <Text style={styles.qrShowText}>{expanded ? 'Hide' : 'Show'}</Text>
           </Pressable>
+          {/* Never `disabled`: a disabled button lets the tap through to the
+              card, which would then fold away mid-download. */}
           <Pressable
             onPress={onDownload}
-            disabled={downloading}
             style={[styles.qrDownloadButton, downloading && styles.qrBusy]}
             accessibilityRole="button"
             accessibilityLabel="Download QR Code"
+            accessibilityState={{ disabled: downloading, busy: downloading }}
           >
             {downloading ? (
               <ActivityIndicator size="small" color={COLORS.navy} />
@@ -481,7 +500,7 @@ function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
           </Text>
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -501,13 +520,24 @@ function SevaRing() {
   const offset = C * (1 - value / 100);
   // Colour by how much of the promised Seva is in: red → amber → green.
   const color = value >= 80 ? '#15803d' : value >= 50 ? '#d97706' : '#b91c1c';
+  const toggle = () => setExpanded(open => !open);
 
   return (
-    <View style={[styles.sectionPanel, styles.sevaPanel]}>
-      <View style={styles.sevaHeader}>
+    // The whole card toggles, like the QR code above it.
+    <Pressable
+      onPress={toggle}
+      accessible={false}
+      style={({ pressed }) => [
+        styles.sectionPanel,
+        styles.sevaPanel,
+        !expanded && styles.sevaPanelFolded,
+        pressed && styles.toggleCardPressed,
+      ]}
+    >
+      <View style={[styles.sevaHeader, !expanded && styles.sevaHeaderFolded]}>
         <Text style={styles.sectionTitle}>Seva</Text>
         <Pressable
-          onPress={() => setExpanded(open => !open)}
+          onPress={toggle}
           style={styles.showTableBtn}
           accessibilityRole="button"
           accessibilityLabel={expanded ? 'Hide Seva' : 'Show Seva'}
@@ -561,7 +591,7 @@ function SevaRing() {
           <Text style={styles.sevaCaption}>Seva submitted of promised</Text>
         </>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -1056,7 +1086,11 @@ function WeeklyAttendanceCard({
           style={styles.showTableBtn}
           onPress={() => setShowTable(!showTable)}
         >
-          <MaterialCommunityIcons name="table" size={15} color={COLORS.navy} />
+          <MaterialCommunityIcons
+            name={showTable ? 'chart-line' : 'table'}
+            size={15}
+            color={COLORS.navy}
+          />
           <Text style={styles.showTableText}>
             {showTable ? 'Show chart' : 'Show table'}
           </Text>
@@ -2304,6 +2338,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   metricCardPressed: { opacity: 0.75 },
+  toggleCardPressed: { opacity: 0.9 },
   metricCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2444,6 +2479,13 @@ const styles = StyleSheet.create({
   donutLabelText: { fontWeight: '600', color: COLORS.muted },
   donutLabelCount: { fontWeight: '800', color: COLORS.navy },
   sevaPanel: { alignItems: 'center' },
+  // Folded, it is one row: the height of the Not Login card under it.
+  sevaPanelFolded: {
+    minHeight: 52,
+    paddingVertical: 8,
+    justifyContent: 'center',
+  },
+  sevaHeaderFolded: { marginBottom: 0 },
   sevaHeader: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { eventsService } from '../services/eventsService';
-import { downloadAndShareFile } from '../utils/fileDownload';
+import { downloadFile } from '../utils/fileDownload';
 
 /**
  * `enabled` must be the caller's EVENTS:READ check, not just "the page is open".
@@ -55,16 +55,14 @@ export function useEventRegistrationData(eventId, enabled) {
 
 /**
  * Fetch one event's registration Excel with the caller's own access token and
- * hand it to the OS share sheet. The web downloads via a blob→object-URL
- * anchor click, which has no RN equivalent (no Blob, no DOM) — see
- * utils/fileDownload.js. Changes nothing server-side so it never refreshes
- * queries.
+ * save it to the device — see utils/fileDownload.js. Resolves that file's
+ * `{ ok, mode }`. Changes nothing server-side so it never refreshes queries.
  */
 export function useEventDataExport() {
   return useMutation({
     meta: { refreshOnSuccess: false },
     mutationFn: async ({ eventId, filename }) => {
-      const result = await downloadAndShareFile(
+      const result = await downloadFile(
         eventsService.exportEventDataPath(eventId),
         filename || 'event-registrations.xlsx',
       );

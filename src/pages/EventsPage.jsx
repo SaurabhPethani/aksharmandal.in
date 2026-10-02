@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import AppHeader from '../components/AppHeader';
@@ -20,8 +20,8 @@ import EventResultsDialog from '../components/events/EventResultsDialog';
 import EventRegistrationData from '../components/events/EventRegistrationData';
 import RegistrationsByEvent from '../components/events/RegistrationsByEvent';
 import EditRegistrationDialog from '../components/events/EditRegistrationDialog';
-import { PermissionContext } from '../contexts/PermissionContext';
 import { useToast } from '../hooks/core';
+import { useMyPermissions } from '../hooks/useMyPermissions';
 import { useCategories, useMe } from '../hooks/useLookups';
 import {
   useEventMutations,
@@ -46,12 +46,8 @@ import { COLORS, RADII, TEXT, WEIGHT, space } from '../constants/theme';
  * `GET /events` 403s for them; the frontend must not fetch the event list
  * before checking READ.
  *
- * ⚠ THE APP DOES NOT YET MOUNT A PermissionProvider (see contexts/
- * PermissionContext.jsx), so `permissions` below is `null` until it does. Every
- * check below reads `!permissions || permissions.can(...)` — the same
- * graceful-degrade convention useUsers.js and useNotifications.js already use
- * — so the page stays fully usable today and starts honouring real grants the
- * moment the provider ships, with no further change here.
+ * The grants are the caller's own, from hooks/useMyPermissions. Nothing is
+ * drawn until they load, so no role is shown a tab or button it does not hold.
  */
 const FILTERS = [
   { key: 'all', label: 'All', status: undefined },
@@ -69,11 +65,12 @@ export default function EventsPage({
   onOpenDeleteAccount,
   onProfile,
 }) {
-  const permissions = useContext(PermissionContext);
+  const permissionsQ = useMyPermissions();
+  const permissions = permissionsQ.data;
   const toast = useToast();
 
   const allowed = (moduleName, actionName) =>
-    !permissions || permissions.can(moduleName, actionName);
+    Boolean(permissions?.can(moduleName, actionName));
 
   const canRead = allowed(MODULES.EVENTS, ACTIONS.READ);
   // One grant for create AND update — see EventFormDialog / the web note.
@@ -84,8 +81,16 @@ export default function EventsPage({
   // Registered Data is scope-gated, NOT permission-gated: anyone with a band
   // above 'self' sees registrant data within their own scope.
   const scopeLevel = permissions?.scopeLevel;
-  const canSeeData =
-    !permissions || (Boolean(scopeLevel) && scopeLevel !== 'self');
+  const canSeeData = Boolean(scopeLevel) && scopeLevel !== 'self';
+
+  // Says only what this caller can do here.
+  const subtitle = canWrite
+    ? 'Create events, register members, and keep track of registrations.'
+    : canSeeData
+      ? 'Discover events, register, and keep track of your registrations.'
+      : canRegister
+        ? 'Discover events and register.'
+        : 'Discover upcoming events.';
 
   // const TABS = [
   //   { key: 'events', label: 'Events', show: canRead },
@@ -259,18 +264,41 @@ export default function EventsPage({
         toast.error(err?.message ?? 'Could not save the registration.'),
     });
 
+  const header = (
+    <AppHeader
+      onMenu={onMenu}
+      onHelp={onHelp}
+      onNotifications={onNotifications}
+      onProfile={onProfile}
+      onBack={onBack}
+      // breadcrumbs={['Dashboard', 'Events']}
+    />
+  );
+
+  if (!permissions) {
+    return (
+      <View style={styles.safe}>
+        {header}
+        <View style={styles.state}>
+          {permissionsQ.error ? (
+            <ErrorState
+              error={permissionsQ.error}
+              onRetry={permissionsQ.refetch}
+              title="Could not load your access"
+            />
+          ) : (
+            <Skeleton style={styles.tabSkeleton} />
+          )}
+        </View>
+      </View>
+    );
+  }
+
   if (!TABS.length) {
     return (
       <View style={styles.safe}>
-        <AppHeader
-          onMenu={onMenu}
-          onHelp={onHelp}
-          onNotifications={onNotifications}
-          onProfile={onProfile}
-          onBack={onBack}
-          breadcrumbs={['Dashboard', 'Events']}
-        />
-        <View style={styles.noAccess}>
+        {header}
+        <View style={styles.state}>
           <EmptyState
             title="No access"
             hint="Viewing events requires the Events · Read permission."
@@ -282,21 +310,14 @@ export default function EventsPage({
 
   return (
     <View style={styles.safe}>
-      <AppHeader
-        onMenu={onMenu}
-        onHelp={onHelp}
-        onNotifications={onNotifications}
-        onProfile={onProfile}
-        onBack={onBack}
-        breadcrumbs={['Dashboard', 'Events']}
-      />
+      {header}
       <ScrollViewWithTop
         style={styles.flex}
         contentContainerStyle={styles.content}
       >
         <PageHeader
           title="Events"
-          subtitle="Discover events, register, and keep track of your registrations."
+          subtitle={subtitle}
           actions={
             canWrite ? (
               <Button variant="accent" onPress={openCreate}>
@@ -514,7 +535,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     gap: space(5),
   },
-  noAccess: { flex: 1, padding: space(4.5) },
+  state: { flex: 1, padding: space(4.5) },
   footerBleed: {
     marginTop: 'auto',
     marginHorizontal: -space(4.5),
