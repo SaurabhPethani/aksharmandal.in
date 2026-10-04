@@ -1,21 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Pressable,
   RefreshControl,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DatePicker, FormField } from '../components/form';
 import { MaterialDesignIcons as Icon } from '@react-native-vector-icons/material-design-icons/static';
 import AppHeader from '../components/AppHeader';
 import SiteFooter from '../components/SiteFooter';
 import { Modal } from '../components/Overlays';
 import { Text } from '../components/Typography';
+import { Card, EmptyState } from '../components/ui';
 import MultiSelectFilter from '../components/form/MultiSelectFilter';
 import ScrollViewWithTop from '../components/ScrollToTop';
 import { dashboardService } from '../services/dashboardService';
 import { searchMatches } from '../utils/options';
+import { todayISO } from '../utils/validation';
 
 const C = {
   navy: '#003158',
@@ -28,15 +33,6 @@ const C = {
   red: '#B42318',
   green: '#15803D',
   amber: '#B45309',
-};
-
-const SOULS = {
-  mission_double: ['Mission Double', '#8B5CF6'],
-  divine: ['Divine', '#16A34A'],
-  climber: ['Climber', '#3B82F6'],
-  steady: ['Steady', '#CA8A04'],
-  seeking: ['Seeking', '#D97706'],
-  sleeping: ['Sleeping', '#10B981'],
 };
 
 function dateOnly(value) {
@@ -83,7 +79,14 @@ function summary(rows) {
         yesterday: total.yesterday + (Number(row.yesterday_count) || 0),
       };
     },
-    { members: 0, count15: 0, distinct15: 0, count30: 0, distinct30: 0, yesterday: 0 },
+    {
+      members: 0,
+      count15: 0,
+      distinct15: 0,
+      count30: 0,
+      distinct30: 0,
+      yesterday: 0,
+    },
   );
 }
 
@@ -104,6 +107,83 @@ const AREA_LEVELS = [
   { key: 'sabhaGroupIds', opt: 'sabha_groups', show: 'show_sabha_group' },
   { key: 'sabhaIds', opt: 'sabhas', show: 'show_sabha' },
 ];
+
+const SOUL_TAG = {
+  mission_double: {
+    label: 'Mission Double',
+    color: '#8B5CF6',
+    meaning:
+      'A new Yuvak — joined within the last 12 weeks. Placed here by joining date, not by attendance, and not applied to Ambrish or Nimit Sevak. Focus: a warm welcome and regular contact.',
+  },
+  divine: {
+    label: 'Divine',
+    color: '#16A34A',
+    meaning:
+      '52-week attendance 72% or more — or already 55% or more and rising (last 12 weeks at least 8 points above the 52-week average). The consistent regulars — celebrate them and involve them in seva.',
+  },
+  climber: {
+    label: 'Climber',
+    color: '#3B82F6',
+    meaning:
+      'Under 55% over the year, but rising — the last 12 weeks are at least 8 points above the 52-week average. Momentum is building — encourage it.',
+  },
+  steady: {
+    label: 'Steady',
+    color: '#CA8A04',
+    meaning:
+      '52-week attendance between 50% and 72% and holding — the last 12 weeks are within 8 points of the year, neither rising nor falling. A light nudge keeps them strong.',
+  },
+  seeking: {
+    label: 'Seeking',
+    color: '#D97706',
+    meaning:
+      '52-week attendance between 50% and 72% but falling — the last 12 weeks are at least 8 points below the 52-week average. Follow up before the slide continues.',
+  },
+  sleeping: {
+    label: 'Sleeping',
+    color: '#10B981',
+    meaning:
+      '52-week attendance under 50% and not rising. Largely disengaged — needs a personal re-connection.',
+  },
+};
+
+function SoulTag({ band }) {
+  const meta = SOUL_TAG[band];
+  if (!meta) return null;
+  return (
+    <Text
+      style={[
+        styles.tag,
+        { color: meta.color, backgroundColor: `${meta.color}18` },
+      ]}
+    >
+      {meta.label}
+    </Text>
+  );
+}
+
+function SoulLegendDialog({ isOpen, onClose }) {
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="lg"
+      title="Soul Types — what they mean"
+      titleStyle={styles.legendHeading}
+      description="Classified automatically from attendance: 52W = share of the last 52 Sabha weeks attended, 12W = the last 12. Only members seen at least once in the last 12 weeks get a tag."
+    >
+      <View style={styles.legendList}>
+        {Object.entries(SOUL_TAG).map(([band, meta]) => (
+          <View key={band} style={styles.legendItem}>
+            <SoulTag band={band} />
+            <Text style={styles.legendTitle}>{meta.label} Souls</Text>
+            <Text style={styles.legendMeaning}>{meta.meaning}</Text>
+          </View>
+        ))}
+      </View>
+    </Modal>
+  );
+}
 
 function asStrSet(values) {
   return new Set((values || []).map(String));
@@ -146,7 +226,9 @@ function levelCoverage(levelKey, ids, filters) {
   optionsAt(levelKey, filters)
     .filter(option => selected.has(String(option.id)))
     .forEach(option => {
-      optionCoverage(levelKey, option, filters).forEach(id => covered.add(String(id)));
+      optionCoverage(levelKey, option, filters).forEach(id =>
+        covered.add(String(id)),
+      );
     });
 
   return covered;
@@ -163,7 +245,11 @@ function intersectSets(a, b) {
 function ancestorAllowed(idx, selection, filters) {
   let allowed = null;
   for (let i = 0; i < idx; i += 1) {
-    const covered = levelCoverage(AREA_LEVELS[i].key, selection[AREA_LEVELS[i].key], filters);
+    const covered = levelCoverage(
+      AREA_LEVELS[i].key,
+      selection[AREA_LEVELS[i].key],
+      filters,
+    );
     if (covered) {
       allowed = allowed === null ? covered : intersectSets(allowed, covered);
     }
@@ -190,8 +276,12 @@ function pruneSelection(selection, filters) {
 
   for (let i = 0; i < AREA_LEVELS.length; i += 1) {
     const levelKey = AREA_LEVELS[i].key;
-    const available = new Set(availableAt(i, next, filters).map(option => String(option.id)));
-    next[levelKey] = (next[levelKey] || []).filter(id => available.has(String(id)));
+    const available = new Set(
+      availableAt(i, next, filters).map(option => String(option.id)),
+    );
+    next[levelKey] = (next[levelKey] || []).filter(id =>
+      available.has(String(id)),
+    );
   }
 
   return next;
@@ -238,11 +328,47 @@ function Kpi({ label, value, unit }) {
   );
 }
 
+function SearchBox({ value, onChange }) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View style={styles.searchPanel}>
+      <View style={[styles.searchField, focused && styles.searchFieldFocused]}>
+        <Icon name="magnify" size={22} color={C.muted} />
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder="Search member by name…"
+          placeholderTextColor={C.muted}
+          accessibilityLabel="Search members by name"
+          autoCorrect={false}
+          returnKeyType="search"
+          style={styles.searchInput}
+        />
+        {value ? (
+          <Pressable
+            onPress={() => onChange('')}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            hitSlop={8}
+            style={styles.searchClear}
+          >
+            {({ pressed }) => (
+              <Icon name="close" size={15} color={pressed ? C.navy : C.muted} />
+            )}
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 function MemberRow({ row, canAdd, onHistory, onAdd, showAssigned, showSabha }) {
   const [open, setOpen] = useState(false);
   const tone = priorityStyle(row.priority);
   const last = dateOnly(row.date);
-  const soul = SOULS[row.soul_band];
   const creator = row.followup_user_name;
   const compact = last ? [last, creator].filter(Boolean).join(' · ') : 'Never';
 
@@ -260,16 +386,7 @@ function MemberRow({ row, canAdd, onHistory, onAdd, showAssigned, showSabha }) {
             <Text style={styles.memberName} numberOfLines={1}>
               {row.user_name || 'Member'}
             </Text>
-            {soul ? (
-              <Text
-                style={[
-                  styles.tag,
-                  { color: soul[1], backgroundColor: `${soul[1]}18` },
-                ]}
-              >
-                {soul[0]}
-              </Text>
-            ) : null}
+            <SoulTag band={row.soul_band} />
             {showAssigned && row.is_mine ? (
               <Text style={styles.youTag}>You</Text>
             ) : null}
@@ -364,6 +481,7 @@ export default function YuvaSevaPage({
   onOpenDeleteAccount,
   onProfile,
 }) {
+  const insets = useSafeAreaInsets();
   const canAdd = true;
   const [rows, setRows] = useState([]);
   const [scope, setScope] = useState('all');
@@ -372,6 +490,7 @@ export default function YuvaSevaPage({
   const [areaOptions, setAreaOptions] = useState(null);
   const [pageSize, setPageSize] = useState(25);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
   const sabhaGroupOptions = useMemo(
     () => areaOptions?.sabha_groups || [],
     [areaOptions],
@@ -430,14 +549,18 @@ export default function YuvaSevaPage({
         row?.sabha?.sabhaId,
       ];
 
-      return candidates.some(value => value != null && allowed.has(String(value))) ||
-        (row?.sabha_name != null && allowedNames.has(String(row.sabha_name)));
+      return (
+        candidates.some(value => value != null && allowed.has(String(value))) ||
+        (row?.sabha_name != null && allowedNames.has(String(row.sabha_name)))
+      );
     });
   }, [rows, sabhaIds, sabhaNameMap]);
 
   const hasOthers = filteredRows.some(row => !row.is_mine);
   const scopedRows = deriveScopeRows(filteredRows, scope);
-  const showSabha = hasOthers && new Set(filteredRows.map(row => row.sabha_name).filter(Boolean)).size > 1;
+  const showSabha =
+    hasOthers &&
+    new Set(filteredRows.map(row => row.sabha_name).filter(Boolean)).size > 1;
   const showSearch = scopedRows.length > 25;
   const searchText = showSearch ? query.trim() : '';
   const visibleRows = searchText
@@ -452,30 +575,33 @@ export default function YuvaSevaPage({
       .map(row => row.user_id ?? row.user_name),
   ).size;
 
-  const load = useCallback(async (refresh = false) => {
-    if (refresh) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const result = await dashboardService.yuvaSevaReport(
-        sabhaIds.length ? { sabha_ids: sabhaIds } : undefined,
-      );
-      const nextRows = Array.isArray(result?.data)
-        ? result.data
-        : Array.isArray(result)
-          ? result
-          : [];
-      setRows(nextRows);
-      setError('');
-      if (result?.filters?.area) {
-        setAreaOptions(current => current || result.filters.area);
+  const load = useCallback(
+    async (refresh = false) => {
+      if (refresh) setRefreshing(true);
+      else setLoading(true);
+      try {
+        const result = await dashboardService.yuvaSevaReport(
+          sabhaIds.length ? { sabha_ids: sabhaIds } : undefined,
+        );
+        const nextRows = Array.isArray(result?.data)
+          ? result.data
+          : Array.isArray(result)
+            ? result
+            : [];
+        setRows(nextRows);
+        setError('');
+        if (result?.filters?.area) {
+          setAreaOptions(current => current || result.filters.area);
+        }
+      } catch (caught) {
+        setError(caught?.message || 'Could not load the Yuva Seva report.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (caught) {
-      setError(caught?.message || 'Could not load the Yuva Seva report.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [sabhaIds]);
+    },
+    [sabhaIds],
+  );
 
   useEffect(() => {
     setPageSize(25);
@@ -487,7 +613,10 @@ export default function YuvaSevaPage({
     const changed = AREA_LEVELS.some(level => {
       const before = area[level.key] || [];
       const after = cleaned[level.key] || [];
-      return before.length !== after.length || before.some((id, idx) => String(id) !== String(after[idx]));
+      return (
+        before.length !== after.length ||
+        before.some((id, idx) => String(id) !== String(after[idx]))
+      );
     });
     if (changed) {
       setArea(cleaned);
@@ -512,7 +641,7 @@ export default function YuvaSevaPage({
 
   const openAdd = row => {
     setAdding(row);
-    setForm({ date: new Date().toISOString().slice(0, 10) });
+    setForm('');
     setFormError('');
   };
 
@@ -521,7 +650,7 @@ export default function YuvaSevaPage({
       setFormError('Mode, duration, and date are required.');
       return;
     }
-    if (form.date > new Date().toISOString().slice(0, 10)) {
+    if (form.date > todayISO()) {
       setFormError('A seva cannot be logged for a future date.');
       return;
     }
@@ -557,211 +686,235 @@ export default function YuvaSevaPage({
         onBack={onBack}
         // breadcrumbs={['Dashboard', 'Yuva Seva']}
       />
-      <ScrollViewWithTop
+      {/* The offset is the status bar: the screen starts below it. */}
+      <KeyboardAvoidingView
+        behavior="padding"
+        keyboardVerticalOffset={insets.top}
         style={styles.flex}
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => load(true)}
-            tintColor={C.navy}
-          />
-        }
       >
-        <Text style={styles.title}>Yuva Seva</Text>
-        <Text style={styles.subtitle}>
-          Follow up with members and help them stay connected.
-        </Text>
-        {loading ? (
-          <ActivityIndicator size="large" color={C.navy} />
-        ) : error ? (
-          <View style={styles.state}>
-            <Text style={styles.stateText}>{error}</Text>
-            <Pressable onPress={() => load()}>
-              <Text style={styles.retry}>Retry</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <>
-            {areaOptions &&
-            (areaOptions.show_sabha_group || areaOptions.show_sabha) ? (
-              <View style={styles.filterWrap}>
-                <Text style={styles.filterLabel}>Sabha filter</Text>
-                <View style={styles.filterRow}>
-                  {areaOptions.show_sabha_group && sabhaGroupOptions.length ? (
-                    <MultiSelectFilter
-                      label="Sabha group"
-                      allLabel="All Sabha Groups"
-                      options={sabhaGroupOptions}
-                      value={area.sabhaGroupIds || []}
-                      onChange={ids =>
-                        setArea(value =>
-                          pruneSelection(
-                            { ...value, sabhaGroupIds: ids },
-                            areaOptions,
-                          ),
-                        )
-                      }
-                    />
-                  ) : null}
-                  {areaOptions.show_sabha && availableSabhaOptions.length ? (
-                    <MultiSelectFilter
-                      label="Sabha"
-                      allLabel="All Sabhas"
-                      options={availableSabhaOptions}
-                      value={area.sabhaIds || []}
-                      onChange={ids =>
-                        setArea(value =>
-                          pruneSelection(
-                            { ...value, sabhaIds: ids },
-                            areaOptions,
-                          ),
-                        )
-                      }
-                    />
-                  ) : null}
+        <ScrollViewWithTop
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => load(true)}
+              tintColor={C.navy}
+            />
+          }
+        >
+          <Text style={styles.title}>Yuva Seva</Text>
+          <Text style={styles.subtitle}>
+            Follow up with members and help them stay connected.
+          </Text>
+          {loading ? (
+            <ActivityIndicator size="large" color={C.navy} />
+          ) : error ? (
+            <View style={styles.state}>
+              <Text style={styles.stateText}>{error}</Text>
+              <Pressable onPress={() => load()}>
+                <Text style={styles.retry}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              {areaOptions &&
+              (areaOptions.show_sabha_group || areaOptions.show_sabha) ? (
+                <View style={styles.filterWrap}>
+                  <Text style={styles.filterLabel}>Sabha filter</Text>
+                  <View style={styles.filterRow}>
+                    {areaOptions.show_sabha_group &&
+                    sabhaGroupOptions.length ? (
+                      <MultiSelectFilter
+                        label="Sabha group"
+                        allLabel="All Sabha Groups"
+                        options={sabhaGroupOptions}
+                        value={area.sabhaGroupIds || []}
+                        onChange={ids =>
+                          setArea(value =>
+                            pruneSelection(
+                              { ...value, sabhaGroupIds: ids },
+                              areaOptions,
+                            ),
+                          )
+                        }
+                      />
+                    ) : null}
+                    {areaOptions.show_sabha && availableSabhaOptions.length ? (
+                      <MultiSelectFilter
+                        label="Sabha"
+                        allLabel="All Sabhas"
+                        options={availableSabhaOptions}
+                        value={area.sabhaIds || []}
+                        onChange={ids =>
+                          setArea(value =>
+                            pruneSelection(
+                              { ...value, sabhaIds: ids },
+                              areaOptions,
+                            ),
+                          )
+                        }
+                      />
+                    ) : null}
+                  </View>
                 </View>
-              </View>
-            ) : null}
-            {hasOthers ? (
-              <View style={styles.scopeToggle}>
-                {['all', 'mine'].map(value => (
-                  <Pressable
-                    key={value}
-                    onPress={() => setScope(value)}
-                    style={[
-                      styles.scopeOption,
-                      scope === value && styles.scopeSelected,
-                    ]}
-                  >
-                    <Text
+              ) : null}
+              {hasOthers ? (
+                <View style={styles.scopeToggle}>
+                  {['all', 'mine'].map(value => (
+                    <Pressable
+                      key={value}
+                      onPress={() => setScope(value)}
                       style={[
-                        styles.scopeText,
-                        scope === value && styles.scopeTextSelected,
+                        styles.scopeOption,
+                        scope === value && styles.scopeSelected,
                       ]}
                     >
-                      {value === 'all' ? 'All in scope' : 'My follow-ups'}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-            <View style={styles.kpiGrid}>
-              <Kpi
-                label="Total Members"
-                value={displayStats.members}
-                unit="On follow-up"
-              />
-              <Kpi
-                label="Unique Yuvak · 15 days"
-                value={displayStats.distinct15}
-                unit="Contacted"
-              />
-              <Kpi
-                label="Unique Yuvak · 30 days"
-                value={displayStats.distinct30}
-                unit="Contacted"
-              />
-              <Kpi
-                label="Yuva Seva Yesterday"
-                value={displayStats.yesterday}
-                unit="Follow-up records"
-              />
-              <Kpi
-                label="Yuva Seva On Field"
-                value={onFieldCount}
-                unit="Follow-ups active"
-              />
-              <Kpi
-                label="Yuva Seva Rate"
-                value={`${displayStats.members ? Math.round((displayStats.distinct30 / displayStats.members) * 100) : 0}%`}
-                unit="30-day reach"
-              />
-            </View>
-            {showSearch ? (
-              <>
-                <TextInput
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="Search member by name…"
-                  placeholderTextColor={C.faint}
-                  style={styles.search}
-                  accessibilityLabel="Search members by name"
+                      <Text
+                        style={[
+                          styles.scopeText,
+                          scope === value && styles.scopeTextSelected,
+                        ]}
+                      >
+                        {value === 'all' ? 'All in scope' : 'My follow-ups'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+              <View style={styles.kpiGrid}>
+                <Kpi
+                  label="Total Members"
+                  value={displayStats.members}
+                  unit="On follow-up"
                 />
-              </>
-            ) : null}
-            {visibleRows.length ? (
-              <View style={styles.totalCard}>
-                <Text style={styles.totalCardTitle}>
-                  {visibleStats.members} member
-                  {visibleStats.members === 1 ? '' : 's'} on follow-up
-                </Text>
-                <Text style={styles.totalCardMeta}>
-                  <Text style={styles.totalCardMetaStrong}>
-                    {visibleStats.count15}
-                  </Text>{' '}
-                  in 15 days ·{' '}
-                  <Text style={styles.totalCardMetaStrong}>
-                    {visibleStats.count30}
-                  </Text>{' '}
-                  in 30 days
-                </Text>
+                <Kpi
+                  label="Unique Yuvak · 15 days"
+                  value={displayStats.distinct15}
+                  unit="Contacted"
+                />
+                <Kpi
+                  label="Unique Yuvak · 30 days"
+                  value={displayStats.distinct30}
+                  unit="Contacted"
+                />
+                <Kpi
+                  label="Yuva Seva Yesterday"
+                  value={displayStats.yesterday}
+                  unit="Follow-up records"
+                />
+                <Kpi
+                  label="Yuva Seva On Field"
+                  value={onFieldCount}
+                  unit="Follow-ups active"
+                />
+                <Kpi
+                  label="Yuva Seva Rate"
+                  value={`${displayStats.members ? Math.round((displayStats.distinct30 / displayStats.members) * 100) : 0}%`}
+                  unit="30-day reach"
+                />
               </View>
-            ) : null}
-            {!visibleRows.length ? (
-              <View style={styles.state}>
-                <Text style={styles.stateText}>
-                  {searchText
-                    ? 'No member matches your search.'
-                    : hasOthers && scope === 'mine'
-                      ? 'None of these members are assigned to you.'
-                      : 'No members need follow-up.'}
-                </Text>
-              </View>
-            ) : (
-              <>
-                {pagedRows.map(row => (
-                  <MemberRow
-                    key={row.user_id || row.user_name}
-                    row={row}
-                    canAdd={canAdd}
-                    showAssigned={hasOthers && scope !== 'mine'}
-                    showSabha={showSabha}
-                    onHistory={() => viewHistory(row)}
-                    onAdd={() => openAdd(row)}
+              {showSearch ? (
+                <SearchBox value={query} onChange={setQuery} />
+              ) : null}
+              {rows.some(row => SOUL_TAG[row.soul_band]) ? (
+                <Pressable
+                  onPress={() => setShowLegend(true)}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.legendLink,
+                    pressed && styles.legendLinkPressed,
+                  ]}
+                >
+                  <Icon name="information-outline" size={16} color={C.accent} />
+                  <Text style={styles.legendLinkText}>
+                    What do the tags mean?
+                  </Text>
+                </Pressable>
+              ) : null}
+              {visibleRows.length ? (
+                <View style={styles.totalCard}>
+                  <Text style={styles.totalCardTitle}>
+                    {visibleStats.members} member
+                    {visibleStats.members === 1 ? '' : 's'} on follow-up
+                  </Text>
+                  <Text style={styles.totalCardMeta}>
+                    <Text style={styles.totalCardMetaStrong}>
+                      {visibleStats.count15}
+                    </Text>{' '}
+                    in 15 days ·{' '}
+                    <Text style={styles.totalCardMetaStrong}>
+                      {visibleStats.count30}
+                    </Text>{' '}
+                    in 30 days
+                  </Text>
+                </View>
+              ) : null}
+              {!visibleRows.length ? (
+                <Card>
+                  <EmptyState
+                    icon="charity"
+                    title={
+                      searchText
+                        ? 'No member matches your search'
+                        : 'No follow-ups to show'
+                    }
+                    hint={
+                      searchText
+                        ? `No member matches “${searchText}”.`
+                        : hasOthers && scope === 'mine'
+                          ? 'None of these members are assigned to you.'
+                          : 'Nobody is assigned to you for Yuva Seva yet.'
+                    }
                   />
-                ))}
-                {pageSize < visibleRows.length ? (
-                  <Pressable
-                    style={styles.loadMoreButton}
-                    disabled={loadingMore}
-                    onPress={() => {
-                      setLoadingMore(true);
-                      setTimeout(() => {
-                        setPageSize(value => value + 25);
-                        setLoadingMore(false);
-                      }, 250);
-                    }}
-                  >
-                    {loadingMore ? (
-                      <ActivityIndicator size="small" color={C.navy} />
-                    ) : (
-                      <Text style={styles.loadMoreText}>Load more</Text>
-                    )}
-                  </Pressable>
-                ) : null}
-              </>
-            )}
-          </>
-        )}
-        <View style={styles.footerBleed}>
-          <SiteFooter
-            onPrivacy={onOpenPrivacy}
-            onTerms={onOpenTerms}
-            onDeleteAccount={onOpenDeleteAccount}
-          />
-        </View>
-      </ScrollViewWithTop>
+                </Card>
+              ) : (
+                <>
+                  {pagedRows.map(row => (
+                    <MemberRow
+                      key={row.user_id || row.user_name}
+                      row={row}
+                      canAdd={canAdd}
+                      showAssigned={hasOthers && scope !== 'mine'}
+                      showSabha={showSabha}
+                      onHistory={() => viewHistory(row)}
+                      onAdd={() => openAdd(row)}
+                    />
+                  ))}
+                  {pageSize < visibleRows.length ? (
+                    <Pressable
+                      style={styles.loadMoreButton}
+                      disabled={loadingMore}
+                      onPress={() => {
+                        setLoadingMore(true);
+                        setTimeout(() => {
+                          setPageSize(value => value + 25);
+                          setLoadingMore(false);
+                        }, 250);
+                      }}
+                    >
+                      {loadingMore ? (
+                        <ActivityIndicator size="small" color={C.navy} />
+                      ) : (
+                        <Text style={styles.loadMoreText}>Load more</Text>
+                      )}
+                    </Pressable>
+                  ) : null}
+                </>
+              )}
+            </>
+          )}
+          <View style={styles.footerBleed}>
+            <SiteFooter
+              onPrivacy={onOpenPrivacy}
+              onTerms={onOpenTerms}
+              onDeleteAccount={onOpenDeleteAccount}
+            />
+          </View>
+        </ScrollViewWithTop>
+      </KeyboardAvoidingView>
       <Modal
         isOpen={Boolean(openHistory)}
         onClose={() => {
@@ -871,13 +1024,16 @@ export default function YuvaSevaPage({
           style={styles.formInput}
         />
         <Text style={styles.fieldLabel}>Date *</Text>
-        <TextInput
-          value={form.date || ''}
-          onChangeText={date => setForm(value => ({ ...value, date }))}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={C.faint}
-          style={styles.formInput}
-        />
+        <FormField>
+          <DatePicker
+            value={form.date}
+            // max={todayISO()}
+            label="Select date"
+            placeholder="dd-mm-yyyy"
+            style={styles.dateInput}
+            onChange={date => setForm(value => ({ ...value, date }))}
+          />
+        </FormField>
         <Text style={styles.fieldLabel}>Remark</Text>
         <TextInput
           value={form.remark || ''}
@@ -889,6 +1045,10 @@ export default function YuvaSevaPage({
         />
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
       </Modal>
+      <SoulLegendDialog
+        isOpen={showLegend}
+        onClose={() => setShowLegend(false)}
+      />
     </View>
   );
 }
@@ -965,15 +1125,49 @@ const styles = StyleSheet.create({
   totalCardTitle: { color: C.navy, fontSize: 13, fontWeight: '800' },
   totalCardMeta: { color: C.muted, fontSize: 12 },
   totalCardMetaStrong: { color: C.navy, fontWeight: '700' },
-  search: {
+  searchPanel: {
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: '#E8EEF6',
+    borderRadius: 15,
+    padding: 15,
+    elevation: 1,
+    shadowColor: C.navy,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  searchField: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 11,
+    paddingHorizontal: 11,
+  },
+  searchFieldFocused: { borderColor: C.accent },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    paddingVertical: 8,
+    fontSize: 14.5,
     color: C.navy,
   },
+  searchClear: { marginLeft: 4, padding: 4, borderRadius: 4 },
+  legendLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 6,
+  },
+  legendLinkPressed: { opacity: 0.8 },
+  legendLinkText: { color: C.accent, fontSize: 13, fontWeight: '600' },
+  legendHeading: { fontWeight: '800' },
+  legendList: { gap: 16 },
+  legendItem: { alignItems: 'flex-start', gap: 4 },
+  legendTitle: { color: C.navy, fontSize: 14, fontWeight: '700' },
+  legendMeaning: { color: C.muted, fontSize: 13, lineHeight: 19 },
   memberCard: {
     backgroundColor: C.surface,
     borderWidth: 1,
@@ -1136,6 +1330,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 10,
     color: C.navy,
+    marginTop: 6,
+  },
+  dateInput: {
+    borderColor: C.border,
+    borderRadius: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
     marginTop: 6,
   },
   remarkInput: { minHeight: 80, textAlignVertical: 'top' },
