@@ -1,4 +1,4 @@
-import { absoluteUrl, api, apiUrl } from '../api/client';
+import { absoluteUrl, api } from '../api/client';
 
 export const profileService = {
   /** `{ user_id, user_name, image_url }` — `image_url` is null until one is set. */
@@ -30,7 +30,8 @@ export const profileService = {
 
   deleteResume: (resumeId) => api.delete(`/api/v1/resume/${resumeId}`, { envelope: true }),
 
-  qrCodeUrl: (userId) => apiUrl(`/api/v1/qr/codes/akshar-connect-${userId}.jpeg`),
+  /** `{ user_id, public_url, filename }`; 404 until the code is generated. */
+  qrInfo: (userId) => api.get(`/api/v1/qr/users/${userId}`),
 
   regenerateQr: (userId) =>
     api.post(`/api/v1/qr/users/${userId}/regenerate`, null, { envelope: true }),

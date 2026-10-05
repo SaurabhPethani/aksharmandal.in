@@ -1,6 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   Animated,
+  Easing,
   Keyboard,
   KeyboardAvoidingView,
   PanResponder,
@@ -11,9 +19,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useOverlayPortal } from '../contexts/OverlayContext';
+import { useOverlay } from '../contexts/OverlayContext';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from './Typography';
+import { FONT_DISPLAY } from '../constants/typography';
 import {
   COLORS,
   RADII,
@@ -31,6 +40,12 @@ const MAX_HEIGHT = 0.7;
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 1.2;
 
+// The card rises this far (dp) into place as it opens, and slides off the
+// bottom of the screen as it closes.
+const ENTER_RISE = 24;
+const ENTER_MS = 180;
+const LEAVE_MS = 160;
+
 // `2xl` exists for dialogs that lay content out in columns.
 const SIZES = {
   sm: rem(24),
@@ -39,6 +54,31 @@ const SIZES = {
   xl: rem(56),
   '2xl': rem(64),
 };
+
+const CloseContext = createContext(null);
+
+/**
+ * Closes the dialog this is rendered in, the way its ✕ does: the card goes at
+ * once and `onClose` follows. For a dialog's own Cancel button.
+ */
+export const useModalClose = () => useContext(CloseContext);
+
+/**
+ * Starts the entrance once the card is on the overlay layer. The layer mounts
+ * it a render after the Modal, so an animation started from the Modal itself
+ * can finish before the views exist.
+ */
+function Arrive({ value }) {
+  useEffect(() => {
+    Animated.timing(value, {
+      toValue: 1,
+      duration: ENTER_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [value]);
+  return null;
+}
 
 export function Modal({
   isOpen,
@@ -54,42 +94,83 @@ export function Modal({
 }) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const dismiss = () => {
-    if (dismissible) onClose?.();
-  };
+  const overlay = useOverlay();
 
+  // How far below its place the card sits: a drag, or the slide away.
   const drag = useRef(new Animated.Value(0)).current;
-  // The responder is created once, so it reads the current props through this.
-  const latest = useRef({ dismissible, onClose, height });
-  latest.current = { dismissible, onClose, height };
+  // 0 → 1 as the card arrives.
+  const shown = useRef(new Animated.Value(0)).current;
+  // 'closed', 'open', or 'leaving' while the card slides away.
+  const phase = useRef('closed');
+  const entry = useRef(null);
+  // The responder and the callbacks are created once, so they read the
+  // current props through this.
+  const latest = useRef({ isOpen, dismissible, onClose, height });
+  latest.current = { isOpen, dismissible, onClose, height };
 
-  // Every opening starts at rest, not where the last drag left the card.
-  useEffect(() => {
-    if (isOpen) drag.setValue(0);
-  }, [isOpen, drag]);
+  // Slides the card off the screen. It stops counting as open straight away,
+  // so the screen behind is sharp and usable while it goes.
+  const leave = useCallback(() => {
+    phase.current = 'leaving';
+    overlay.retire();
+    Animated.timing(drag, {
+      toValue: latest.current.height,
+      duration: LEAVE_MS,
+      easing: Easing.in(Easing.quad),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished || phase.current !== 'leaving') return;
+      if (latest.current.isOpen) {
+        // The owner kept it open, so it comes back.
+        phase.current = 'open';
+        drag.setValue(0);
+        overlay.show(entry.current);
+      } else {
+        phase.current = 'closed';
+        overlay.remove();
+      }
+    });
+  }, [drag, overlay]);
 
-  // A card opened over a keyboard would sit behind it: the keyboard wrapper
-  // only learns of a keyboard that opens after it mounts. So the keyboard goes
-  // first, before the card's own fields can take focus.
+  // ✕, the backdrop, Android's back button and a pull down all end here. The
+  // card goes at once; the owner is told a tick later, so that its re-render
+  // does not hold the slide up.
+  const close = useCallback(() => {
+    if (!latest.current.dismissible || phase.current !== 'open') return;
+    leave();
+    setTimeout(() => latest.current.onClose?.(), 0);
+  }, [leave]);
+
   useEffect(() => {
-    if (isOpen) Keyboard.dismiss();
-  }, [isOpen]);
+    if (isOpen) {
+      // A card caught while sliding away is simply put back; a new one comes
+      // in from below.
+      if (phase.current === 'closed') shown.setValue(0);
+      phase.current = 'open';
+      // Every opening starts at rest, not where the last drag left the card.
+      drag.setValue(0);
+      // A card opened over a keyboard would sit behind it: the keyboard
+      // wrapper only learns of a keyboard that opens after it mounts. So the
+      // keyboard goes first, before the card's own fields can take focus.
+      Keyboard.dismiss();
+    } else if (phase.current === 'open') {
+      // Closed by the owner: Cancel, a pick, or a save that went through.
+      leave();
+    }
+  }, [isOpen, drag, shown, leave]);
 
   const swipe = useRef(
     PanResponder.create({
       // Only a mostly-vertical pull downward, so a tap still reaches ✕.
       onMoveShouldSetPanResponder: (_, g) =>
         latest.current.dismissible &&
+        phase.current === 'open' &&
         g.dy > 6 &&
         Math.abs(g.dy) > Math.abs(g.dx),
       onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
       onPanResponderRelease: (_, g) => {
         if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) {
-          Animated.timing(drag, {
-            toValue: latest.current.height,
-            duration: 180,
-            useNativeDriver: true,
-          }).start(() => latest.current.onClose?.());
+          close();
         } else {
           Animated.spring(drag, {
             toValue: 0,
@@ -108,18 +189,31 @@ export function Modal({
     }),
   ).current;
 
-  // The backdrop fades as the card is pulled away.
-  const backdropOpacity = drag.interpolate({
-    inputRange: [0, height],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
+  // The backdrop fades in with the card, and out as it is pulled away.
+  const backdropOpacity = useMemo(
+    () =>
+      Animated.multiply(
+        shown,
+        drag.interpolate({
+          inputRange: [0, height],
+          outputRange: [1, 0],
+          extrapolate: 'clamp',
+        }),
+      ),
+    [drag, shown, height],
+  );
+  const offset = useMemo(
+    () =>
+      Animated.add(
+        drag,
+        shown.interpolate({ inputRange: [0, 1], outputRange: [ENTER_RISE, 0] }),
+      ),
+    [drag, shown],
+  );
 
-  // No entrance animation: the card is mounted by the overlay layer a render
-  // after this one, so an animation started here can finish before the view
-  // exists, leaving it stuck at its starting value.
   const content = (
     <View style={styles.fill}>
+      <Arrive value={shown} />
       {/* `padding` on both platforms: the overlap is measured, so where the
           window has already been resized for the keyboard it comes out as 0.
           It REPLACES this view's own paddingBottom, so the safe-area padding
@@ -146,7 +240,7 @@ export function Modal({
           >
             <Pressable
               style={styles.fill}
-              onPress={dismiss}
+              onPress={close}
               accessibilityRole="button"
               accessibilityLabel="Close"
             />
@@ -166,7 +260,7 @@ export function Modal({
               {
                 maxWidth: SIZES[size] ?? SIZES.md,
                 maxHeight: height * MAX_HEIGHT,
-                transform: [{ translateY: drag }],
+                transform: [{ translateY: offset }],
               },
             ]}
           >
@@ -200,7 +294,7 @@ export function Modal({
                 </View>
                 {dismissible && (
                   <Pressable
-                    onPress={onClose}
+                    onPress={close}
                     accessibilityRole="button"
                     accessibilityLabel="Close"
                     style={({ pressed }) => [
@@ -247,7 +341,19 @@ export function Modal({
 
   // Rendered on the app's own overlay layer, not in a window of its own — see
   // contexts/OverlayContext. Nothing is drawn here.
-  useOverlayPortal(Boolean(isOpen), content, dismiss);
+  // No dependency list: the content is fresh on every render while open. Once
+  // closed it is left as it was, which is what slides away.
+  entry.current = {
+    content: (
+      <CloseContext.Provider value={close}>{content}</CloseContext.Provider>
+    ),
+    onRequestClose: close,
+  };
+  useEffect(() => {
+    if (isOpen) {
+      overlay.show({ ...entry.current, leaving: phase.current !== 'open' });
+    }
+  });
   return null;
 }
 
@@ -298,6 +404,7 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1, minWidth: 0 },
   // .section-title
   title: {
+    fontFamily: FONT_DISPLAY,
     fontSize: TEXT.base,
     fontWeight: WEIGHT.semibold,
     color: COLORS.primary,

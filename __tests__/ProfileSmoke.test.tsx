@@ -115,6 +115,12 @@ const auth = {
   session: { userId: 7 },
   activeUserId: 7,
   accounts: [],
+  // The Security tab's biometric switch reads these.
+  biometricAvailable: false,
+  biometricEnabled: false,
+  enableBiometric: jest.fn(),
+  disableBiometric: jest.fn(),
+  refreshBiometric: jest.fn(),
 };
 
 const clients: QueryClient[] = [];

@@ -2,6 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from '../Typography';
+import { FONT_DISPLAY } from '../../constants/typography';
 import { absoluteUrl } from '../../api/client';
 import { NIMIT_SEVAK_LABEL, DOING_POOJA_LABEL } from '../../utils/memberFlags';
 import { COLORS, RADII, SHADOWS, TEXT, TNUM, WEIGHT, rem, space } from '../../constants/theme';
@@ -216,7 +217,12 @@ const styles = StyleSheet.create({
   badgeDot: { width: space(1.5), height: space(1.5), borderRadius: RADII.full },
   badgeText: { fontSize: TEXT.xs, fontWeight: WEIGHT.semibold },
   body: { padding: space(4), gap: space(2) },
-  title: { fontSize: TEXT.base, fontWeight: WEIGHT.bold, color: COLORS.primary },
+  title: {
+    fontFamily: FONT_DISPLAY,
+    fontSize: TEXT.base,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.primary,
+  },
   category: { fontSize: TEXT.sm, fontWeight: WEIGHT.semibold, color: COLORS.accent },
   line: { flexDirection: 'row', alignItems: 'center', gap: space(1.5) },
   meta: { fontSize: TEXT.sm, color: COLORS.textMuted },
@@ -233,7 +239,13 @@ const styles = StyleSheet.create({
   flagChipText: { fontSize: TEXT.xs, fontWeight: WEIGHT.medium, color: COLORS.accent },
   stats: { flexDirection: 'row', gap: space(2), marginTop: space(1) },
   stat: { flex: 1, borderWidth: 1, borderRadius: RADII.control, alignItems: 'center', paddingVertical: space(2) },
-  statValue: { ...TNUM, fontSize: TEXT.lg, fontWeight: WEIGHT.bold, lineHeight: TEXT.lg },
+  statValue: {
+    fontFamily: FONT_DISPLAY,
+    ...TNUM,
+    fontSize: TEXT.lg,
+    fontWeight: WEIGHT.bold,
+    lineHeight: TEXT.lg,
+  },
   statLabel: {
     marginTop: space(1),
     fontSize: 10,

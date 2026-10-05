@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, StyleSheet, View } from 'react-native';
 import DashboardPage, { Drawer } from '../pages/DashboardPage';
 import HelpPage from '../pages/HelpPage';
@@ -33,9 +33,13 @@ export default function AppNavigator({
   initialRoute = 'dashboard',
 }: AppNavigatorProps) {
   const [history, setHistory] = useState<RouteName[]>([initialRoute]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Opened through its ref, so opening it does not re-render the screen.
+  const drawerRef = useRef<{ open: () => void; close: () => void }>(null);
+  const openDrawer = useCallback(() => drawerRef.current?.open(), []);
   const [roleName, setRoleName] = useState('');
   const [roleId, setRoleId] = useState<number | null>(null);
+  // The tab the profile opens on; null is its first one.
+  const [profileTab, setProfileTab] = useState<string | null>(null);
   const { signOut } = useAuth();
   const transition = useRef(new Animated.Value(1)).current;
   const route = history[history.length - 1];
@@ -67,7 +71,15 @@ export default function AppNavigator({
 
   // The header avatar, on every screen. Re-entering from the profile itself
   // would stack a second copy, so it is not offered there.
-  const openProfile = () => navigate('profile');
+  const openProfile = () => {
+    setProfileTab(null);
+    navigate('profile');
+  };
+
+  const openSecurity = () => {
+    setProfileTab('security');
+    navigate('profile');
+  };
 
   const goBack = () => {
     setHistory(previous =>
@@ -79,11 +91,6 @@ export default function AppNavigator({
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
-        if (drawerOpen) {
-          setDrawerOpen(false);
-          return true;
-        }
-
         if (history.length > 1) {
           setHistory(previous => previous.slice(0, -1));
           return true;
@@ -95,19 +102,20 @@ export default function AppNavigator({
     );
 
     return () => subscription.remove();
-  }, [drawerOpen, history.length]);
+  }, [history.length]);
 
   const screen =
     displayedRoute === 'dashboard' ? (
       <DashboardPage
         onOpenHelp={openHelp}
-        onOpenMenu={() => setDrawerOpen(true)}
+        onOpenMenu={openDrawer}
         onOpenBirthdays={() => navigate('birthdays')}
         onOpenNotLoggedIn={() => navigate('not-logged-in')}
         onOpenEvents={() => navigate('events')}
         onOpenUntouchedUsers={() => navigate('yuva-seva')}
         onOpenNotifications={() => navigate('notifications')}
         onOpenProfile={openProfile}
+        onOpenSecurity={openSecurity}
         onRoleNameChange={setRoleName}
         onRoleIdChange={setRoleId}
         onOpenYuvaSeva={() => navigate('yuva-seva')}
@@ -117,7 +125,7 @@ export default function AppNavigator({
       // Opened from the dashboard's birthday tiles; back returns there.
       <BirthdaysPage
         onBack={goBack}
-        onMenu={() => setDrawerOpen(true)}
+        onMenu={openDrawer}
         onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
         onProfile={openProfile}
@@ -126,7 +134,7 @@ export default function AppNavigator({
     ) : displayedRoute === 'not-logged-in' ? (
       <NotLoggedInPage
         onBack={goBack}
-        onOpenMenu={() => setDrawerOpen(true)}
+        onOpenMenu={openDrawer}
         onOpenHelp={openHelp}
         onNotifications={() => navigate('notifications')}
         {...legalLinks}
@@ -135,7 +143,7 @@ export default function AppNavigator({
     ) : displayedRoute === 'events' ? (
       <EventsPage
         onBack={goBack}
-        onMenu={() => setDrawerOpen(true)}
+        onMenu={openDrawer}
         onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
         {...legalLinks}
@@ -144,7 +152,7 @@ export default function AppNavigator({
     ) : displayedRoute === 'yuva-seva' ? (
       <YuvaSevaPage
         onBack={goBack}
-        onMenu={() => setDrawerOpen(true)}
+        onMenu={openDrawer}
         onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
         {...legalLinks}
@@ -153,7 +161,7 @@ export default function AppNavigator({
     ) : displayedRoute === 'notifications' ? (
       <NotificationsPage
         onBack={goBack}
-        onMenu={() => setDrawerOpen(true)}
+        onMenu={openDrawer}
         onHelp={openHelp}
         {...legalLinks}
         onProfile={openProfile}
@@ -161,9 +169,10 @@ export default function AppNavigator({
     ) : route === 'profile' ? (
       <ProfilePage
         onBack={goBack}
-        onMenu={() => setDrawerOpen(true)}
+        onMenu={openDrawer}
         onHelp={openHelp}
         onNotifications={() => navigate('notifications')}
+        initialTab={profileTab}
         {...legalLinks}
       />
     ) : displayedRoute === 'legal-privacy' ? (
@@ -175,7 +184,7 @@ export default function AppNavigator({
     ) : (
       <HelpPage
         onBack={goBack}
-        onMenu={() => setDrawerOpen(true)}
+        onMenu={openDrawer}
         onNotifications={() => navigate('notifications')}
         {...legalLinks}
         onProfile={openProfile}
@@ -204,22 +213,11 @@ export default function AppNavigator({
         {screen}
       </Animated.View>
       <Drawer
-        visible={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        ref={drawerRef}
         onSignOut={signOut}
         onDashboard={() => setHistory(['dashboard'])}
-        onOpenEvents={() => {
-          navigate('events');
-          setDrawerOpen(false);
-        }}
-        onOpenYuvaSeva={() => {
-          navigate('yuva-seva');
-          setDrawerOpen(false);
-        }}
-        onOpenNotifications={() => {
-          navigate('notifications');
-          setDrawerOpen(false);
-        }}
+        onOpenEvents={() => navigate('events')}
+        onOpenYuvaSeva={() => navigate('yuva-seva')}
         activeRoute={route}
         roleName={roleName}
         showYuvaSeva={canOpenYuvaSeva}

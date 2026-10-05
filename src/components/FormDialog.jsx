@@ -1,9 +1,22 @@
 import React from 'react';
-import { Modal } from './Overlays';
+import { Modal, useModalClose } from './Overlays';
 import { Button } from './ui';
 import { Text } from './Typography';
 import { COLORS, RADII, TEXT, WEIGHT, space } from '../constants/theme';
 import { StyleSheet, View } from 'react-native';
+
+/**
+ * A dialog's Cancel button. It closes through the Modal, so the card goes
+ * before the page behind it re-renders.
+ */
+export function DialogCancel({ variant, disabled, children = 'Cancel' }) {
+  const close = useModalClose();
+  return (
+    <Button variant={variant} onPress={close} disabled={disabled}>
+      {children}
+    </Button>
+  );
+}
 
 /**
  * The standard create / update popup for this app — the mobile port of the
@@ -64,9 +77,7 @@ export default function FormDialog({
       dismissible={!busy}
       footer={
         <>
-          <Button onPress={close} disabled={busy}>
-            {cancelLabel}
-          </Button>
+          <DialogCancel disabled={busy}>{cancelLabel}</DialogCancel>
           {!hideSubmit && (
             <Button
               variant={submitVariant}

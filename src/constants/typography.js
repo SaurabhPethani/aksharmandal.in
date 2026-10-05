@@ -1,8 +1,19 @@
 import { Platform } from 'react-native';
 
+// The web's two faces, bundled for Android in android/app/src/main/res/font and
+// registered in MainApplication. iOS has no copy of them yet.
+
+/** Body text — the web's DM Sans. */
 export const FONT_FAMILY = Platform.select({
   ios: 'System',
-  android: 'sans-serif',
+  android: 'DM Sans',
+  default: 'sans-serif',
+});
+
+/** Titles and figures — the web's Sora (`font-display`, `.page-title`). */
+export const FONT_DISPLAY = Platform.select({
+  ios: 'System',
+  android: 'Sora',
   default: 'sans-serif',
 });
 

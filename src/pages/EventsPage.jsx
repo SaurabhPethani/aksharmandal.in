@@ -8,6 +8,7 @@ import { Text } from '../components/Typography';
 import { Tabs } from '../components/Navigation';
 import {
   Button,
+  Card,
   EmptyState,
   ErrorState,
   PageHeader,
@@ -382,16 +383,18 @@ export default function EventsPage({
                 title="Could not load events"
               />
             ) : events.length === 0 ? (
-              <EmptyState
-                title={
-                  filter === 'all' ? 'No events yet' : `No ${filter} events`
-                }
-                hint={
-                  filter === 'all'
-                    ? 'Nothing has been created.'
-                    : 'Try another filter.'
-                }
-              />
+              <Card>
+                <EmptyState
+                  title={
+                    filter === 'all' ? 'No events yet' : `No ${filter} events`
+                  }
+                  hint={
+                    filter === 'all'
+                      ? 'Nothing has been created.'
+                      : 'Try another filter.'
+                  }
+                />
+              </Card>
             ) : (
               <View style={styles.cards}>
                 {events.map(event => (
@@ -432,10 +435,12 @@ export default function EventsPage({
               title="Could not load your registrations"
             />
           ) : registrations.length === 0 ? (
-            <EmptyState
-              title="No registrations yet"
-              hint="Members you register for an event will appear here."
-            />
+            <Card>
+              <EmptyState
+                title="No registrations yet"
+                hint="Members you register for an event will appear here."
+              />
+            </Card>
           ) : (
             <RegistrationsByEvent
               rows={registrations}

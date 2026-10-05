@@ -11,6 +11,7 @@ import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vec
 import SiteFooter from '../components/SiteFooter';
 import AppHeader from '../components/AppHeader';
 import { Text } from '../components/Typography';
+import { FONT_DISPLAY } from '../constants/typography';
 import { searchMatches } from '../utils/options';
 
 const COLORS = {
@@ -1103,6 +1104,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
+    fontFamily: FONT_DISPLAY,
     color: COLORS.text,
     fontSize: 24,
     fontWeight: '700',
@@ -1224,6 +1226,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   sectionTitle: {
+    fontFamily: FONT_DISPLAY,
     color: COLORS.text,
     fontSize: 18,
     fontWeight: '700',

@@ -11,7 +11,9 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -48,6 +50,29 @@ function App() {
   );
 }
 
+// Only the SCREENS blur. The overlay layer is their sibling, so a dialog on
+// top of them stays sharp. `filter` blur is Android 12+ only; elsewhere the
+// modal's dimmed backdrop is all that shows.
+// A component of its own, so a dialog opening or closing re-renders this one
+// view and not every screen inside it.
+function Screens({
+  style,
+  children,
+}: {
+  style: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
+  const overlayOpen = useOverlayOpen();
+  return (
+    // `collapsable={false}` keeps this a stacking context at all times: were
+    // the blur `filter` to turn it into one, Fabric would re-attach
+    // everything underneath as the dialog opens.
+    <View collapsable={false} style={[style, overlayOpen && styles.blurred]}>
+      {children}
+    </View>
+  );
+}
+
 // Insets are applied once here, so screens must not add their own
 // SafeAreaView or the padding doubles up.
 function AppContent() {
@@ -56,20 +81,10 @@ function AppContent() {
   const [legalPage, setLegalPage] = useState<
     'privacy' | 'terms' | 'delete' | null
   >(null);
-  // A modal is drawn in its own window, so the screen behind it is blurred
-  // here (see contexts/OverlayContext). `filter` blur is Android 12+ only;
-  // elsewhere the modal's dimmed backdrop is all that shows.
-  const overlayOpen = useOverlayOpen();
 
   return (
     <View style={styles.root}>
-      {/* Only the SCREENS blur. The overlay layer below is their sibling, so a
-          dialog on top of them stays sharp.
-          `collapsable={false}` keeps this a stacking context at all times: were
-          the blur `filter` to turn it into one, Fabric would re-attach
-          everything underneath as the dialog opens. */}
-      <View
-        collapsable={false}
+      <Screens
         style={[
           styles.content,
           {
@@ -78,7 +93,6 @@ function AppContent() {
             paddingLeft: insets.left,
             paddingRight: insets.right,
           },
-          overlayOpen && styles.blurred,
         ]}
       >
         {status === 'booting' ? (
@@ -96,7 +110,7 @@ function AppContent() {
         ) : (
           <AppNavigator />
         )}
-      </View>
+      </Screens>
 
       <OverlayHost />
     </View>

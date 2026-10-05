@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from '../Typography';
-import { Button, EmptyState, ErrorState, Skeleton } from '../ui';
+import { Button, Card, EmptyState, ErrorState, Skeleton } from '../ui';
 import { FormField, Select } from '../form';
 import {
   useEventDataExport,
@@ -117,10 +117,12 @@ export default function EventRegistrationData({ enabled }) {
   }
   if (!events.length) {
     return (
-      <EmptyState
-        title="No event data available"
-        hint="You can see registration data for events you created, or whose creator you outrank."
-      />
+      <Card>
+        <EmptyState
+          title="No event data available"
+          hint="You can see registration data for events you created, or whose creator you outrank."
+        />
+      </Card>
     );
   }
 
@@ -156,7 +158,9 @@ export default function EventRegistrationData({ enabled }) {
       ) : dataQ.error ? (
         <ErrorState error={dataQ.error} onRetry={dataQ.refetch} title="Could not load registrations" />
       ) : rows.length === 0 ? (
-        <EmptyState title="No registrations yet" hint="Nobody has registered for this event." />
+        <Card>
+          <EmptyState title="No registrations yet" hint="Nobody has registered for this event." />
+        </Card>
       ) : (
         <View style={styles.results}>
           <View style={styles.resultsHead}>

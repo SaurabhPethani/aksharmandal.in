@@ -5,7 +5,6 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,8 +12,9 @@ import { DatePicker, FormField } from '../components/form';
 import { MaterialDesignIcons as Icon } from '@react-native-vector-icons/material-design-icons/static';
 import AppHeader from '../components/AppHeader';
 import SiteFooter from '../components/SiteFooter';
-import { Modal } from '../components/Overlays';
-import { Text } from '../components/Typography';
+import { Modal, useModalClose } from '../components/Overlays';
+import { Text, TextInput } from '../components/Typography';
+import { FONT_DISPLAY } from '../constants/typography';
 import { Card, EmptyState } from '../components/ui';
 import MultiSelectFilter from '../components/form/MultiSelectFilter';
 import ScrollViewWithTop from '../components/ScrollToTop';
@@ -468,6 +468,15 @@ function Fact({ label, value, danger, color }) {
         {String(value)}
       </Text>
     </View>
+  );
+}
+
+function CancelButton({ disabled }) {
+  const close = useModalClose();
+  return (
+    <Pressable disabled={disabled} onPress={close} style={styles.cancelButton}>
+      <Text style={styles.cancelText}>Cancel</Text>
+    </Pressable>
   );
 }
 
@@ -970,16 +979,11 @@ export default function YuvaSevaPage({
       <Modal
         isOpen={Boolean(adding)}
         onClose={() => !saving && setAdding(null)}
+        dismissible={!saving}
         title={`Add Yuva Seva · ${adding?.user_name || 'Member'}`}
         footer={
           <View style={styles.modalFooter}>
-            <Pressable
-              disabled={saving}
-              onPress={() => setAdding(null)}
-              style={styles.cancelButton}
-            >
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
+            <CancelButton disabled={saving} />
             <Pressable
               disabled={saving}
               onPress={saveAdd}
@@ -1058,7 +1062,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { flexGrow: 1, padding: 18, gap: 12 },
   footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
-  title: { color: C.navy, fontSize: 26, fontWeight: '800' },
+  title: {
+    fontFamily: FONT_DISPLAY,
+    color: C.navy,
+    fontSize: 26,
+    fontWeight: '800',
+  },
   subtitle: { color: C.muted, lineHeight: 20 },
   scopeToggle: {
     flexDirection: 'row',
@@ -1107,7 +1116,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   kpiBody: { alignItems: 'center', paddingVertical: 14, paddingHorizontal: 10 },
-  kpiValue: { color: C.navy, fontSize: 24, fontWeight: '800' },
+  kpiValue: {
+    fontFamily: FONT_DISPLAY,
+    color: C.navy,
+    fontSize: 24,
+    fontWeight: '800',
+  },
   kpiUnit: { color: C.muted, fontSize: 11, marginTop: 4, textAlign: 'center' },
   filterWrap: { gap: 8 },
   filterLabel: { color: C.navy, fontSize: 12, fontWeight: '700' },

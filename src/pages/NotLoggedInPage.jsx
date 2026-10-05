@@ -5,14 +5,14 @@ import {
   Linking,
   Pressable,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import AppHeader from '../components/AppHeader';
 import ScrollViewWithTop from '../components/ScrollToTop';
 import SiteFooter from '../components/SiteFooter';
-import { Text } from '../components/Typography';
+import { Text, TextInput } from '../components/Typography';
+import { FONT_DISPLAY } from '../constants/typography';
 import { useNotLoggedIn } from '../hooks/useNotLoggedIn';
 import { hasMobile, telUrl } from '../utils/contact';
 import { NIMIT_SEVAK_LABEL, ambrishLabel } from '../utils/memberFlags';
@@ -314,7 +314,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   backText: { color: COLORS.navy, fontSize: 13, fontWeight: '700' },
-  title: { color: COLORS.navy, fontSize: 24, fontWeight: '800' },
+  title: {
+    fontFamily: FONT_DISPLAY,
+    color: COLORS.navy,
+    fontSize: 24,
+    fontWeight: '800',
+  },
   subtitle: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 4 },
   search: {
     backgroundColor: COLORS.surface,
@@ -382,7 +387,13 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 2,
   },
-  groupName: { flex: 1, color: COLORS.navy, fontSize: 14, fontWeight: '800' },
+  groupName: {
+    fontFamily: FONT_DISPLAY,
+    flex: 1,
+    color: COLORS.navy,
+    fontSize: 14,
+    fontWeight: '800',
+  },
   groupCount: {
     flexShrink: 0,
     color: COLORS.muted,

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BackHandler, Linking, Pressable,  StyleSheet, View } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from '../components/Typography';
+import { FONT_DISPLAY } from '../constants/typography';
 import SiteFooter from '../components/SiteFooter';
 import ScrollViewWithTop from '../components/ScrollToTop';
 
@@ -167,7 +168,12 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F0F4F8' },
   header: { minHeight: 58, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#003158' },
   back: { padding: 10, marginRight: 4 },
-  headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  headerTitle: {
+    fontFamily: FONT_DISPLAY,
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+  },
   breadcrumbBar: {
     minHeight: 36,
     paddingHorizontal: 16,
@@ -180,9 +186,22 @@ const styles = StyleSheet.create({
   breadcrumbCurrent: { color: '#003158', fontSize: 12, fontWeight: '800' },
   content: { flexGrow: 1, padding: 18, paddingBottom: 0 },
   footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
-  pageTitle: { color: '#003158', fontSize: 28, fontWeight: '800', marginBottom: 10 },
+  pageTitle: {
+    fontFamily: FONT_DISPLAY,
+    color: '#003158',
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
   block: { marginBottom: 18 },
-  heading: { color: '#003158', fontSize: 18, fontWeight: '800', marginTop: 10, marginBottom: 8 },
+  heading: {
+    fontFamily: FONT_DISPLAY,
+    color: '#003158',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 10,
+    marginBottom: 8,
+  },
   paragraph: { color: '#16324B', fontSize: 14, lineHeight: 22, marginBottom: 7 },
   bold: { fontWeight: '800' },
   emailButton: { minHeight: 48, borderRadius: 12, paddingHorizontal: 16, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#003158', marginBottom: 18 },

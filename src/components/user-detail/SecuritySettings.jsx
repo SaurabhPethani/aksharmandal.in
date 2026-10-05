@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, StyleSheet, View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from '../Typography';
-import { Button } from '../ui';
+import { FONT_DISPLAY } from '../../constants/typography';
+import { Button, Toggle } from '../ui';
 import { FormField, Input } from '../form';
-import { useToast } from '../../hooks/core';
+import { useAuth, useToast } from '../../hooks/core';
 import { authService } from '../../services/authService';
 import { COLORS, RADII, TEXT, WEIGHT, space } from '../../constants/theme';
 
@@ -49,6 +50,80 @@ function Section({ icon, title, hint, children }) {
       <Text style={styles.sectionHint}>{hint}</Text>
       <View style={styles.sectionBody}>{children}</View>
     </View>
+  );
+}
+
+function BiometricSection() {
+  const toast = useToast();
+  const {
+    biometricAvailable: available,
+    biometricEnabled: enabled,
+    enableBiometric,
+    disableBiometric,
+    refreshBiometric,
+  } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const working = useRef(false);
+
+  // A fingerprint added in the phone's settings shows up on the way back.
+  useEffect(() => {
+    refreshBiometric();
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active' && !working.current) refreshBiometric();
+    });
+    return () => sub.remove();
+  }, [refreshBiometric]);
+
+  const toggle = async () => {
+    if (working.current) return;
+    working.current = true;
+    setBusy(true);
+    try {
+      if (enabled) {
+        await disableBiometric();
+        toast.success('Biometric login is turned off.');
+      } else {
+        await enableBiometric();
+        toast.success('Biometric login is turned on.');
+      }
+    } catch {
+      toast.error(
+        enabled
+          ? 'Could not turn off biometric login. Please try again.'
+          : 'Could not turn on biometric login. Please try again.',
+      );
+    } finally {
+      working.current = false;
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section
+      icon="fingerprint"
+      title="Biometric Login"
+      hint="Sign in with your fingerprint or face instead of typing your PIN or password. This applies to this phone only."
+    >
+      <View style={styles.switchRow}>
+        <View style={styles.switchCopy}>
+          <Text style={styles.switchTitle}>Enable biometric login</Text>
+          <Text style={styles.switchHint}>
+            {!available
+              ? 'No fingerprint or face is set up on this phone. Add one in the phone’s settings first.'
+              : enabled
+                ? 'On for this phone.'
+                : 'Off.'}
+          </Text>
+        </View>
+        <Toggle
+          tone="accent"
+          label="Enable biometric login"
+          checked={enabled}
+          disabled={!available || busy}
+          onChange={toggle}
+        />
+      </View>
+    </Section>
   );
 }
 
@@ -97,6 +172,8 @@ export default function SecuritySettings() {
 
   return (
     <View style={styles.stack}>
+      <BiometricSection />
+
       <Section
         icon="lock-outline"
         title="Change Password"
@@ -208,6 +285,7 @@ const styles = StyleSheet.create({
     gap: space(2),
   },
   sectionTitle: {
+    fontFamily: FONT_DISPLAY,
     fontSize: TEXT.lg,
     fontWeight: WEIGHT.bold,
     color: COLORS.primary,
@@ -220,4 +298,23 @@ const styles = StyleSheet.create({
   },
   sectionBody: { marginTop: space(4), gap: space(3) },
   submit: { alignSelf: 'flex-start' },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space(3),
+    borderRadius: RADII.control,
+    borderWidth: 1,
+    borderColor: COLORS.lineSoft,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: space(4),
+    paddingVertical: space(3),
+  },
+  switchCopy: { flex: 1 },
+  switchTitle: {
+    fontSize: TEXT.sm,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.primary,
+  },
+  switchHint: { fontSize: TEXT.xs, color: COLORS.textMuted },
 });

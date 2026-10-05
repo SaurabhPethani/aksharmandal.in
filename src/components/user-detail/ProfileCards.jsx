@@ -11,6 +11,7 @@ import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vec
 import { Card, EmptyState, Loader } from '../ui';
 import { Tabs } from '../Navigation';
 import { Text } from '../Typography';
+import { FONT_DISPLAY } from '../../constants/typography';
 import {
   useUserEducations,
   useUserFamily,
@@ -498,6 +499,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, lineHeight: 17, color: COLORS.textMuted },
   valueWrap: { marginTop: 6 },
   value: {
+    fontFamily: FONT_DISPLAY,
     fontSize: 15,
     lineHeight: 21,
     fontWeight: WEIGHT.bold,
@@ -539,6 +541,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionTitle: {
+    fontFamily: FONT_DISPLAY,
     flexShrink: 1,
     fontSize: 18,
     fontWeight: WEIGHT.bold,
@@ -626,6 +629,7 @@ const styles = StyleSheet.create({
   heroCopy: { flexShrink: 1, alignItems: 'center' },
   heroCopyWide: { flex: 1, alignItems: 'flex-start' },
   heroName: {
+    fontFamily: FONT_DISPLAY,
     fontSize: 24,
     lineHeight: 30,
     fontWeight: WEIGHT.bold,

@@ -21,6 +21,7 @@ import {
   Skeleton,
 } from '../components/ui';
 import { Modal } from '../components/Overlays';
+import { DialogCancel } from '../components/FormDialog';
 import { Breadcrumbs, Tabs } from '../components/Navigation';
 import { FormField, Textarea } from '../components/form';
 import {
@@ -130,6 +131,20 @@ function LeaderCrown() {
       color={COLORS.primary}
       accessibilityLabel="Your leader"
     />
+  );
+}
+
+/** The age the member turns today. */
+function AgePill({ age }) {
+  return (
+    <View style={styles.agePill}>
+      <MaterialCommunityIcons
+        name="cake-variant-outline"
+        size={space(3.5)}
+        color={COLORS.accent}
+      />
+      <Text style={styles.ageText}>Turns {age} today</Text>
+    </View>
   );
 }
 
@@ -359,9 +374,7 @@ function WishDialog({ person, isOpen, onClose, onSent, onToast }) {
       description={person ? `To ${nameOf(person)}` : undefined}
       footer={
         <>
-          <Button variant="ghost" onPress={onClose} disabled={wish.isPending}>
-            Cancel
-          </Button>
+          <DialogCancel variant="ghost" disabled={wish.isPending} />
           <Button
             variant="accent"
             onPress={send}
@@ -480,25 +493,37 @@ function SendWishes() {
                       <Text style={styles.name}>{name}</Text>
                       {personal && <PersonalStar />}
                       {leader && <LeaderCrown />}
-                      {row?.sabha_name ? (
-                        <Text style={styles.sabha}>({row.sabha_name})</Text>
-                      ) : null}
                     </View>
+                    {row?.sabha_name || row?.age != null ? (
+                      <View style={styles.sabhaLine}>
+                        {row?.sabha_name ? (
+                          <Text style={styles.metaText}>
+                            <Text style={styles.metaLabel}>Sabha:</Text>{' '}
+                            <Text style={styles.metaValue}>
+                              {row.sabha_name}
+                            </Text>
+                          </Text>
+                        ) : null}
+                        {row?.age != null ? <AgePill age={row.age} /> : null}
+                      </View>
+                    ) : null}
                     {mobile ? (
                       <Text style={styles.mobile}>{mobile}</Text>
                     ) : null}
                     <LeaderMeta row={row} />
-                    {canContact && hasMobile(mobile) ? (
-                      <View style={styles.contact}>
-                        <CallButton row={row} mobile={mobile} />
-                        <WhatsAppButton row={row} mobile={mobile} />
-                      </View>
-                    ) : null}
-                    <WishButton
-                      row={row}
-                      sent={sent.has(row?.user_id)}
-                      onPress={() => setWishing(row)}
-                    />
+                    <View style={styles.actions}>
+                      <WishButton
+                        row={row}
+                        sent={sent.has(row?.user_id)}
+                        onPress={() => setWishing(row)}
+                      />
+                      {canContact && hasMobile(mobile) ? (
+                        <>
+                          <CallButton row={row} mobile={mobile} />
+                          <WhatsAppButton row={row} mobile={mobile} />
+                        </>
+                      ) : null}
+                    </View>
                   </View>
                 </View>
               );
@@ -730,7 +755,28 @@ const styles = StyleSheet.create({
     fontWeight: WEIGHT.bold,
     color: COLORS.primary,
   },
-  sabha: { fontSize: TEXT.sm, color: COLORS.textMuted },
+  sabhaLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: space(2),
+    rowGap: space(1),
+    marginTop: space(0.5),
+  },
+  agePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(1),
+    borderRadius: RADII.full,
+    backgroundColor: 'rgba(255,134,42,0.12)',
+    paddingHorizontal: space(2),
+    paddingVertical: space(0.5),
+  },
+  ageText: {
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.accent,
+  },
   mobile: {
     ...TNUM,
     marginTop: space(0.5),
@@ -743,14 +789,16 @@ const styles = StyleSheet.create({
   metaValue: { fontWeight: WEIGHT.medium },
   attended: { fontWeight: WEIGHT.semibold, color: COLORS.successFg },
   absent: { fontWeight: WEIGHT.semibold, color: COLORS.dangerFg },
-  contact: { flexDirection: 'row', gap: space(2), marginTop: space(2) },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space(2),
+    marginTop: space(2),
+  },
 
   // `!py-2 !text-xs` on the web's Button
-  wishButton: {
-    alignSelf: 'flex-start',
-    marginTop: space(2),
-    paddingVertical: space(2),
-  },
+  wishButton: { paddingVertical: space(2) },
   wishButtonText: { fontSize: TEXT.xs },
 
   roundLink: {

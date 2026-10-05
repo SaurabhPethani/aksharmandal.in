@@ -88,7 +88,7 @@ export default function AppHeader({
               style={styles.topButton}
             >
               <MaterialCommunityIcons
-                name="book-open-page-variant"
+                name="book-open-blank-variant-outline"
                 size={22}
                 color={COLORS.surface}
               />

@@ -10,6 +10,7 @@ import AppHeader from '../components/AppHeader';
 import ScrollViewWithTop from '../components/ScrollToTop';
 import SiteFooter from '../components/SiteFooter';
 import { Text } from '../components/Typography';
+import { FONT_DISPLAY } from '../constants/typography';
 import { useNotifications } from '../hooks/useNotifications';
 import {
   groupByDay,
@@ -171,7 +172,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  title: { color: C.navy, fontSize: 26, fontWeight: '800', marginBottom: 4 },
+  title: {
+    fontFamily: FONT_DISPLAY,
+    color: C.navy,
+    fontSize: 26,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
   subtitle: { color: C.muted, fontSize: 13, lineHeight: 18 },
   markRead: { color: C.accent, fontSize: 13, fontWeight: '700' },
   error: {

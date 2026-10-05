@@ -11,6 +11,7 @@ import Svg, {
   Text as SvgText,
 } from 'react-native-svg';
 import { Text } from '../Typography';
+import { FONT_FAMILY } from '../../constants/typography';
 import {
   COLORS,
   RADII,
@@ -351,6 +352,7 @@ export default function TrendChart({
                     x={PAD.left - 8}
                     y={y(v) + 4}
                     textAnchor="end"
+                    fontFamily={FONT_FAMILY}
                     fontSize="10"
                     fill={AXIS_COLOUR}
                   >
@@ -408,6 +410,7 @@ export default function TrendChart({
                         x={x(i)}
                         y={firstY + li * lineHeight}
                         textAnchor="middle"
+                        fontFamily={FONT_FAMILY}
                         fontSize="10"
                         fontWeight="600"
                         fill={series[0].color}
@@ -443,6 +446,7 @@ export default function TrendChart({
                       x={x(i)}
                       y={y(50) - 8}
                       textAnchor="middle"
+                      fontFamily={FONT_FAMILY}
                       fontSize="10"
                       fontWeight="600"
                       fill={AXIS_COLOUR}
@@ -463,6 +467,7 @@ export default function TrendChart({
                     x={x(i)}
                     y={axisY}
                     textAnchor="end"
+                    fontFamily={FONT_FAMILY}
                     fontSize="10"
                     fill={AXIS_COLOUR}
                     transform={`rotate(-90 ${x(i)} ${axisY})`}

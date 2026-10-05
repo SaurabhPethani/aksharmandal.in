@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   BackHandler,
@@ -16,6 +16,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import AppHeader from '../components/AppHeader';
 import SiteFooter from '../components/SiteFooter';
 import { Text } from '../components/Typography';
+import { FONT_DISPLAY } from '../constants/typography';
 import { useAuth, useToast } from '../hooks/core';
 import { useProfile } from '../hooks/useUsers';
 import { useFeatures } from '../hooks/useLookups';
@@ -24,6 +25,7 @@ import { useProfileForm } from '../hooks/useProfileForm';
 import {
   useMyResumes,
   useProfileImage,
+  useQrInfo,
   useRegenerateQr,
   useRemoveProfileImage,
   useResumeMutations,
@@ -50,7 +52,6 @@ import { isAttending, statusLabel } from '../utils/memberFlags';
 import { formatDate } from '../utils/format';
 import { pickRows } from '../utils/options';
 import { absoluteUrl } from '../api/client';
-import { profileService } from '../services/profileService';
 import { saveRemoteImage } from '../utils/saveImage';
 import { LOADING } from '../constants/messages';
 import { COLORS, RADII, TEXT, WEIGHT, space } from '../constants/theme';
@@ -63,6 +64,8 @@ export default function ProfilePage({
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
+  // No default: a `null` one would narrow the type a TS caller may pass.
+  initialTab,
 }) {
   const { activeUserId: userId } = useAuth();
   const toast = useToast();
@@ -71,7 +74,12 @@ export default function ProfilePage({
   const [tabKey, setTabKey] = useState('Personal');
   // A request to jump the strip to a tab: the Change Password / PIN button, and
   // coming back out of the editor. The token lets the same tab be re-requested.
-  const [jumpTo, setJumpTo] = useState(null);
+  const [jumpTo, setJumpTo] = useState(() =>
+    initialTab ? { key: initialTab, token: Date.now() } : null,
+  );
+  // Opened on a named tab, the page scrolls past the hero to show it.
+  const scrollRef = useRef(null);
+  const scrollToTabs = useRef(Boolean(initialTab));
   // Editing happens HERE, on this screen. There is no separate form route any
   // more — the same tab strip swaps its read cards for the record's fields.
   const [editing, setEditing] = useState(false);
@@ -105,7 +113,11 @@ export default function ProfilePage({
   const [qrMissing, setQrMissing] = useState(false);
   // Not a mutation — nothing is written — so it carries its own pending flag.
   const [qrSaving, setQrSaving] = useState(false);
-  const qrSrc = `${profileService.qrCodeUrl(userId)}${qrNonce ? `?v=${qrNonce}` : ''}`;
+  const qrQ = useQrInfo(userId);
+  // The nonce re-requests a file regenerated under the same address.
+  const qrSrc = qrQ.data
+    ? `${qrQ.data}${qrNonce ? `${qrQ.data.includes('?') ? '&' : '?'}v=${qrNonce}` : ''}`
+    : null;
 
   const name = data?.user_name || 'User';
   const role = data?.role_name;
@@ -279,6 +291,7 @@ export default function ProfilePage({
           does still resize. */}
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView
+          ref={scrollRef}
           style={styles.flex}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
@@ -438,7 +451,7 @@ export default function ProfilePage({
               </Button>
             </View>
           ) : (
-            <View style={styles.heroButtons}>
+            <View style={styles.heroStack}>
               <Button variant="accent" onPress={startEditing}>
                 Edit Profile
               </Button>
@@ -459,123 +472,136 @@ export default function ProfilePage({
       {editing ? (
         <ProfileEditor form={form} onSaveAndExit={saveEditing} />
       ) : (
-        <ProfileCards
-          user={data}
-          userId={userId}
-          onTabChange={setTabKey}
-          jumpTo={jumpTo}
-          // Family is READ-ONLY here (a list of members + relation, no controls) —
-          // a member should be able to SEE their own family, they just cannot
-          // maintain it from their own screen.
-          omitTabs={[]}
-          extraTabs={[
-            {
-              key: 'security',
-              label: 'Security',
-              render: () => <SecuritySettings />,
-            },
-            ...(resumeEnabled
-              ? [
-                  {
-                    key: 'resume',
-                    label: 'Resume',
-                    render: () => (
-                      <View style={styles.stack}>
-                        <View style={styles.builder}>
-                          <Text style={styles.sectionTitle}>
-                            Resume Builder
-                          </Text>
-                          <Text style={styles.builderCopy}>
-                            Generate a PDF resume from your profile, education
-                            and job details. Each resume is a frozen snapshot —
-                            later profile edits won’t change resumes you’ve
-                            already created.
-                          </Text>
-                          <Button
-                            variant="accent"
-                            style={styles.builderBtn}
-                            onPress={generateResume}
-                            busy={resumeMutations.create.isPending}
-                          >
-                            Generate Resume
-                          </Button>
-                        </View>
+        <View
+          onLayout={event => {
+            if (!scrollToTabs.current) return;
+            scrollToTabs.current = false;
+            const { y } = event.nativeEvent.layout;
+            requestAnimationFrame(() =>
+              scrollRef.current?.scrollTo({ y, animated: false }),
+            );
+          }}
+        >
+          <ProfileCards
+            user={data}
+            userId={userId}
+            onTabChange={setTabKey}
+            jumpTo={jumpTo}
+            // Family is READ-ONLY here (a list of members + relation, no controls) —
+            // a member should be able to SEE their own family, they just cannot
+            // maintain it from their own screen.
+            omitTabs={[]}
+            extraTabs={[
+              {
+                key: 'security',
+                label: 'Security',
+                render: () => <SecuritySettings />,
+              },
+              ...(resumeEnabled
+                ? [
+                    {
+                      key: 'resume',
+                      label: 'Resume',
+                      render: () => (
+                        <View style={styles.stack}>
+                          <View style={styles.builder}>
+                            <Text style={styles.sectionTitle}>
+                              Resume Builder
+                            </Text>
+                            <Text style={styles.builderCopy}>
+                              Generate a PDF resume from your profile, education
+                              and job details. Each resume is a frozen snapshot
+                              — later profile edits won’t change resumes you’ve
+                              already created.
+                            </Text>
+                            <Button
+                              variant="accent"
+                              style={styles.builderBtn}
+                              onPress={generateResume}
+                              busy={resumeMutations.create.isPending}
+                            >
+                              Generate Resume
+                            </Button>
+                          </View>
 
-                        <ResumeList
-                          query={resumesQ}
-                          onDelete={deleteResume}
-                          busy={resumeMutations.remove.isPending}
-                        />
-                      </View>
-                    ),
-                  },
-                ]
-              : []),
-            {
-              key: 'qr',
-              label: 'My QR Code',
-              render: () => (
-                <Card style={styles.qrCard}>
-                  {qrMissing ? (
-                    <View style={styles.qrEmpty}>
-                      <Text style={styles.muted}>
-                        No QR code has been generated for your account yet.
-                      </Text>
-                      <Button
-                        variant="accent"
-                        style={styles.qrEmptyBtn}
-                        onPress={generateQr}
-                        busy={regenerateQr.isPending}
-                      >
-                        Generate QR code
-                      </Button>
-                    </View>
-                  ) : (
-                    <>
-                      <View style={styles.qrFrame}>
-                        <Image
-                          key={qrNonce}
-                          source={{ uri: qrSrc }}
-                          accessibilityLabel="Your attendance QR code"
-                          resizeMode="contain"
-                          style={styles.qrImage}
-                          onError={() => setQrMissing(true)}
-                        />
-                      </View>
-                      <Text style={[styles.muted, styles.qrHint]}>
-                        Show this at Sabha to mark your attendance
-                      </Text>
-                      <View style={styles.qrActions}>
+                          <ResumeList
+                            query={resumesQ}
+                            onDelete={deleteResume}
+                            busy={resumeMutations.remove.isPending}
+                          />
+                        </View>
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                key: 'qr',
+                label: 'My QR Code',
+                render: () => (
+                  <Card style={styles.qrCard}>
+                    {qrMissing || qrQ.isError ? (
+                      <View style={styles.qrEmpty}>
+                        <Text style={styles.muted}>
+                          No QR code has been generated for your account yet.
+                        </Text>
                         <Button
                           variant="accent"
-                          onPress={downloadQr}
-                          busy={qrSaving}
-                        >
-                          <MaterialCommunityIcons
-                            name="download"
-                            size={space(4)}
-                          />
-                          Download QR Code
-                        </Button>
-                        <Button
-                          variant="outline"
+                          style={styles.qrEmptyBtn}
                           onPress={generateQr}
                           busy={regenerateQr.isPending}
                         >
-                          <MaterialCommunityIcons
-                            name="refresh"
-                            size={space(4)}
-                          />
-                          Regenerate QR Code
+                          Generate QR code
                         </Button>
                       </View>
-                    </>
-                  )}
-                </Card>
-              ),
-            },
-          ]}
-        />
+                    ) : !qrSrc ? (
+                      <PageLoader label={LOADING.page} />
+                    ) : (
+                      <>
+                        <View style={styles.qrFrame}>
+                          <Image
+                            key={qrNonce}
+                            source={{ uri: qrSrc }}
+                            accessibilityLabel="Your attendance QR code"
+                            resizeMode="contain"
+                            style={styles.qrImage}
+                            onError={() => setQrMissing(true)}
+                          />
+                        </View>
+                        <Text style={[styles.muted, styles.qrHint]}>
+                          Show this at Sabha to mark your attendance
+                        </Text>
+                        <View style={styles.qrActions}>
+                          <Button
+                            variant="accent"
+                            onPress={downloadQr}
+                            busy={qrSaving}
+                          >
+                            <MaterialCommunityIcons
+                              name="download"
+                              size={space(4)}
+                            />
+                            Download QR Code
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onPress={generateQr}
+                            busy={regenerateQr.isPending}
+                          >
+                            <MaterialCommunityIcons
+                              name="refresh"
+                              size={space(4)}
+                            />
+                            Regenerate QR Code
+                          </Button>
+                        </View>
+                      </>
+                    )}
+                  </Card>
+                ),
+              },
+            ]}
+          />
+        </View>
       )}
 
       {/* Crop-and-zoom before upload — opens when a photo is picked, uploads
@@ -755,6 +781,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space(2),
   },
+  // One above the other, both as wide as the longer label.
+  heroStack: { gap: space(2) },
 
   builder: {
     borderRadius: RADII.card,
@@ -764,6 +792,7 @@ const styles = StyleSheet.create({
     padding: space(5),
   },
   sectionTitle: {
+    fontFamily: FONT_DISPLAY,
     fontSize: TEXT.lg,
     fontWeight: WEIGHT.bold,
     color: COLORS.primary,
@@ -787,14 +816,8 @@ const styles = StyleSheet.create({
   },
   qrImage: { width: 224, height: 224 },
   qrHint: { marginTop: space(4), textAlign: 'center' },
-  qrActions: {
-    marginTop: space(4),
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space(2),
-  },
+  // One above the other, both as wide as the longer label.
+  qrActions: { marginTop: space(4), gap: space(2) },
 
   resumeSkeletons: { gap: space(2) },
   resumeSkeleton: { height: space(16), width: '100%' },

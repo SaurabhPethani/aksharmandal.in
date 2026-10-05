@@ -10,6 +10,7 @@ import {
 import Svg, { Circle, Path } from 'react-native-svg';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Modal } from './Overlays';
+import { DialogCancel } from './FormDialog';
 import { Button } from './ui';
 import { COLORS, RADII, space } from '../constants/theme';
 
@@ -295,9 +296,7 @@ export default function ImageCropDialog({
       scrollable={false}
       footer={
         <>
-          <Button variant="ghost" onPress={onCancel} disabled={working}>
-            Cancel
-          </Button>
+          <DialogCancel variant="ghost" disabled={working} />
           <Button variant="primary" onPress={save} busy={working}>
             Save photo
           </Button>
