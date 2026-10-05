@@ -68,9 +68,10 @@ export {
 } from './useProfileExtras';
 
 export {
-  useSabhaDetails, useSabhaSchedules, useAttendanceSummary, usePriorWeek,
+  useSabhaDetails, useSabhaSchedules, useSpecialSchedules,
+  useAttendanceSummary, usePriorWeek, useAssemblyBroadcast,
   useMarkAttendance, useCreateAttendanceRecord, useSaveAttendanceRecord,
-  useCancelSabhaDetail,
+  useCancelSabhaDetail, useSittingsByDate, useToggleAttendanceOpen,
 } from './useAttendance';
 
 // /dashboard reads its OWN endpoint, not the Reports one — see

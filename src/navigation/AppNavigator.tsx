@@ -5,12 +5,17 @@ import HelpPage from '../pages/HelpPage';
 import BirthdaysPage from '../pages/BirthdaysPage';
 import NotLoggedInPage from '../pages/NotLoggedInPage';
 import EventsPage from '../pages/EventsPage';
+import AttendancePage from '../pages/AttendancePage';
 import YuvaSevaPage from '../pages/YuvaSevaPage';
 import NotificationsPage from '../pages/NotificationsPage';
 import LegalPage from '../pages/LegalPage';
 import ProfilePage from '../pages/ProfilePage';
 import { useAuth } from '../hooks/core';
-import { canReadHelp, canSeeYuvaSeva } from '../constants/roles';
+import {
+  canReadHelp,
+  canSeeYuvaSeva,
+  canSeeAttendance,
+} from '../constants/roles';
 
 type RouteName =
   | 'dashboard'
@@ -18,6 +23,7 @@ type RouteName =
   | 'birthdays'
   | 'not-logged-in'
   | 'events'
+  | 'attendance'
   | 'yuva-seva'
   | 'notifications'
   | 'legal-privacy'
@@ -41,9 +47,11 @@ export default function AppNavigator({
   const route = history[history.length - 1];
   const canOpenHelp = canReadHelp(roleId);
   const canOpenYuvaSeva = canSeeYuvaSeva(roleId);
+  const canOpenAttendance = canSeeAttendance(roleId);
   const blocked =
     (route === 'help' && !canOpenHelp) ||
-    (route === 'yuva-seva' && !canOpenYuvaSeva);
+    (route === 'yuva-seva' && !canOpenYuvaSeva) ||
+    (route === 'attendance' && !canOpenAttendance);
   const openHelp = canOpenHelp ? () => navigate('help') : undefined;
   const legalLinks = {
     onOpenPrivacy: () => navigate('legal-privacy'),
@@ -141,6 +149,15 @@ export default function AppNavigator({
         {...legalLinks}
         onProfile={openProfile}
       />
+    ) : displayedRoute === 'attendance' ? (
+      <AttendancePage
+        onBack={goBack}
+        onMenu={() => setDrawerOpen(true)}
+        onHelp={openHelp}
+        onNotifications={() => navigate('notifications')}
+        {...legalLinks}
+        onProfile={openProfile}
+      />
     ) : displayedRoute === 'yuva-seva' ? (
       <YuvaSevaPage
         onBack={goBack}
@@ -212,6 +229,10 @@ export default function AppNavigator({
           navigate('events');
           setDrawerOpen(false);
         }}
+        onOpenAttendance={() => {
+          navigate('attendance');
+          setDrawerOpen(false);
+        }}
         onOpenYuvaSeva={() => {
           navigate('yuva-seva');
           setDrawerOpen(false);
@@ -223,6 +244,7 @@ export default function AppNavigator({
         activeRoute={route}
         roleName={roleName}
         showYuvaSeva={canOpenYuvaSeva}
+        showAttendance={canOpenAttendance}
       />
     </View>
   );

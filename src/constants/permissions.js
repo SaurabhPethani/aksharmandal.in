@@ -13,6 +13,20 @@ export const MODULES = {
   TRANSFER: 'TRANSFER',
   ATTENDANCE: 'ATTENDANCE',
   /**
+   * Additive, delegable grants for SPECIAL Sabhas — one-off and recurring. A
+   * Sabha-level role can be given SPECIAL_SABHA:CREATE / MARK / REPORT to run the
+   * special sittings in their scope without holding the base ATTENDANCE actions.
+   * The landing page OR's these with the matching ATTENDANCE action per row (see
+   * AttendancePage's `mayMark` / `mayReport` / `canEdit`).
+   */
+  SPECIAL_SABHA: 'SPECIAL_SABHA',
+  /**
+   * The Attendance Track History tool — a read-only replay of every mark for one
+   * sitting. Declares VIEW, which gates the history view (SuperAdmin may always
+   * open it).
+   */
+  ATTENDANCE_HISTORY: 'ATTENDANCE_HISTORY',
+  /**
    * The hierarchy tree screen. Declares READ and nothing else — it opens the
    * page and lists the Pradeshes, and grants no writes at all.
    *
@@ -153,6 +167,10 @@ export const ACTIONS = {
   CREATE: 'CREATE',
   UPDATE: 'UPDATE',
   DELETE: 'DELETE',
+  /** Marking a member present/absent — `ATTENDANCE:MARK` / `SPECIAL_SABHA:MARK`. */
+  MARK: 'MARK',
+  /** Opening a sitting's attendance report — `ATTENDANCE:REPORT` / `SPECIAL_SABHA:REPORT`. */
+  REPORT: 'REPORT',
   BULK_STATUS_UPDATE: 'BULK_STATUS_UPDATE',
   /** USER_ADMIN's only action — gates the delegable "Change Mobile" tool. */
   CHANGE_MOBILE: 'CHANGE_MOBILE',

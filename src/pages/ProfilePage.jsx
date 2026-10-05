@@ -50,7 +50,6 @@ import { isAttending, statusLabel } from '../utils/memberFlags';
 import { formatDate } from '../utils/format';
 import { pickRows } from '../utils/options';
 import { absoluteUrl } from '../api/client';
-import { profileService } from '../services/profileService';
 import { saveRemoteImage } from '../utils/saveImage';
 import { LOADING } from '../constants/messages';
 import { COLORS, RADII, TEXT, WEIGHT, space } from '../constants/theme';
@@ -105,7 +104,16 @@ export default function ProfilePage({
   const [qrMissing, setQrMissing] = useState(false);
   // Not a mutation — nothing is written — so it carries its own pending flag.
   const [qrSaving, setQrSaving] = useState(false);
-  const qrSrc = `${profileService.qrCodeUrl(userId)}${qrNonce ? `?v=${qrNonce}` : ''}`;
+  // The URL a just-pressed "Generate" handed back. The cached /users/me record
+  // still has the old (null) `qr_url` until it refetches, so without this a
+  // first-ever code would stay invisible after minting it.
+  const [generatedUrl, setGeneratedUrl] = useState(null);
+  // The QR image URL now carries a per-user token in its filename, so it can no
+  // longer be built from the id — it comes from the member's own record
+  // (GET /users/me returns the tokened `qr_url`). `?v=` busts the cache on a
+  // regenerate (the URL itself is stable — the token is reused).
+  const qrBase = absoluteUrl(generatedUrl || data?.qr_url);
+  const qrSrc = qrBase ? `${qrBase}${qrNonce ? `?v=${qrNonce}` : ''}` : '';
 
   const name = data?.user_name || 'User';
   const role = data?.role_name;
@@ -205,6 +213,9 @@ export default function ProfilePage({
   const generateQr = async () => {
     try {
       const res = await regenerateQr.mutateAsync();
+      // Use the freshly minted URL so a first-ever code shows at once, rather
+      // than waiting on the cached /users/me record to refetch its `qr_url`.
+      setGeneratedUrl(res?.data?.public_url || null);
       setQrMissing(false);
       setQrNonce(Date.now());
       toast.success(res?.detail || 'QR code generated.');
@@ -516,7 +527,10 @@ export default function ProfilePage({
               label: 'My QR Code',
               render: () => (
                 <Card style={styles.qrCard}>
-                  {qrMissing ? (
+                  {/* `!qrSrc` is the no-code case: unlike a browser, an RN
+                      <Image> with an empty uri will not fire `onError`, so the
+                      missing state is decided here rather than waited on. */}
+                  {qrMissing || !qrSrc ? (
                     <View style={styles.qrEmpty}>
                       <Text style={styles.muted}>
                         No QR code has been generated for your account yet.

@@ -114,6 +114,19 @@ export const canSeeYuvaSeva = (roleId) =>
   roleId == null || !YUVA_SEVA_DENIED_ROLE_IDS.includes(Number(roleId));
 
 /**
+ * Who sees Attendance: the drawer entry and the route. A UI gate only.
+ *
+ * Attendance is a Yuva Seva responsibility — marking a Sabha's roll — so roles
+ * below Yuva Seva rank (the Yuvak role, id 10, whose scope is only itself) have
+ * nothing to do there. A SEPARATE list from YUVA_SEVA_DENIED_ROLE_IDS by policy,
+ * for the reason the lists above give: two decisions about one role, and merging
+ * them would mean a change to either silently moves the other.
+ */
+export const ATTENDANCE_DENIED_ROLE_IDS = [10];
+export const canSeeAttendance = (roleId) =>
+  roleId == null || !ATTENDANCE_DENIED_ROLE_IDS.includes(Number(roleId));
+
+/**
  * ROLES THAT MAY NOT OPEN THE REPORTS KPI DRILL-DOWN — the third ID-keyed rule
  * here, carrying the same ⚠ as the two above.
  *

@@ -4,6 +4,10 @@ export const usersService = {
   list: params => api.get('/api/v1/users/list', { params }),
   byId: userId => api.get(`/api/v1/users/${userId}`),
 
+  // Org-wide member search for the Vakta (speaker) picker — a speaker is often a
+  // visitor from another Sabha/Mandal, so this is not scoped to one Sabha.
+  vaktaSearch: q => api.get('/api/v1/users/vakta-search', { params: { q } }),
+
   create: payload => api.post('/api/v1/users/', payload, { envelope: true }),
   createChild: (parentId, payload) =>
     api.post(`/api/v1/users/${parentId}/children`, payload, {

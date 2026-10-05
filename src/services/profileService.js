@@ -1,4 +1,4 @@
-import { absoluteUrl, api, apiUrl } from '../api/client';
+import { absoluteUrl, api } from '../api/client';
 
 export const profileService = {
   /** `{ user_id, user_name, image_url }` — `image_url` is null until one is set. */
@@ -30,7 +30,18 @@ export const profileService = {
 
   deleteResume: (resumeId) => api.delete(`/api/v1/resume/${resumeId}`, { envelope: true }),
 
-  qrCodeUrl: (userId) => apiUrl(`/api/v1/qr/codes/akshar-connect-${userId}.jpeg`),
+  /**
+   * GET /api/v1/qr/users/{user_id} -> `{ user_id, public_url, filename }`.
+   *
+   * The QR image URL now carries a per-user RANDOM TOKEN in its filename
+   * (`akshar-connect-<id>-<token>.jpeg`) so the public code set can't be walked
+   * id-by-id. The filename is therefore NO LONGER derivable from the id, so the
+   * old id-built `/qr/codes/akshar-connect-{id}.jpeg` path has been dropped —
+   * the app asks the backend for `public_url` and loads that. The image itself
+   * stays public (200, no Authorization header), so a plain `<Image>` works.
+   * Lazily creates the QR on first read; self needs no grant.
+   */
+  qrInfo: (userId) => api.get(`/api/v1/qr/users/${userId}`),
 
   regenerateQr: (userId) =>
     api.post(`/api/v1/qr/users/${userId}/regenerate`, null, { envelope: true }),

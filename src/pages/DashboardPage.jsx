@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import Svg, { Circle, G, Polyline, Text as SvgText } from 'react-native-svg';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
 import AppHeader from '../components/AppHeader';
@@ -23,7 +23,8 @@ import { Skeleton } from '../components/ui';
 import MemberStatsSearch from '../components/dashboard/MemberStatsSearch';
 import TrendChart from '../components/charts/TrendChart';
 import { dashboardService } from '../services/dashboardService';
-import { API_BASE } from '../config/appConfig';
+import { profileService } from '../services/profileService';
+import { absoluteUrl } from '../api/client';
 import { useAuth } from '../hooks/core';
 import {
   canReadHelp,
@@ -73,8 +74,6 @@ const MONTHS = [
 
 const numberText = value =>
   value == null ? '—' : Number(value).toLocaleString('en-IN');
-const qrUrl = userId =>
-  userId ? `${API_BASE}/api/v1/qr/codes/akshar-connect-${userId}.jpeg` : null;
 
 function weekRange(weekDate, { live = false } = {}) {
   if (!weekDate) return null;
@@ -280,11 +279,13 @@ export function Drawer({
   onSignOut,
   onDashboard,
   onOpenEvents,
+  onOpenAttendance,
   onOpenYuvaSeva,
   onOpenNotifications,
   activeRoute = 'dashboard',
   roleName,
   showYuvaSeva = true,
+  showAttendance = true,
 }) {
   const slide = useRef(new Animated.Value(-320)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -366,7 +367,11 @@ export function Drawer({
               'Dashboard',
               activeRoute === 'dashboard',
             ],
-
+            showAttendance && [
+              'calendar-check',
+              'Attendance',
+              activeRoute === 'attendance',
+            ],
             showYuvaSeva && [
               'hand-heart',
               'Yuva Seva',
@@ -380,6 +385,7 @@ export function Drawer({
                 key={label}
                 onPress={() => {
                   if (label === 'Dashboard') onDashboard?.();
+                  else if (label === 'Attendance') onOpenAttendance?.();
                   else if (label === 'Events') onOpenEvents?.();
                   else if (label === 'Yuva Seva') onOpenYuvaSeva?.();
                   onClose();
@@ -429,7 +435,29 @@ export function Drawer({
 }
 
 function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
-  const image = qrUrl(userId);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  // The QR filename now carries a per-user random token, so it is NOT derivable
+  // from the id — we ask the backend for the tokened `public_url` and load that,
+  // exactly as the web's QrCodeCard does. (GET /qr/users/{id} lazily mints the
+  // code; self needs no grant, and the image itself is public.)
+  const qrQ = useQuery({
+    queryKey: ['qr-info', userId],
+    queryFn: () => profileService.qrInfo(userId),
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
+  });
+  const image = absoluteUrl(qrQ.data?.public_url) || '';
+
+  useEffect(() => {
+    setLoadFailed(false);
+  }, [image]);
+
+  // "Nothing to show": the lookup failed (no access / no code) OR an <Image>
+  // load already concluded the code is unavailable. A lookup still in flight is
+  // NOT empty — it shows a quiet loading tile instead. Mirrors web `showEmpty`.
+  const showEmpty = loadFailed || qrQ.isError;
+
   return (
     // A tap anywhere on the card shows or hides it. Not `accessible`, so the
     // two buttons inside stay reachable on their own.
@@ -438,7 +466,7 @@ function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
       accessible={false}
       style={({ pressed }) => [
         styles.qrBar,
-        expanded && styles.qrBarExpanded,
+        expanded && !showEmpty && styles.qrBarExpanded,
         pressed && styles.toggleCardPressed,
       ]}
     >
@@ -446,53 +474,82 @@ function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
         <Text style={styles.qrBarTitle} numberOfLines={1}>
           My QR Code
         </Text>
-        <View style={styles.qrBarActions}>
-          <Pressable
-            onPress={onToggle}
-            style={styles.qrShowButton}
-            accessibilityRole="button"
-            accessibilityLabel={expanded ? 'Hide QR Code' : 'Show QR Code'}
-          >
-            <Text style={styles.qrShowText}>{expanded ? 'Hide' : 'Show'}</Text>
-          </Pressable>
-          {/* Never `disabled`: a disabled button lets the tap through to the
-              card, which would then fold away mid-download. */}
-          <Pressable
-            onPress={onDownload}
-            style={[styles.qrDownloadButton, downloading && styles.qrBusy]}
-            accessibilityRole="button"
-            accessibilityLabel="Download QR Code"
-            accessibilityState={{ disabled: downloading, busy: downloading }}
-          >
-            {downloading ? (
-              <ActivityIndicator size="small" color={COLORS.navy} />
-            ) : (
-              <MaterialCommunityIcons
-                name="download-outline"
-                size={16}
-                color={COLORS.navy}
-              />
-            )}
-            <Text style={styles.qrDownloadText}>Download</Text>
-          </Pressable>
-        </View>
+        {/* Nothing to fold means nothing to show or download: the web replaces
+            the two buttons with a quiet QR glyph in the same spot. */}
+        {showEmpty ? (
+          <MaterialCommunityIcons
+            name="qrcode"
+            size={18}
+            color="rgba(255,255,255,0.5)"
+          />
+        ) : (
+          <View style={styles.qrBarActions}>
+            <Pressable
+              onPress={onToggle}
+              style={styles.qrShowButton}
+              accessibilityRole="button"
+              accessibilityLabel={expanded ? 'Hide QR Code' : 'Show QR Code'}
+            >
+              <Text style={styles.qrShowText}>
+                {expanded ? 'Hide' : 'Show'}
+              </Text>
+            </Pressable>
+            {/* Never `disabled`: a disabled button lets the tap through to the
+                card, which would then fold away mid-download. The handler no-ops
+                until the URL has arrived. */}
+            <Pressable
+              onPress={() => onDownload(image)}
+              style={[styles.qrDownloadButton, downloading && styles.qrBusy]}
+              accessibilityRole="button"
+              accessibilityLabel="Download QR Code"
+              accessibilityState={{ disabled: downloading, busy: downloading }}
+            >
+              {downloading ? (
+                <ActivityIndicator size="small" color={COLORS.navy} />
+              ) : (
+                <MaterialCommunityIcons
+                  name="download-outline"
+                  size={16}
+                  color={COLORS.navy}
+                />
+              )}
+              <Text style={styles.qrDownloadText}>Download</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
-      {expanded ? (
+
+      {showEmpty ? (
+        // The web's not-generated state, value for value — a plate, a title and
+        // one line of guidance, shown whether or not the card is "open" because
+        // there is nothing here to fold away.
+        <View style={styles.qrEmpty}>
+          <View style={styles.qrEmptyPlate}>
+            <MaterialCommunityIcons
+              name="qrcode"
+              size={28}
+              color="rgba(255,255,255,0.5)"
+            />
+          </View>
+          <Text style={styles.qrEmptyTitle}>QR code not generated yet</Text>
+          <Text style={styles.qrEmptyText}>
+            Ask an administrator to generate QR codes for your Mandal.
+          </Text>
+        </View>
+      ) : expanded ? (
         <View style={styles.qrContent}>
           {image ? (
             <Image
               source={{ uri: image }}
               style={styles.qrInlineImage}
               resizeMode="contain"
+              onError={() => setLoadFailed(true)}
             />
           ) : (
-            <View style={styles.qrMissingBox}>
-              <MaterialCommunityIcons
-                name="qrcode-remove"
-                size={40}
-                color={COLORS.muted}
-              />
-              <Text style={styles.qrMissingText}>QR code not available</Text>
+            // Lookup still in flight — a quiet tile the same size as the code, so
+            // the card doesn't jump when the image arrives.
+            <View style={styles.qrLoadingTile}>
+              <ActivityIndicator size="small" color="rgba(255,255,255,0.7)" />
             </View>
           )}
           <Text style={styles.qrInlineHint}>
@@ -1499,7 +1556,7 @@ function SelfDashboard({
   thought,
   onOpenBirthdays,
   onPickMember,
-  onOpenEvents
+  onOpenEvents,
 }) {
   const attendance = data?.total_sabha_present;
   const recent = data?.present_in_last_4w;
@@ -1798,7 +1855,7 @@ export default function DashboardPage({
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
-  onOpenYuvaSeva
+  onOpenYuvaSeva,
 }) {
   const { activeUserId } = useAuth();
   const queryClient = useQueryClient();
@@ -1880,8 +1937,9 @@ export default function DashboardPage({
   const activeTab = mayReadOverall ? tab : 'self';
   const displayName = me?.user_name || me?.full_name || 'Bhoolku';
 
-  const downloadQr = async () => {
-    const image = qrUrl(activeUserId || me?.id || me?.user_id);
+  // The tokened image URL is resolved inside QrBar (from GET /qr/users/{id}),
+  // so it is handed in rather than rebuilt from the id here.
+  const downloadQr = async image => {
     if (!image || qrDownloading) return;
     setQrDownloading(true);
     // Named after the member, as on the web, minus characters a file name
@@ -2160,7 +2218,7 @@ const styles = StyleSheet.create({
   },
   drawerLogoutText: { color: '#FFD0B0', fontSize: 14, fontWeight: '800' },
   scroll: { flexGrow: 1, padding: 16, paddingTop: 16, paddingBottom: 0 },
- footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
   header: { marginBottom: 16 },
   title: { color: COLORS.navy, fontSize: 24, fontWeight: '800' },
   qrBar: {
@@ -2219,15 +2277,41 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 8,
   },
-  qrMissingBox: {
+  // The web's not-generated state (components/dashboard/QrCodeCard.jsx): a
+  // translucent plate, a bold title and one muted line, centred under the header.
+  qrEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    marginTop: 16,
+  },
+  qrEmptyPlate: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  qrEmptyTitle: { color: COLORS.surface, fontSize: 14, fontWeight: '600' },
+  qrEmptyText: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12,
+    marginTop: 4,
+    maxWidth: 220,
+    textAlign: 'center',
+  },
+  // Placeholder while the tokened URL is still being fetched — same footprint as
+  // the code so the card doesn't jump when the image arrives.
+  qrLoadingTile: {
     width: 220,
     height: 220,
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  qrMissingText: { color: '#C5D8E8', fontSize: 13, marginTop: 8 },
   qrInlineHint: {
     color: '#C5D8E8',
     textAlign: 'center',

@@ -6,6 +6,8 @@ module.exports = {
     '^@react-native-camera-roll/camera-roll$':
       '<rootDir>/__mocks__/@react-native-camera-roll/camera-roll.js',
     '^react-native-config$': '<rootDir>/__mocks__/react-native-config.js',
+    '^react-native-camera-kit$':
+      '<rootDir>/__mocks__/react-native-camera-kit.js',
     '^react-native-image-picker$':
       '<rootDir>/__mocks__/react-native-image-picker.js',
     '^@react-native-community/image-editor$':

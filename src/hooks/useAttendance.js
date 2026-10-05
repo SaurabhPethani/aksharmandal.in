@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { attendanceService } from '../services/attendanceService';
+import { openAttendanceService } from '../services/openAttendanceService';
 
 /**
  * Sabhas for a landing tab, or (with no type) every active one for the scanner.
@@ -40,6 +41,19 @@ export function useSabhaSchedules(enabled = true) {
 }
 
 /**
+ * The recurring Special Sabha rules (Category+tag audiences). Its own query key
+ * so the recurring form's `invalidate` refreshes only this list, not the regular
+ * schedules. Enabled only when the caller may manage them.
+ */
+export function useSpecialSchedules(enabled = true) {
+  return useQuery({
+    queryKey: ['special-schedules'],
+    queryFn: () => attendanceService.specialSchedules(),
+    enabled,
+  });
+}
+
+/**
  * Live attendance for one Sabha — totals and each member's marked status.
  * This is the source of truth the member rows render from, so marking refetches
  * it rather than mutating anything locally.
@@ -63,6 +77,24 @@ export function usePriorWeek(sabhaDetailId) {
     queryKey: ['attendance-prior-week', sabhaDetailId ?? null],
     queryFn: () => attendanceService.priorWeek(sabhaDetailId),
     enabled: Boolean(sabhaDetailId),
+  });
+}
+
+/**
+ * The live-assembly broadcast numbers for one sitting. `final` gives the
+ * live/closed read; `asOf` (IST ISO) gives a point-in-time slot snapshot.
+ * `retry:false` so a Special sitting (the endpoint 400s) resolves to an error
+ * immediately, which is how the broadcast strip tells regular from special.
+ */
+export function useAssemblyBroadcast(
+  sabhaDetailId,
+  { asOf = null, final = false, enabled = true } = {},
+) {
+  return useQuery({
+    queryKey: ['assembly-broadcast', sabhaDetailId ?? null, final ? 'final' : asOf ?? 'live'],
+    queryFn: () => attendanceService.broadcast(sabhaDetailId, { asOf, final }),
+    enabled: enabled && Boolean(sabhaDetailId),
+    retry: false,
   });
 }
 
@@ -176,5 +208,35 @@ export function useCancelSabhaDetail() {
   return useMutation({
     mutationFn: (id) => attendanceService.cancelSabhaDetail(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sabha-details'] }),
+  });
+}
+
+/* ── Open Attendance (SuperAdmin) ───────────────────────────────────────────── */
+
+/**
+ * The sittings held on `date` the caller may open/close for attendance. Keyed by
+ * date so each day is cached separately and the toggle below can invalidate just
+ * the day on screen.
+ */
+export function useSittingsByDate(date, enabled = true) {
+  return useQuery({
+    queryKey: ['open-attendance', date ?? null],
+    queryFn: () => openAttendanceService.byDate(date),
+    enabled: enabled && Boolean(date),
+  });
+}
+
+/**
+ * Flips one past sitting open/closed for attendance. The list is refetched for
+ * the day in question rather than patched: `is_open` is the only thing that
+ * changed and a re-read keeps the row honest.
+ */
+export function useToggleAttendanceOpen(date) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sabhaDetailId, open }) =>
+      openAttendanceService.toggle(sabhaDetailId, open),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['open-attendance', date ?? null] }),
   });
 }

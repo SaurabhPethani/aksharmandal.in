@@ -3,6 +3,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Scanning a member's QR code to mark attendance. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- Saving images to the gallery; Android 10+ needs no permission for that. -->
     <uses-permission
       android:name="android.permission.WRITE_EXTERNAL_STORAGE"
