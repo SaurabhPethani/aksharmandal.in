@@ -5,15 +5,17 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons/static';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import SiteFooter from '../components/SiteFooter';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import { Text, TextInput } from '../components/Typography';
+import { FONT_DISPLAY } from '../constants/typography';
 import { useAuth } from '../hooks/core';
 import { AUTH, LOGIN_LOCKOUT_LIMIT } from '../constants/messages';
 import { ErrorBanner } from '../components/form/LoginField';
@@ -32,8 +34,6 @@ const iconNames = {
   shield: 'shield-check-outline',
   fingerprint: 'fingerprint',
   check: 'check-circle',
-  checkboxOn: 'checkbox-marked',
-  checkboxOff: 'checkbox-blank-outline',
 };
 
 function NativeIcon({ name, size = 20, color = '#9BB5CB' }) {
@@ -102,55 +102,6 @@ function Field({
           <View style={styles.fieldAction}>{rightElement}</View>
         ) : null}
       </View>
-    </Pressable>
-  );
-}
-// Shows whether biometric login is active on this device; the choice is
-// applied (token saved or removed) on the next PIN/password sign-in.
-function BiometricCheckbox({ checked, active, onChange, disabled }) {
-  const status = active
-    ? checked
-      ? 'Active; stays enabled after sign-in'
-      : 'Will be turned off after PIN/password sign-in'
-    : checked
-      ? 'Will be turned on when you sign in'
-      : 'Not active on this device';
-
-  return (
-    <Pressable
-      onPress={() => onChange(!checked)}
-      disabled={disabled}
-      hitSlop={6}
-      style={({ pressed }) => [
-        styles.biometricOption,
-        pressed && styles.pressedLink,
-      ]}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked, disabled }}
-    >
-      <NativeIcon
-        name={checked ? 'checkboxOn' : 'checkboxOff'}
-        size={22}
-        color={checked ? '#003158' : '#9BB5CB'}
-      />
-      <View style={styles.biometricOptionText}>
-        <Text style={styles.biometricOptionLabel}>
-          {active ? 'Use biometric login' : 'Enable biometric login'}
-        </Text>
-        <Text
-          style={[
-            styles.biometricOptionStatus,
-            active && checked && styles.biometricOptionActive,
-          ]}
-        >
-          {status}
-        </Text>
-      </View>
-      <NativeIcon
-        name="fingerprint"
-        size={22}
-        color={active ? '#22A06B' : '#9BB5CB'}
-      />
     </Pressable>
   );
 }
@@ -251,8 +202,23 @@ function CodeInput({
   );
 }
 
-export default function LoginPage() {
+/**
+ * @typedef {Object} LoginPageProps
+ * @property {(() => void) | undefined} [onOpenPrivacy]
+ * @property {(() => void) | undefined} [onOpenTerms]
+ * @property {(() => void) | undefined} [onOpenDeleteAccount]
+ */
+
+/**
+ * @param {LoginPageProps} props
+ */
+export default function LoginPage({
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
+}) {
   const auth = useAuth();
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState('main');
   const [tab, setTab] = useState('pin');
   const [mobile, setMobile] = useState('');
@@ -272,6 +238,8 @@ export default function LoginPage() {
   const [notice, setNotice] = useState('');
   const [failure, setFailure] = useState(null);
   const [biometricBusy, setBiometricBusy] = useState(false);
+  // Biometric login is switched on and off in Profile → Security. This only
+  // keeps it on across a PIN/password sign-in, which saves a fresh token.
   const [useBiometric, setUseBiometric] = useState(auth.biometricEnabled);
   const biometricStateLoaded = useRef(auth.biometricEnabled);
 
@@ -340,8 +308,8 @@ export default function LoginPage() {
 
       setNotice('Signed in successfully.');
     } catch (biometricError) {
-      // The saved token was revoked and removed; keep the box ticked so the
-      // next PIN/password sign-in saves a fresh one.
+      // The saved token was revoked and removed; the next PIN/password
+      // sign-in saves a fresh one.
       if (biometricError?.biometricExpired) setUseBiometric(true);
       setError(biometricError?.message || 'Biometric authentication failed.');
     } finally {
@@ -363,12 +331,10 @@ export default function LoginPage() {
         if (!password) throw new Error('Enter your password');
         result = await auth.loginWithPassword(mobile, password, { biometric });
       }
-      if (result?.biometricSaved === false) {
+      if (biometric && result?.biometricSaved === false) {
         Alert.alert(
           'Biometric login',
-          biometric
-            ? 'You are signed in, but biometric login could not be turned on. You can try again the next time you sign in.'
-            : 'You are signed in, but biometric login could not be turned off. Please try again the next time you sign in.',
+          'You are signed in, but biometric login could not be kept on. You can turn it on again from Profile → Security.',
         );
       }
       setNotice('Signed in successfully.');
@@ -442,9 +408,7 @@ export default function LoginPage() {
       accessibilityLabel={showSetupPin ? 'Hide PIN' : 'Show PIN'}
     >
       <NativeIcon name={showSetupPin ? 'eyeOff' : 'eye'} size={18} />
-      <Text style={styles.pinToggleText}>
-        {showSetupPin ? 'Hide' : 'Show'}
-      </Text>
+      <Text style={styles.pinToggleText}>{showSetupPin ? 'Hide' : 'Show'}</Text>
     </Pressable>
   );
 
@@ -455,13 +419,43 @@ export default function LoginPage() {
         ? 'Account Setup'
         : 'Welcome Back';
 
+  // Shown directly above each step's submit button.
+  const showAttempts = !locked && attemptsLeft != null && attemptsLeft > 0;
+  const feedback =
+    error || locked || showAttempts || notice ? (
+      <View style={styles.feedback}>
+        <ErrorBanner message={error} />
+        {locked ? <Text style={styles.error}>{AUTH.locked}</Text> : null}
+        {showAttempts ? (
+          <Text style={styles.warning}>{AUTH.attemptsLeft(attemptsLeft)}</Text>
+        ) : null}
+        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+      </View>
+    ) : null;
+
   return (
     <View style={styles.safe}>
+      <View pointerEvents="none" style={styles.topGlow}>
+        <Svg width="100%" height="220" viewBox="0 0 360 220">
+          <Defs>
+            <RadialGradient id="login-top-glow" cx="50%" cy="0%" r="72%">
+              <Stop offset="0%" stopColor="#FF862A" stopOpacity="0.34" />
+              <Stop offset="0.55" stopColor="#FF862A" stopOpacity="0.14" />
+              <Stop offset="1" stopColor="#FF862A" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Circle cx="180" cy="0" r="170" fill="url(#login-top-glow)" />
+        </Svg>
+      </View>
+      {/* `padding` on Android too: the window is no longer resized for the
+          keyboard there, so the form would sit under it. The screen starts
+          below the status bar, which the offset accounts for. */}
       <KeyboardAvoidingView
         style={styles.safe}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
+        keyboardVerticalOffset={insets.top}
       >
-        <ScrollView
+        <ScrollViewWithTop
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
@@ -478,7 +472,7 @@ export default function LoginPage() {
               resizeMode="contain"
             />
           </View>
-          <View style={styles.card}>
+          <View style={styles.content}>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>
               {step === 'otp'
@@ -538,15 +532,6 @@ export default function LoginPage() {
                     Enter a valid 10-digit number
                   </Text>
                 )}
-                {/* Above the PIN because the PIN signs in on its last digit. */}
-                {auth.biometricAvailable && (
-                  <BiometricCheckbox
-                    checked={useBiometric}
-                    active={auth.biometricEnabled}
-                    onChange={setUseBiometric}
-                    disabled={busy}
-                  />
-                )}
                 {tab === 'pin' ? (
                   <CodeInput
                     label={`${PIN_LENGTH}-digit PIN`}
@@ -581,6 +566,7 @@ export default function LoginPage() {
                     returnKeyType="go"
                   />
                 )}
+                {feedback}
                 <Pressable
                   style={({ pressed }) => [
                     styles.primary,
@@ -590,9 +576,11 @@ export default function LoginPage() {
                   onPress={() => login()}
                   disabled={busy || !canLogin}
                 >
-                  <Text style={styles.primaryText}>
-                    {busy ? 'Please wait...' : 'Continue'}
-                  </Text>
+                  {busy ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.primaryText}>Continue</Text>
+                  )}
                 </Pressable>
                 {auth.biometricAvailable && auth.biometricEnabled && (
                   <>
@@ -652,6 +640,7 @@ export default function LoginPage() {
                   onChangeText={changeOtp}
                   editable={!busy}
                 />
+                {feedback}
                 <Pressable
                   style={({ pressed }) => [
                     styles.primary,
@@ -661,9 +650,11 @@ export default function LoginPage() {
                   onPress={() => verifyOtp()}
                   disabled={busy || !canVerifyOtp}
                 >
-                  <Text style={styles.primaryText}>
-                    {busy ? 'Please wait...' : 'Verify OTP'}
-                  </Text>
+                  {busy ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.primaryText}>Verify OTP</Text>
+                  )}
                 </Pressable>
                 <Pressable
                   onPress={() => {
@@ -743,6 +734,7 @@ export default function LoginPage() {
                   editable={!busy}
                   rightElement={setupPinToggle}
                 />
+                {feedback}
                 <Pressable
                   style={({ pressed }) => [
                     styles.primary,
@@ -752,40 +744,38 @@ export default function LoginPage() {
                   onPress={completeSetup}
                   disabled={busy || !canCompleteSetup}
                 >
-                  <Text style={styles.primaryText}>
-                    {busy ? 'Please wait...' : 'Complete Setup'}
-                  </Text>
+                  {busy ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.primaryText}>Complete Setup</Text>
+                  )}
                 </Pressable>
               </>
             )}
 
-            <ErrorBanner message={error} />
-            {locked ? <Text style={styles.error}>{AUTH.locked}</Text> : null}
-            {!locked && attemptsLeft != null && attemptsLeft > 0 ? (
-              <Text style={styles.warning}>
-                {AUTH.attemptsLeft(attemptsLeft)}
-              </Text>
-            ) : null}
-            {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-            {busy ? (
-              <ActivityIndicator color="#FF862A" style={styles.loader} />
-            ) : null}
+            <View style={styles.footerBleed}>
+              <SiteFooter
+                onPrivacy={onOpenPrivacy}
+                onTerms={onOpenTerms}
+                onDeleteAccount={onOpenDeleteAccount}
+              />
+            </View>
           </View>
-        </ScrollView>
-        <SiteFooter light />
+        </ScrollViewWithTop>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F0F4F8' },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
   scroll: {
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 22,
     paddingBottom: 8,
   },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -20, paddingTop: 14 },
   appLogo: {
     width: 78,
     height: 78,
@@ -807,20 +797,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.4,
   },
-  card: {
-    width: '100%',
-    maxWidth: 520,
-    alignSelf: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 22,
-    padding: 22,
-    elevation: 3,
-    shadowColor: '#003158',
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 5 },
+  topGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+    alignItems: 'center',
   },
+  content: { flex: 1, width: '100%' },
   title: {
+    fontFamily: FONT_DISPLAY,
     color: '#003158',
     fontSize: 25,
     fontWeight: '800',
@@ -954,42 +941,24 @@ const styles = StyleSheet.create({
   pressedPrimary: { backgroundColor: '#0A5688', transform: [{ scale: 0.98 }] },
   pressedLink: { opacity: 0.65 },
   primaryText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  feedback: { marginBottom: 12 },
   link: {
     color: '#E87522',
     fontWeight: '700',
     textAlign: 'center',
     paddingVertical: 15,
   },
-  error: { color: '#C53030', fontSize: 13, textAlign: 'center', marginTop: 12 },
+  error: { color: '#C53030', fontSize: 13, marginTop: 12 },
   warning: {
     color: '#C26B00',
     fontSize: 12,
-    textAlign: 'center',
     marginTop: 10,
   },
   notice: {
     color: '#56758D',
     fontSize: 13,
-    textAlign: 'center',
     marginTop: 10,
   },
-  loader: { marginTop: 8 },
-  biometricOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#DCE7F0',
-    borderRadius: 14,
-    backgroundColor: '#F5F9FD',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  biometricOptionText: { flex: 1 },
-  biometricOptionLabel: { color: '#003158', fontSize: 14, fontWeight: '700' },
-  biometricOptionStatus: { color: '#7894AA', fontSize: 12, marginTop: 2 },
-  biometricOptionActive: { color: '#22A06B', fontWeight: '600' },
   orRow: {
     flexDirection: 'row',
     alignItems: 'center',

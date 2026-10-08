@@ -1,11 +1,32 @@
-import { useCallback, useMemo, useState } from 'react';
-import { usePermissions } from './core';
-import { useInfoRequests, useMyTransferRequests, usePendingTransfers } from './useApprovals';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { PermissionContext } from '../contexts/PermissionContext';
+import { STORAGE_KEYS } from '../constants/storage';
+import {
+  useInfoRequests,
+  useMyTransferRequests,
+  usePendingTransfers,
+  useMyInfoRequests,
+} from './useApprovals';
 import { ACTIONS, MODULES } from '../constants/permissions';
 import {
-  fromInfoRequests, fromMyTransferRequests, fromPendingTransfers,
-  isUnread, markAllRead, readWatermark, sortByNewest,
+  fromInfoRequests,
+  fromMyTransferRequests,
+  fromPendingTransfers,
+  isUnread,
+  markAllRead,
+  readWatermark,
+  sortByNewest,
+  fromMyInfoRequests,
 } from '../utils/notifications';
+
+function nativeStorage() {
+  try {
+    // Keep the native-only dependency out of the Jest web transform path.
+    return require('@react-native-async-storage/async-storage').default;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Everything behind the bell, from the three lists the Approvals screen already
@@ -25,10 +46,17 @@ import {
  * page after the bell has loaded costs nothing.
  */
 export function useNotifications() {
-  const { can } = usePermissions();
+  // The current mobile app does not mount PermissionProvider yet. Keep the
+  // notification feed usable there, while honoring permission gates whenever
+  // the provider is available.
+  const permissions = useContext(PermissionContext);
 
-  const canReadTransfers = can(MODULES.TRANSFER, ACTIONS.READ);
-  const canApproveInfo = can(MODULES.USERS, ACTIONS.APPROVE_USER_INFO);
+  const { userId } = permissions ?? {};
+
+  const canReadTransfers =
+    !permissions || permissions.can(MODULES.TRANSFER, ACTIONS.READ);
+  const canApproveInfo =
+    !permissions || permissions.can(MODULES.USERS, ACTIONS.APPROVE_USER_INFO);
 
   const pendingQ = usePendingTransfers(canReadTransfers);
   const mineQ = useMyTransferRequests(canReadTransfers);
@@ -38,32 +66,88 @@ export function useNotifications() {
   // does not notify its own tab, and re-reading it on render would not either.
   const [watermark, setWatermark] = useState(readWatermark);
 
-  const rowsOf = (q) => (Array.isArray(q.data) ? q.data : q.data?.items ?? []);
+  useEffect(() => {
+    let active = true;
+    const storage = nativeStorage();
+    if (!storage) return undefined;
+    storage
+      .getItem(STORAGE_KEYS.notificationsReadAt)
+      .then(raw => {
+        if (!active || !raw) return;
+        const stored = Date.parse(raw);
+        if (!Number.isNaN(stored)) setWatermark(stored);
+      })
+      .catch(() => {
+        // The in-memory watermark still keeps the current screen consistent.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const myInfoQ = useMyInfoRequests(true, userId);
+
+  const rowsOf = q => (Array.isArray(q.data) ? q.data : (q.data?.items ?? []));
 
   const items = useMemo(
-    () => sortByNewest([
-      ...fromPendingTransfers(rowsOf(pendingQ)),
-      ...fromMyTransferRequests(rowsOf(mineQ)),
-      ...fromInfoRequests(rowsOf(infoQ)),
-    ]).map((entry) => ({ ...entry, unread: isUnread(entry, watermark) })),
-    [pendingQ, mineQ, infoQ, watermark]
+    () =>
+      sortByNewest([
+        ...fromPendingTransfers(rowsOf(pendingQ)),
+        ...fromMyTransferRequests(rowsOf(mineQ)),
+        ...fromInfoRequests(rowsOf(infoQ)),
+        ...fromMyInfoRequests(rowsOf(myInfoQ)),
+      ]).map(entry => ({ ...entry, unread: isUnread(entry, watermark) })),
+    [pendingQ, mineQ, infoQ, myInfoQ, watermark],
   );
 
-  const unreadCount = items.filter((i) => i.unread).length;
+  const unreadCount = items.filter(i => i.unread).length;
+  const sourceErrors = [
+    pendingQ.error,
+    mineQ.error,
+    infoQ.error,
+    myInfoQ.error,
+  ].filter(Boolean);
+  const error =
+    sourceErrors.find(sourceError => sourceError.status !== 403) ?? null;
 
   return {
     items,
     unreadCount,
     // Loading only while something is actually in flight for a source this
     // caller may read — a role with no sources is not "loading", it is empty.
-    isLoading: pendingQ.isLoading || mineQ.isLoading || infoQ.isLoading,
+    isLoading:
+      pendingQ.isLoading ||
+      mineQ.isLoading ||
+      infoQ.isLoading ||
+      myInfoQ.isLoading,
     /**
      * Every source refused. Reported separately from `items` so the UI can say
      * "could not load" instead of "you're all caught up", which would be a lie
      * told by an empty array.
      */
-    error: pendingQ.error ?? mineQ.error ?? infoQ.error ?? null,
-    markAllRead: useCallback(() => setWatermark(markAllRead()), []),
+    // A mobile session currently has no hierarchy/permission context. The API
+    // may answer 403 for a queue that is not available to that session; that
+    // queue is an empty source, not a notification-screen failure.
+    error,
+    refetch: useCallback(
+      () =>
+        Promise.all([
+          pendingQ.refetch(),
+          mineQ.refetch(),
+          infoQ.refetch(),
+          myInfoQ.refetch(),
+        ]),
+      [pendingQ, mineQ, infoQ, myInfoQ],
+    ),
+    markAllRead: useCallback(() => {
+      const now = markAllRead();
+      setWatermark(now);
+      nativeStorage()
+        ?.setItem(STORAGE_KEYS.notificationsReadAt, new Date(now).toISOString())
+        ?.catch(() => {
+          // The in-memory watermark still keeps the current screen consistent.
+        });
+    }, []),
     /**
      * Does this caller have ANY readable source?
      *

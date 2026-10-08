@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +11,7 @@ import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vec
 import SiteFooter from '../components/SiteFooter';
 import AppHeader from '../components/AppHeader';
 import { Text } from '../components/Typography';
+import { FONT_DISPLAY } from '../constants/typography';
 import { searchMatches } from '../utils/options';
 
 const COLORS = {
@@ -97,29 +99,39 @@ type MatrixRow = {
 
 function RoleMatrix({ rows }: { rows: MatrixRow[] }) {
   return (
-    <View style={styles.matrixWrap}>
-      <View style={styles.matrixHeaderRow}>
-        <Text style={styles.matrixHeaderActivity}>Activity</Text>
-        {ROLE_COLS.map(column => (
-          <View key={column.key} style={styles.matrixHeaderCell}>
-            <Text style={styles.matrixHeaderShort}>{column.short}</Text>
-            <Text style={styles.matrixHeaderLabel}>
-              {column.label.split(' ').slice(-1)[0]}
-            </Text>
-          </View>
-        ))}
-      </View>
-      {rows.map((row, index) => (
-        <View key={`${row.label}-${index}`} style={styles.matrixRow}>
-          <Text style={styles.matrixLabel}>{row.label}</Text>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator
+      nestedScrollEnabled
+      style={styles.matrixScroll}
+    >
+      <View style={styles.matrixWrap}>
+        <View style={styles.matrixHeaderRow}>
+          <Text style={styles.matrixHeaderActivity}>Activity</Text>
           {ROLE_COLS.map(column => (
-            <View key={`${row.label}-${column.key}`} style={styles.matrixCell}>
-              <Cell value={row[column.key as keyof MatrixRow]} />
+            <View key={column.key} style={styles.matrixHeaderCell}>
+              <Text style={styles.matrixHeaderShort}>{column.short}</Text>
+              <Text style={styles.matrixHeaderLabel}>
+                {column.label.split(' ').slice(-1)[0]}
+              </Text>
             </View>
           ))}
         </View>
-      ))}
-    </View>
+        {rows.map((row, index) => (
+          <View key={`${row.label}-${index}`} style={styles.matrixRow}>
+            <Text style={styles.matrixLabel}>{row.label}</Text>
+            {ROLE_COLS.map(column => (
+              <View
+                key={`${row.label}-${column.key}`}
+                style={styles.matrixCell}
+              >
+                <Cell value={row[column.key as keyof MatrixRow]} />
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -792,9 +804,19 @@ function groupSections(sections: SectionEntry[]) {
 export default function HelpPage({
   onMenu = () => {},
   onNotifications = () => {},
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
+  onProfile,
+  onBack,
 }: {
   onMenu?: () => void;
   onNotifications?: () => void;
+  onOpenPrivacy?: () => void;
+  onOpenTerms?: () => void;
+  onOpenDeleteAccount?: () => void;
+  onProfile?: () => void;
+  onBack?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const sectionRefs = useRef<Record<string, View | null>>({});
@@ -845,9 +867,17 @@ export default function HelpPage({
 
   return (
     <View style={styles.screen}>
-      <AppHeader onMenu={onMenu} onNotifications={onNotifications} />
+      <AppHeader
+        onMenu={onMenu}
+        onNotifications={onNotifications}
+        onProfile={onProfile}
+        onBack={onBack}
+      />
 
-      <View style={styles.contentWrap}>
+      {/* Edge-to-edge is on (see android/gradle.properties), so the keyboard
+          is drawn OVER the screen rather than resizing it. `padding` measures
+          the real overlap, so it is 0 wherever the window does still resize. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.contentWrap}>
         <ScrollView
           ref={node => {
             (sectionRefs.current as any).__scrollView = node;
@@ -1012,10 +1042,16 @@ export default function HelpPage({
               </View>
             ))
           )}
-        </ScrollView>
-      </View>
 
-      <SiteFooter />
+          <View style={styles.footerBleed}>
+            <SiteFooter
+              onPrivacy={onOpenPrivacy}
+              onTerms={onOpenTerms}
+              onDeleteAccount={onOpenDeleteAccount}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -1032,6 +1068,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingTop: 14,
     paddingBottom: 20,
     paddingHorizontal: 14,
@@ -1067,6 +1104,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
+    fontFamily: FONT_DISPLAY,
     color: COLORS.text,
     fontSize: 24,
     fontWeight: '700',
@@ -1077,6 +1115,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1187,6 +1226,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   sectionTitle: {
+    fontFamily: FONT_DISPLAY,
     color: COLORS.text,
     fontSize: 18,
     fontWeight: '700',
@@ -1194,10 +1234,13 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   matrixWrap: {
+    width: 540,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  matrixScroll: {
     marginTop: 10,
   },
   matrixHeaderRow: {
@@ -1207,14 +1250,15 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   matrixHeaderActivity: {
-    flex: 1.3,
+    width: 150,
     padding: 10,
     color: COLORS.text,
     fontSize: 12,
     fontWeight: '700',
+    lineHeight: 17,
   },
   matrixHeaderCell: {
-    flex: 0.8,
+    width: 65,
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderLeftWidth: 1,
@@ -1239,14 +1283,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   matrixLabel: {
-    flex: 1.3,
+    width: 150,
     padding: 12,
     color: COLORS.text,
     fontSize: 13,
     fontWeight: '600',
+    lineHeight: 18,
   },
   matrixCell: {
-    flex: 0.8,
+    width: 65,
     paddingVertical: 10,
     paddingHorizontal: 6,
     borderLeftWidth: 1,

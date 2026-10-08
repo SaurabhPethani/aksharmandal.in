@@ -3,13 +3,13 @@ import {
   BackHandler,
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import AppHeader from '../components/AppHeader';
 import { Text } from '../components/Typography';
 import {
@@ -21,6 +21,7 @@ import {
   Skeleton,
 } from '../components/ui';
 import { Modal } from '../components/Overlays';
+import { DialogCancel } from '../components/FormDialog';
 import { Breadcrumbs, Tabs } from '../components/Navigation';
 import { FormField, Textarea } from '../components/form';
 import {
@@ -64,19 +65,26 @@ const todayLabel = () => {
 const nameOf = row =>
   String(row?.user_name ?? '').trim() || `Member #${row?.user_id ?? ''}`;
 
-/** CSS `linear-gradient(135deg, …)`, painted behind its parent's content. */
-function LinearFill({ id, stops }) {
+function LinearFill({ id, stops, radius = 0 }) {
   return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          {stops.map(([offset, color]) => (
-            <Stop key={offset} offset={offset} stopColor={color} />
-          ))}
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${id})`} />
-    </Svg>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            {stops.map(([offset, color]) => (
+              <Stop key={offset} offset={offset} stopColor={color} />
+            ))}
+          </LinearGradient>
+        </Defs>
+        <Rect
+          width="100%"
+          height="100%"
+          rx={radius}
+          ry={radius}
+          fill={`url(#${id})`}
+        />
+      </Svg>
+    </View>
   );
 }
 
@@ -123,6 +131,20 @@ function LeaderCrown() {
       color={COLORS.primary}
       accessibilityLabel="Your leader"
     />
+  );
+}
+
+/** The age the member turns today. */
+function AgePill({ age }) {
+  return (
+    <View style={styles.agePill}>
+      <MaterialCommunityIcons
+        name="cake-variant-outline"
+        size={space(3.5)}
+        color={COLORS.accent}
+      />
+      <Text style={styles.ageText}>Turns {age} today</Text>
+    </View>
   );
 }
 
@@ -352,9 +374,7 @@ function WishDialog({ person, isOpen, onClose, onSent, onToast }) {
       description={person ? `To ${nameOf(person)}` : undefined}
       footer={
         <>
-          <Button variant="ghost" onPress={onClose} disabled={wish.isPending}>
-            Cancel
-          </Button>
+          <DialogCancel variant="ghost" disabled={wish.isPending} />
           <Button
             variant="accent"
             onPress={send}
@@ -420,30 +440,14 @@ function SendWishes() {
       </Card>
     );
   } else if (users.length === 0) {
-    // The most common view, most days — so it least deserves to look like a
-    // failed request.
     content = (
-      <View style={styles.noBirthdays}>
-        <LinearFill
-          id="no-birthdays"
-          stops={[
-            [0, '#FEF3C7'],
-            [0.5, '#FFEDD5'],
-            [1, '#FFE4CC'],
-          ]}
+      <Card>
+        <EmptyState
+          icon="cake-variant-outline"
+          title="No birthdays today"
+          hint="Nobody in your Mandal is celebrating today — check back tomorrow."
         />
-        <View style={styles.noBirthdaysIcon}>
-          <MaterialCommunityIcons
-            name="cake-variant-outline"
-            size={space(7)}
-            color="#B45309"
-          />
-        </View>
-        <Text style={styles.noBirthdaysTitle}>No birthdays today</Text>
-        <Text style={styles.noBirthdaysText}>
-          Nobody in your Mandal is celebrating today — check back tomorrow.
-        </Text>
-      </View>
+      </Card>
     );
   } else {
     content = (
@@ -470,7 +474,6 @@ function SendWishes() {
           <View style={styles.tableClip}>
             <View style={styles.thead}>
               <Text style={styles.th}>Member</Text>
-              <Text style={styles.th}>Wish them</Text>
             </View>
 
             {users.map((row, i) => {
@@ -490,27 +493,38 @@ function SendWishes() {
                       <Text style={styles.name}>{name}</Text>
                       {personal && <PersonalStar />}
                       {leader && <LeaderCrown />}
-                      {row?.sabha_name ? (
-                        <Text style={styles.sabha}>({row.sabha_name})</Text>
-                      ) : null}
                     </View>
+                    {row?.sabha_name || row?.age != null ? (
+                      <View style={styles.sabhaLine}>
+                        {row?.sabha_name ? (
+                          <Text style={styles.metaText}>
+                            <Text style={styles.metaLabel}>Sabha:</Text>{' '}
+                            <Text style={styles.metaValue}>
+                              {row.sabha_name}
+                            </Text>
+                          </Text>
+                        ) : null}
+                        {row?.age != null ? <AgePill age={row.age} /> : null}
+                      </View>
+                    ) : null}
                     {mobile ? (
                       <Text style={styles.mobile}>{mobile}</Text>
                     ) : null}
                     <LeaderMeta row={row} />
-                    {canContact && hasMobile(mobile) ? (
-                      <View style={styles.contact}>
-                        <CallButton row={row} mobile={mobile} />
-                        <WhatsAppButton row={row} mobile={mobile} />
-                      </View>
-                    ) : null}
+                    <View style={styles.actions}>
+                      <WishButton
+                        row={row}
+                        sent={sent.has(row?.user_id)}
+                        onPress={() => setWishing(row)}
+                      />
+                      {canContact && hasMobile(mobile) ? (
+                        <>
+                          <CallButton row={row} mobile={mobile} />
+                          <WhatsAppButton row={row} mobile={mobile} />
+                        </>
+                      ) : null}
+                    </View>
                   </View>
-
-                  <WishButton
-                    row={row}
-                    sent={sent.has(row?.user_id)}
-                    onPress={() => setWishing(row)}
-                  />
                 </View>
               );
             })}
@@ -620,6 +634,10 @@ export default function BirthdaysPage({
   onMenu,
   onHelp,
   onNotifications,
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
+  onProfile,
 }) {
   const [tab, setTab] = useState('send');
 
@@ -639,11 +657,12 @@ export default function BirthdaysPage({
         onMenu={onMenu}
         onHelp={onHelp}
         onNotifications={onNotifications}
+        onProfile={onProfile}
         onBack={onBack}
-        breadcrumbs={['Dashboard', 'Birthdays']}
+        // breadcrumbs={['Dashboard', 'Birthdays']}
       />
 
-      <ScrollView
+      <ScrollViewWithTop
         style={styles.page}
         contentContainerStyle={styles.pageContent}
         keyboardShouldPersistTaps="handled"
@@ -666,9 +685,13 @@ export default function BirthdaysPage({
         </View>
 
         <View style={styles.footerBleed}>
-          <SiteFooter />
+          <SiteFooter
+            onPrivacy={onOpenPrivacy}
+            onTerms={onOpenTerms}
+            onDeleteAccount={onOpenDeleteAccount}
+          />
         </View>
-      </ScrollView>
+      </ScrollViewWithTop>
     </View>
   );
 }
@@ -732,7 +755,28 @@ const styles = StyleSheet.create({
     fontWeight: WEIGHT.bold,
     color: COLORS.primary,
   },
-  sabha: { fontSize: TEXT.sm, color: COLORS.textMuted },
+  sabhaLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: space(2),
+    rowGap: space(1),
+    marginTop: space(0.5),
+  },
+  agePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(1),
+    borderRadius: RADII.full,
+    backgroundColor: 'rgba(255,134,42,0.12)',
+    paddingHorizontal: space(2),
+    paddingVertical: space(0.5),
+  },
+  ageText: {
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.accent,
+  },
   mobile: {
     ...TNUM,
     marginTop: space(0.5),
@@ -745,7 +789,13 @@ const styles = StyleSheet.create({
   metaValue: { fontWeight: WEIGHT.medium },
   attended: { fontWeight: WEIGHT.semibold, color: COLORS.successFg },
   absent: { fontWeight: WEIGHT.semibold, color: COLORS.dangerFg },
-  contact: { flexDirection: 'row', gap: space(2), marginTop: space(2) },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space(2),
+    marginTop: space(2),
+  },
 
   // `!py-2 !text-xs` on the web's Button
   wishButton: { paddingVertical: space(2) },
@@ -770,35 +820,6 @@ const styles = StyleSheet.create({
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: space(1.5) },
   legendText: { fontSize: TEXT.xs, color: COLORS.textMuted },
-
-  noBirthdays: {
-    alignItems: 'center',
-    overflow: 'hidden',
-    borderRadius: RADII.card,
-    paddingHorizontal: space(6),
-    paddingVertical: space(12),
-  },
-  noBirthdaysIcon: {
-    width: space(14),
-    height: space(14),
-    borderRadius: RADII['2xl'],
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noBirthdaysTitle: {
-    marginTop: space(4),
-    fontSize: TEXT.base,
-    fontWeight: WEIGHT.bold,
-    color: '#7C2D12',
-    textAlign: 'center',
-  },
-  noBirthdaysText: {
-    marginTop: space(1),
-    fontSize: TEXT.sm,
-    color: '#9A3412',
-    textAlign: 'center',
-  },
 
   wishCount: {
     backgroundColor: '#FFF7ED',

@@ -28,7 +28,10 @@ export {
 } from './core';
 export { useNavigation } from './useNavigation';
 
-export { usePradeshList, useMandals, useSabhas, useSabhaById, useMandalById } from './useHierarchy';
+export {
+  usePradeshList, useMandals, useSabhas, useSabhaById, useMandalById,
+  useMyGroupLeaderships,
+} from './useHierarchy';
 
 export {
   useFeatures,
@@ -96,3 +99,15 @@ export {
 // return { pageSize, setPageSize }; changing the size resets to page 1.
 export { useClientPagination, useServerPagination } from './usePagination';
 export { useFilterState, clearAllFilterState } from './useFilterState';
+
+// Events — see services/eventsService.js for why READ/CREATE/UPDATE/REGISTER
+// are checked independently rather than folded into one grant.
+export {
+  useEvents,
+  useMyRegistrations,
+  useEventFieldResults,
+  useRegistrationDataEvents,
+  useEventRegistrationData,
+  useEventDataExport,
+  useEventMutations,
+} from './useEvents';

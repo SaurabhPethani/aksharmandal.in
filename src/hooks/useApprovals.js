@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { approvalsService } from '../services/approvalsService';
 
+const LIVE = { refetchInterval: 60_000, refetchOnWindowFocus: true };
+
 /**
  * The four Approvals queues.
  *
@@ -12,6 +14,16 @@ export function usePendingTransfers(enabled) {
     queryKey: ['transfers', 'pending'],
     queryFn: approvalsService.pendingTransfers,
     enabled,
+    ...LIVE,
+  });
+}
+
+export function useMyInfoRequests(enabled, userId) {
+  return useQuery({
+    queryKey: ['info-requests', 'mine', String(userId ?? '')],
+    queryFn: () => approvalsService.infoRequests({ user_id: userId }),
+    enabled: Boolean(enabled) && userId != null,
+    ...LIVE,
   });
 }
 
@@ -20,6 +32,7 @@ export function useTransferHistory(enabled) {
     queryKey: ['transfers', 'history'],
     queryFn: approvalsService.transferHistory,
     enabled,
+    ...LIVE,
   });
 }
 
@@ -28,6 +41,7 @@ export function useMyTransferRequests(enabled) {
     queryKey: ['transfers', 'mine'],
     queryFn: approvalsService.myTransferRequests,
     enabled,
+    ...LIVE,
   });
 }
 
@@ -36,6 +50,7 @@ export function useInfoRequests(enabled, params) {
     queryKey: ['info-requests', params ?? null],
     queryFn: () => approvalsService.infoRequests(params),
     enabled,
+    ...LIVE,
   });
 }
 
@@ -82,16 +97,22 @@ export function useApprovalActions() {
     onSuccess: invalidate,
   });
   const rejectInfo = useMutation({
-    mutationFn: ({ id, remarks }) => approvalsService.rejectInfoRequest(id, remarks),
+    mutationFn: ({ id, remarks }) =>
+      approvalsService.rejectInfoRequest(id, remarks),
     onSuccess: invalidate,
   });
   const cancelInfo = useMutation({
-    mutationFn: ({ id, remarks }) => approvalsService.cancelInfoRequest(id, remarks),
+    mutationFn: ({ id, remarks }) =>
+      approvalsService.cancelInfoRequest(id, remarks),
     onSuccess: invalidate,
   });
 
   return {
-    acceptTransfer, rejectTransfer, cancelTransfer,
-    approveInfo, rejectInfo, cancelInfo,
+    acceptTransfer,
+    rejectTransfer,
+    cancelTransfer,
+    approveInfo,
+    rejectInfo,
+    cancelInfo,
   };
 }

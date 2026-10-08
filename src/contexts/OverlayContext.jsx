@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useSyncExternalStore,
 } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
@@ -19,12 +20,23 @@ function createOverlayStore() {
       return () => listeners.delete(listener);
     },
     getEntries: () => entries,
+    /** An overlay on its way out no longer counts. */
+    isOpen: () => entries.some(e => !e.leaving),
     /** Adds the overlay, or replaces its content — keeping its place in the stack. */
     set(id, entry) {
       const at = entries.findIndex(e => e.id === id);
       const next = entries.slice();
       if (at === -1) next.push({ id, ...entry });
       else next[at] = { id, ...entry };
+      entries = next;
+      emit();
+    },
+    /** Stays drawn while it animates away, but is no longer open. */
+    retire(id) {
+      const at = entries.findIndex(e => e.id === id);
+      if (at === -1 || entries[at].leaving) return;
+      const next = entries.slice();
+      next[at] = { ...next[at], leaving: true };
       entries = next;
       emit();
     },
@@ -50,30 +62,42 @@ export function OverlayProvider({ children }) {
 /** True while any overlay is open — what the app shell blurs on. */
 export function useOverlayOpen() {
   const store = useContext(OverlayStoreContext);
-  return useSyncExternalStore(
-    store.subscribe,
-    () => store.getEntries().length > 0,
-  );
+  return useSyncExternalStore(store.subscribe, store.isOpen);
 }
 
 /**
- * Renders `content` on the overlay layer for as long as `active` is true.
- * `onRequestClose` is what Android's back button calls on the topmost overlay.
+ * One component's place on the overlay layer.
+ *
+ *   show({ content, onRequestClose, leaving })  draws it, or redraws it where
+ *       it already is in the stack. `onRequestClose` is what Android's back
+ *       button calls on the topmost overlay.
+ *   retire()  leaves it drawn while it animates away, but no longer open: the
+ *       screen behind is sharp again and takes touches.
+ *   remove()  takes it down. Unmounting does the same.
  */
-export function useOverlayPortal(active, content, onRequestClose) {
+export function useOverlay() {
   const store = useContext(OverlayStoreContext);
   const id = useId();
-
-  // No dependency list: the content is fresh on every render while open, and
-  // `set` keeps the overlay where it is in the stack.
-  useEffect(() => {
-    if (active) store.set(id, { content, onRequestClose });
-  });
+  const mounted = useRef(true);
 
   useEffect(() => {
-    if (!active) store.remove(id);
-    return () => store.remove(id);
-  }, [active, id, store]);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      store.remove(id);
+    };
+  }, [id, store]);
+
+  return useMemo(
+    () => ({
+      show: entry => {
+        if (mounted.current) store.set(id, entry);
+      },
+      retire: () => store.retire(id),
+      remove: () => store.remove(id),
+    }),
+    [id, store],
+  );
 }
 
 /**
@@ -90,7 +114,10 @@ export function OverlayHost() {
     if (!open) return undefined;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       // Read at press time: the top of the stack may have changed since.
-      const top = store.getEntries()[store.getEntries().length - 1];
+      const top = store
+        .getEntries()
+        .filter(e => !e.leaving)
+        .pop();
       top?.onRequestClose?.();
       return true;
     });
@@ -101,8 +128,16 @@ export function OverlayHost() {
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+      {/* Each overlay gets the whole layer to itself. As plain siblings two
+          open overlays shared the height, one in each half of the screen. */}
       {entries.map(entry => (
-        <React.Fragment key={entry.id}>{entry.content}</React.Fragment>
+        <View
+          key={entry.id}
+          pointerEvents={entry.leaving ? 'none' : 'box-none'}
+          style={StyleSheet.absoluteFill}
+        >
+          {entry.content}
+        </View>
       ))}
     </View>
   );

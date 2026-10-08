@@ -108,6 +108,11 @@ export const NOT_LOGGED_IN_DENIED_ROLE_IDS = [10];
 export const canSeeNotLoggedIn = (roleId) =>
   roleId == null || !NOT_LOGGED_IN_DENIED_ROLE_IDS.includes(Number(roleId));
 
+/** Who sees Yuva Seva: the drawer entry and the route. A UI gate only. */
+export const YUVA_SEVA_DENIED_ROLE_IDS = [10];
+export const canSeeYuvaSeva = (roleId) =>
+  roleId == null || !YUVA_SEVA_DENIED_ROLE_IDS.includes(Number(roleId));
+
 /**
  * ROLES THAT MAY NOT OPEN THE REPORTS KPI DRILL-DOWN — the third ID-keyed rule
  * here, carrying the same ⚠ as the two above.

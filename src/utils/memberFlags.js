@@ -27,6 +27,10 @@ export const NIMIT_SEVAK_FIELD = 'is_nimit_sevak';
 /** What that flag is called on screen, everywhere. */
 export const NIMIT_SEVAK_LABEL = 'Nimit Sevak';
 
+/** Swayam Sevak — a standing conferred like Nimit Sevak, and its label. */
+export const SWAYAM_SEVAK_FIELD = 'is_swayam_sevak';
+export const SWAYAM_SEVAK_LABEL = 'Swayam Sevak';
+
 /** The daily-pooja flag, and its label. */
 export const DOING_POOJA_FIELD = 'doing_pooja';
 export const DOING_POOJA_LABEL = 'Doing Pooja';
@@ -71,3 +75,10 @@ export const isNimitSevak = (user) => readMemberField(user, NIMIT_SEVAK_FIELD) =
  */
 export const ambrishLabel = (gender) =>
   String(gender ?? '').trim().toLowerCase() === 'female' ? 'Sarhadyi' : 'Ambrish';
+
+/** The API has shipped status as a boolean and as 'active'/'Active'. */
+export const isAttending = (status) =>
+  status === true || status === 'active' || status === 'Active';
+
+export const statusLabel = (status) =>
+  isAttending(status) ? 'Attending' : 'Not Attending';

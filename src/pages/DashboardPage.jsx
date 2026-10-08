@@ -1,8 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  BackHandler,
+  Easing,
   Image,
   Linking,
   Pressable,
@@ -10,23 +19,31 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import Svg, { Circle, G, Polyline, Text as SvgText } from 'react-native-svg';
 import { useQueryClient } from '@tanstack/react-query';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
 import AppHeader from '../components/AppHeader';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import { Text } from '../components/Typography';
+import { FONT_DISPLAY, FONT_FAMILY } from '../constants/typography';
 import { Modal } from '../components/Overlays';
 import { Skeleton } from '../components/ui';
+import BiometricPrompt from '../components/dashboard/BiometricPrompt';
 import MemberStatsSearch from '../components/dashboard/MemberStatsSearch';
 import TrendChart from '../components/charts/TrendChart';
 import { dashboardService } from '../services/dashboardService';
-import { API_BASE } from '../config/appConfig';
 import { useAuth } from '../hooks/core';
-import { canReadOverallDashboard, canSeeNotLoggedIn } from '../constants/roles';
+import {
+  canReadHelp,
+  canReadOverallDashboard,
+  canSeeNotLoggedIn,
+} from '../constants/roles';
 import { nextWeekdayDate, readWeekDate } from '../utils/dates';
 import { useMyKhardo } from '../hooks/useKhardo';
+import { useQrInfo } from '../hooks/useProfileExtras';
 import { useMemberStats } from '../hooks/useMemberStats';
 import {
   saveRemoteImage,
@@ -68,8 +85,6 @@ const MONTHS = [
 
 const numberText = value =>
   value == null ? '—' : Number(value).toLocaleString('en-IN');
-const qrUrl = userId =>
-  userId ? `${API_BASE}/api/v1/qr/codes/akshar-connect-${userId}.jpeg` : null;
 
 function weekRange(weekDate, { live = false } = {}) {
   if (!weekDate) return null;
@@ -246,7 +261,7 @@ const CountWithDelta = ({ now, last }) => (
  * web.
  */
 const PairValue = ({ present, absent, presentDelta }) => (
-  <Text numberOfLines={1}>
+  <Text numberOfLines={2}>
     <Text style={styles.greenText}>{numberText(present)}</Text>
     <DeltaBadge delta={presentDelta} />
     <Text style={styles.metricValue}> | </Text>
@@ -269,78 +284,119 @@ const RatioValue = ({ part, whole }) => (
   </Text>
 );
 
-export function Drawer({
-  visible,
-  onClose,
-  onSignOut,
-  onDashboard,
-  onOpenEvents,
-  onOpenNotifications,
-  activeRoute = 'dashboard',
-  roleName,
-}) {
-  const slide = useRef(new Animated.Value(-320)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const [mounted, setMounted] = useState(visible);
+// Past its own width, so the closed drawer's shadow is off screen as well.
+const DRAWER_SHADOW = 24;
 
+/**
+ * @typedef {Object} DrawerProps
+ * @property {() => void} [onSignOut]
+ * @property {() => void} [onDashboard]
+ * @property {() => void} [onOpenEvents]
+ * @property {() => void} [onOpenYuvaSeva]
+ * @property {string} [activeRoute]
+ * @property {string} [roleName]
+ * @property {boolean} [showYuvaSeva]
+ */
+
+/**
+ * Opened and closed through its ref (`open()` / `close()`), not a prop: the
+ * drawer stays mounted off screen and starts its slide in the tap itself, so
+ * neither waits on a render nor re-renders the screen behind it.
+ */
+export const Drawer = forwardRef(function Drawer(
+  /** @type {DrawerProps} */
+  {
+    onSignOut,
+    onDashboard,
+    onOpenEvents,
+    onOpenYuvaSeva,
+    activeRoute = 'dashboard',
+    roleName,
+    showYuvaSeva = true,
+  },
+  ref,
+) {
+  const { width } = useWindowDimensions();
+  const travel = Math.min(width * 0.82, 320) + DRAWER_SHADOW;
+  const progress = useRef(new Animated.Value(0)).current;
+  const [open, setOpen] = useState(false);
+
+  const slideTo = useCallback(
+    next => {
+      setOpen(next);
+      Animated.timing(progress, {
+        toValue: next ? 1 : 0,
+        duration: next ? 240 : 200,
+        easing: next ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    },
+    [progress],
+  );
+  const close = useCallback(() => slideTo(false), [slideTo]);
+
+  useImperativeHandle(ref, () => ({ open: () => slideTo(true), close }), [
+    slideTo,
+    close,
+  ]);
+
+  // Subscribed while open, so it is asked before the navigator's own handler.
   useEffect(() => {
-    if (visible) {
-      setMounted(true);
-      Animated.parallel([
-        Animated.timing(slide, {
-          toValue: 0,
-          duration: 180,
-          useNativeDriver: true,
-        }),
-        Animated.timing(backdropOpacity, {
-          toValue: 1,
-          duration: 140,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      return undefined;
-    }
-
-    const closingAnimation = Animated.parallel([
-      Animated.timing(slide, {
-        toValue: -320,
-        duration: 160,
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 120,
-        useNativeDriver: true,
-      }),
-    ]);
-
-    closingAnimation.start(({ finished }) => {
-      if (finished) setMounted(false);
+    if (!open) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      close();
+      return true;
     });
+    return () => sub.remove();
+  }, [open, close]);
 
-    return () => closingAnimation.stop();
-  }, [backdropOpacity, slide, visible]);
-
-  if (!mounted) return null;
+  // Close first and act a frame later: a screen change is heavy, and started
+  // in the same tick it would hold the slide back.
+  const go = action => {
+    close();
+    requestAnimationFrame(() => action?.());
+  };
 
   return (
-    <View style={styles.drawerLayer}>
+    <View
+      style={styles.drawerLayer}
+      pointerEvents={open ? 'auto' : 'none'}
+      accessibilityElementsHidden={!open}
+      importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+    >
       <Animated.View
-        style={[styles.drawer, { transform: [{ translateX: slide }] }]}
+        style={[
+          styles.drawer,
+          {
+            transform: [
+              {
+                translateX: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-travel, 0],
+                }),
+              },
+            ],
+          },
+        ]}
       >
         <View style={styles.drawerHeader}>
           <View style={styles.drawerLogoFrame}>
             <Image
-              source={require('../assets/logo-square.png')}
+              source={require('../assets/Akshar-Connect-White-logo.png')}
               style={styles.drawerLogo}
               resizeMode="contain"
               fadeDuration={0}
             />
           </View>
-          <Pressable onPress={onClose} style={styles.drawerClose}>
+          <Pressable
+            onPress={close}
+            accessibilityRole="button"
+            accessibilityLabel="Close navigation"
+            style={styles.drawerClose}
+          >
             <MaterialCommunityIcons
-              name="close"
-              size={20}
+              name="chevron-left"
+              size={24}
               color={COLORS.surface}
             />
           </Pressable>
@@ -359,37 +415,49 @@ export function Drawer({
               'Dashboard',
               activeRoute === 'dashboard',
             ],
+
+            showYuvaSeva && [
+              'hand-heart',
+              'Yuva Seva',
+              activeRoute === 'yuva-seva',
+            ],
             ['calendar-star', 'Events', activeRoute === 'events'],
-          ].map(([icon, label, active]) => (
-            <Pressable
-              key={label}
-              onPress={() => {
-                if (label === 'Dashboard') onDashboard?.();
-                else if (label === 'Events') onOpenEvents?.();
-                onClose();
-              }}
-              style={[styles.drawerItem, active && styles.drawerItemActive]}
-            >
-              <MaterialCommunityIcons
-                name={icon}
-                size={20}
-                color={active ? COLORS.navy : '#C5D8E8'}
-              />
-              <Text
-                style={[
-                  styles.drawerItemText,
-                  active && styles.drawerItemTextActive,
-                ]}
+          ]
+            .filter(Boolean)
+            .map(([icon, label, active]) => (
+              <Pressable
+                key={label}
+                onPress={() =>
+                  go(
+                    label === 'Dashboard'
+                      ? onDashboard
+                      : label === 'Events'
+                        ? onOpenEvents
+                        : onOpenYuvaSeva,
+                  )
+                }
+                style={[styles.drawerItem, active && styles.drawerItemActive]}
               >
-                {label}
-              </Text>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={18}
-                color={active ? COLORS.navy : '#7EA1BA'}
-              />
-            </Pressable>
-          ))}
+                <MaterialCommunityIcons
+                  name={icon}
+                  size={20}
+                  color={active ? COLORS.navy : '#C5D8E8'}
+                />
+                <Text
+                  style={[
+                    styles.drawerItemText,
+                    active && styles.drawerItemTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={18}
+                  color={active ? COLORS.navy : '#7EA1BA'}
+                />
+              </Pressable>
+            ))}
         </ScrollView>
 
         <Pressable onPress={onSignOut} style={[styles.drawerItem]}>
@@ -397,25 +465,67 @@ export function Drawer({
           <Text style={[styles.drawerItemText]}>Logout</Text>
         </Pressable>
       </Animated.View>
-      <Animated.View
-        style={[styles.drawerBackdrop, { opacity: backdropOpacity }]}
-        pointerEvents={visible ? 'auto' : 'none'}
-      >
+      <Animated.View style={[styles.drawerBackdrop, { opacity: progress }]}>
         <Pressable
           style={styles.drawerBackdropButton}
-          onPress={onClose}
+          onPress={close}
           accessibilityRole="button"
           accessibilityLabel="Close navigation"
         />
       </Animated.View>
     </View>
   );
-}
+});
 
 function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
-  const image = qrUrl(userId);
+  // The address comes from the backend: its filename carries a token the app
+  // cannot build. A failed lookup means the code is not generated yet.
+  const qrQ = useQrInfo(userId);
+  const image = qrQ.data || null;
+  const [failed, setFailed] = useState(null);
+
+  if (qrQ.isError || (image && failed === image)) {
+    return (
+      <View style={[styles.qrBar, styles.qrBarExpanded]}>
+        <View style={styles.qrBarHeader}>
+          <Text style={styles.qrBarTitle} numberOfLines={1}>
+            My QR Code
+          </Text>
+          <MaterialCommunityIcons
+            name="qrcode"
+            size={16}
+            color="rgba(255,255,255,0.5)"
+          />
+        </View>
+        <View style={styles.qrMissing}>
+          <View style={styles.qrMissingIcon}>
+            <MaterialCommunityIcons
+              name="qrcode"
+              size={26}
+              color="rgba(255,255,255,0.5)"
+            />
+          </View>
+          <Text style={styles.qrMissingTitle}>QR code not generated yet</Text>
+          <Text style={styles.qrMissingHint}>
+            Ask an administrator to generate QR codes for your Mandal.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.qrBar, expanded && styles.qrBarExpanded]}>
+    // A tap anywhere on the card shows or hides it. Not `accessible`, so the
+    // two buttons inside stay reachable on their own.
+    <Pressable
+      onPress={onToggle}
+      accessible={false}
+      style={({ pressed }) => [
+        styles.qrBar,
+        expanded && styles.qrBarExpanded,
+        pressed && styles.toggleCardPressed,
+      ]}
+    >
       <View style={styles.qrBarHeader}>
         <Text style={styles.qrBarTitle} numberOfLines={1}>
           My QR Code
@@ -429,12 +539,17 @@ function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
           >
             <Text style={styles.qrShowText}>{expanded ? 'Hide' : 'Show'}</Text>
           </Pressable>
+          {/* Never `disabled`: a disabled button lets the tap through to the
+              card, which would then fold away mid-download. */}
           <Pressable
-            onPress={onDownload}
-            disabled={downloading}
-            style={[styles.qrDownloadButton, downloading && styles.qrBusy]}
+            onPress={() => image && onDownload(image)}
+            style={[
+              styles.qrDownloadButton,
+              (downloading || !image) && styles.qrBusy,
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Download QR Code"
+            accessibilityState={{ disabled: downloading, busy: downloading }}
           >
             {downloading ? (
               <ActivityIndicator size="small" color={COLORS.navy} />
@@ -456,15 +571,12 @@ function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
               source={{ uri: image }}
               style={styles.qrInlineImage}
               resizeMode="contain"
+              onError={() => setFailed(image)}
             />
           ) : (
             <View style={styles.qrMissingBox}>
-              <MaterialCommunityIcons
-                name="qrcode-remove"
-                size={40}
-                color={COLORS.muted}
-              />
-              <Text style={styles.qrMissingText}>QR code not available</Text>
+              <ActivityIndicator color={COLORS.surface} />
+              <Text style={styles.qrMissingText}>Loading…</Text>
             </View>
           )}
           <Text style={styles.qrInlineHint}>
@@ -472,7 +584,7 @@ function QrBar({ userId, expanded, onToggle, onDownload, downloading }) {
           </Text>
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -492,13 +604,24 @@ function SevaRing() {
   const offset = C * (1 - value / 100);
   // Colour by how much of the promised Seva is in: red → amber → green.
   const color = value >= 80 ? '#15803d' : value >= 50 ? '#d97706' : '#b91c1c';
+  const toggle = () => setExpanded(open => !open);
 
   return (
-    <View style={[styles.sectionPanel, styles.sevaPanel]}>
-      <View style={styles.sevaHeader}>
+    // The whole card toggles, like the QR code above it.
+    <Pressable
+      onPress={toggle}
+      accessible={false}
+      style={({ pressed }) => [
+        styles.sectionPanel,
+        styles.sevaPanel,
+        !expanded && styles.sevaPanelFolded,
+        pressed && styles.toggleCardPressed,
+      ]}
+    >
+      <View style={[styles.sevaHeader, !expanded && styles.sevaHeaderFolded]}>
         <Text style={styles.sectionTitle}>Seva</Text>
         <Pressable
-          onPress={() => setExpanded(open => !open)}
+          onPress={toggle}
           style={styles.showTableBtn}
           accessibilityRole="button"
           accessibilityLabel={expanded ? 'Hide Seva' : 'Show Seva'}
@@ -552,7 +675,7 @@ function SevaRing() {
           <Text style={styles.sevaCaption}>Seva submitted of promised</Text>
         </>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -1047,7 +1170,11 @@ function WeeklyAttendanceCard({
           style={styles.showTableBtn}
           onPress={() => setShowTable(!showTable)}
         >
-          <MaterialCommunityIcons name="table" size={15} color={COLORS.navy} />
+          <MaterialCommunityIcons
+            name={showTable ? 'chart-line' : 'table'}
+            size={15}
+            color={COLORS.navy}
+          />
           <Text style={styles.showTableText}>
             {showTable ? 'Show chart' : 'Show table'}
           </Text>
@@ -1232,6 +1359,7 @@ function YearAttendance({ year, title = 'My Last 52 Weeks' }) {
               x={CX}
               y={CY + 1}
               textAnchor="middle"
+              fontFamily={FONT_DISPLAY}
               fontSize="15"
               fontWeight="700"
               fill={COLORS.navy}
@@ -1242,6 +1370,7 @@ function YearAttendance({ year, title = 'My Last 52 Weeks' }) {
               x={CX}
               y={CY + 17}
               textAnchor="middle"
+              fontFamily={FONT_FAMILY}
               fontSize="9"
               fontWeight="600"
               letterSpacing="0.6"
@@ -1456,7 +1585,7 @@ function SelfDashboard({
   thought,
   onOpenBirthdays,
   onPickMember,
-  onOpenEvents,
+  onOpenEvents
 }) {
   const attendance = data?.total_sabha_present;
   const recent = data?.present_in_last_4w;
@@ -1749,7 +1878,14 @@ export default function DashboardPage({
   onOpenUntouchedUsers,
   onOpenEvents,
   onOpenNotifications,
+  onOpenProfile,
+  onOpenSecurity,
   onRoleNameChange,
+  onRoleIdChange,
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
+  onOpenYuvaSeva
 }) {
   const { activeUserId } = useAuth();
   const queryClient = useQueryClient();
@@ -1768,7 +1904,8 @@ export default function DashboardPage({
 
   useEffect(() => {
     if (me?.role_name) onRoleNameChange?.(me.role_name);
-  }, [me?.role_name, onRoleNameChange]);
+    if (me?.role_id != null) onRoleIdChange?.(me.role_id);
+  }, [me?.role_id, me?.role_name, onRoleIdChange, onRoleNameChange]);
   /** The member whose stats modal is open, if any. */
   const [statsUserId, setStatsUserId] = useState(null);
 
@@ -1830,8 +1967,7 @@ export default function DashboardPage({
   const activeTab = mayReadOverall ? tab : 'self';
   const displayName = me?.user_name || me?.full_name || 'Bhoolku';
 
-  const downloadQr = async () => {
-    const image = qrUrl(activeUserId || me?.id || me?.user_id);
+  const downloadQr = async image => {
     if (!image || qrDownloading) return;
     setQrDownloading(true);
     // Named after the member, as on the web, minus characters a file name
@@ -1865,12 +2001,13 @@ export default function DashboardPage({
     <View style={styles.safe}>
       <AppHeader
         onMenu={onOpenMenu}
-        onHelp={onOpenHelp}
+        onHelp={canReadHelp(roleId) ? onOpenHelp : null}
         onNotifications={onOpenNotifications}
+        onProfile={onOpenProfile}
       />
 
       <View style={styles.flex1}>
-        <ScrollView
+        <ScrollViewWithTop
           style={styles.flex1}
           contentContainerStyle={styles.scroll}
           // A tap on a search result must reach it rather than only close the
@@ -1882,6 +2019,7 @@ export default function DashboardPage({
               onRefresh={() => {
                 // SevaRing reads through React Query, outside `load`.
                 queryClient.invalidateQueries({ queryKey: ['khardo', 'me'] });
+                queryClient.invalidateQueries({ queryKey: ['qr-info'] });
                 load({ refresh: true });
               }}
               tintColor={COLORS.navy}
@@ -1972,9 +2110,14 @@ export default function DashboardPage({
           )}
 
           <View style={styles.footerBleed}>
-            <SiteFooter />
+            <SiteFooter
+              onPrivacy={onOpenPrivacy}
+              onTerms={onOpenTerms}
+              onDeleteAccount={onOpenDeleteAccount}
+            />
           </View>
-        </ScrollView>
+        </ScrollViewWithTop>
+        <BiometricPrompt onEnable={onOpenSecurity} />
       </View>
 
       <MemberStatsDialog
@@ -2104,10 +2247,15 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   drawerLogoutText: { color: '#FFD0B0', fontSize: 14, fontWeight: '800' },
-  scroll: { padding: 16, paddingTop: 16, paddingBottom: 0 },
-  footerBleed: { marginHorizontal: -16, paddingTop: 14 },
+  scroll: { flexGrow: 1, padding: 16, paddingTop: 16, paddingBottom: 0 },
+ footerBleed: { marginTop: 'auto', marginHorizontal: -18, paddingTop: 14 },
   header: { marginBottom: 16 },
-  title: { color: COLORS.navy, fontSize: 24, fontWeight: '800' },
+  title: {
+    fontFamily: FONT_DISPLAY,
+    color: COLORS.navy,
+    fontSize: 24,
+    fontWeight: '800',
+  },
   qrBar: {
     borderRadius: 18,
     backgroundColor: COLORS.navy,
@@ -2128,6 +2276,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   qrBarTitle: {
+    fontFamily: FONT_DISPLAY,
     flex: 1,
     color: COLORS.surface,
     fontSize: 18,
@@ -2173,6 +2322,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   qrMissingText: { color: '#C5D8E8', fontSize: 13, marginTop: 8 },
+  qrMissing: { alignItems: 'center', paddingVertical: 30, marginTop: 15 },
+  qrMissingIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 11,
+  },
+  qrMissingTitle: { color: COLORS.surface, fontSize: 14.5, fontWeight: '600' },
+  qrMissingHint: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12.5,
+    textAlign: 'center',
+    maxWidth: 220,
+    marginTop: 4,
+  },
   qrInlineHint: {
     color: '#C5D8E8',
     textAlign: 'center',
@@ -2268,7 +2435,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   metricCard: {
-    width: '48.2%',
+    width: '48%',
     minHeight: 90,
     backgroundColor: COLORS.surface,
     borderRadius: 16,
@@ -2283,6 +2450,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   metricCardPressed: { opacity: 0.75 },
+  toggleCardPressed: { opacity: 0.9 },
   metricCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2309,9 +2477,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   metricValue: {
+    fontFamily: FONT_DISPLAY,
     color: COLORS.navy,
     fontSize: 20,
     fontWeight: '800',
+    flexShrink: 1,
+    includeFontPadding: false,
   },
   metricRatioSub: {
     color: COLORS.faint,
@@ -2392,7 +2563,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionTitle: { color: COLORS.navy, fontSize: 15, fontWeight: '800' },
+  sectionTitle: {
+    fontFamily: FONT_DISPLAY,
+    color: COLORS.navy,
+    fontSize: 15,
+    fontWeight: '800',
+  },
   // The drawing keeps the web's proportions and scales with the card.
   donut: {
     width: '100%',
@@ -2419,8 +2595,19 @@ const styles = StyleSheet.create({
   donutLabelPresent: { borderColor: 'rgba(21,128,61,0.45)' },
   donutLabelAbsent: { borderColor: 'rgba(233,135,138,0.45)' },
   donutLabelText: { fontWeight: '600', color: COLORS.muted },
-  donutLabelCount: { fontWeight: '800', color: COLORS.navy },
+  donutLabelCount: {
+    fontFamily: FONT_DISPLAY,
+    fontWeight: '800',
+    color: COLORS.navy,
+  },
   sevaPanel: { alignItems: 'center' },
+  // Folded, it is one row: the height of the Not Login card under it.
+  sevaPanelFolded: {
+    minHeight: 52,
+    paddingVertical: 8,
+    justifyContent: 'center',
+  },
+  sevaHeaderFolded: { marginBottom: 0 },
   sevaHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2439,7 +2626,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sevaPercent: { fontSize: 34, lineHeight: 40, fontWeight: '800' },
+  sevaPercent: {
+    fontFamily: FONT_DISPLAY,
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '800',
+  },
   sevaSubmitted: { color: '#64748b', fontSize: 13, marginTop: 2 },
   sevaCaption: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
   sectionLink: { color: COLORS.accent, fontSize: 12, fontWeight: '800' },
@@ -2590,13 +2782,6 @@ const styles = StyleSheet.create({
   chartRows: { gap: 4 },
   weekRow: { flexDirection: 'row', alignItems: 'center', height: 28 },
   weekLabel: { width: 48, color: COLORS.muted, fontSize: 11 },
-  weekTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E8EFF4',
-    overflow: 'hidden',
-  },
   weekFill: { height: '100%', borderRadius: 4 },
   weekFillAttended: { width: '100%', backgroundColor: COLORS.green },
   weekFillMissed: { width: '12%', backgroundColor: COLORS.softRed },
@@ -2606,10 +2791,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
-  greenText: { color: COLORS.green, fontWeight: '800', fontSize: 18 },
-  redText: { color: COLORS.red, fontWeight: '800', fontSize: 18 },
+  greenText: {
+    fontFamily: FONT_DISPLAY,
+    color: COLORS.green,
+    fontWeight: '800',
+    fontSize: 18,
+  },
+  redText: {
+    fontFamily: FONT_DISPLAY,
+    color: COLORS.red,
+    fontWeight: '800',
+    fontSize: 18,
+  },
   // The change badge rides a size below the figure it qualifies.
   deltaUp: { color: COLORS.green, fontWeight: '700', fontSize: 13 },
   deltaDown: { color: COLORS.red, fontWeight: '700', fontSize: 13 },
-  navyText: { color: COLORS.navy, fontWeight: '800', fontSize: 18 },
+  navyText: {
+    fontFamily: FONT_DISPLAY,
+    color: COLORS.navy,
+    fontWeight: '800',
+    fontSize: 18,
+  },
 });

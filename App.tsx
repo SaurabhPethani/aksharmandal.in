@@ -11,6 +11,9 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -23,9 +26,11 @@ import {
   OverlayProvider,
   useOverlayOpen,
 } from './src/contexts/OverlayContext';
+import { ToastProvider } from './src/contexts/ToastContext';
 import LoginPage from './src/pages/LoginPage';
 import AppNavigator from './src/navigation/AppNavigator';
 import { useAuth } from './src/hooks/core';
+import LegalPage from './src/pages/LegalPage';
 
 function App() {
   return (
@@ -35,11 +40,36 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <OverlayProvider>
-            <AppContent />
+            <ToastProvider>
+              <AppContent />
+            </ToastProvider>
           </OverlayProvider>
         </AuthProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
+  );
+}
+
+// Only the SCREENS blur. The overlay layer is their sibling, so a dialog on
+// top of them stays sharp. `filter` blur is Android 12+ only; elsewhere the
+// modal's dimmed backdrop is all that shows.
+// A component of its own, so a dialog opening or closing re-renders this one
+// view and not every screen inside it.
+function Screens({
+  style,
+  children,
+}: {
+  style: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
+  const overlayOpen = useOverlayOpen();
+  return (
+    // `collapsable={false}` keeps this a stacking context at all times: were
+    // the blur `filter` to turn it into one, Fabric would re-attach
+    // everything underneath as the dialog opens.
+    <View collapsable={false} style={[style, overlayOpen && styles.blurred]}>
+      {children}
+    </View>
   );
 }
 
@@ -48,20 +78,13 @@ function App() {
 function AppContent() {
   const insets = useSafeAreaInsets();
   const { status } = useAuth();
-  // A modal is drawn in its own window, so the screen behind it is blurred
-  // here (see contexts/OverlayContext). `filter` blur is Android 12+ only;
-  // elsewhere the modal's dimmed backdrop is all that shows.
-  const overlayOpen = useOverlayOpen();
+  const [legalPage, setLegalPage] = useState<
+    'privacy' | 'terms' | 'delete' | null
+  >(null);
 
   return (
     <View style={styles.root}>
-      {/* Only the SCREENS blur. The overlay layer below is their sibling, so a
-          dialog on top of them stays sharp.
-          `collapsable={false}` keeps this a stacking context at all times: were
-          the blur `filter` to turn it into one, Fabric would re-attach
-          everything underneath as the dialog opens. */}
-      <View
-        collapsable={false}
+      <Screens
         style={[
           styles.content,
           {
@@ -70,17 +93,24 @@ function AppContent() {
             paddingLeft: insets.left,
             paddingRight: insets.right,
           },
-          overlayOpen && styles.blurred,
         ]}
       >
         {status === 'booting' ? (
           <ActivityIndicator size="large" color="#003158" />
         ) : status !== 'authed' ? (
-          <LoginPage />
+          legalPage ? (
+            <LegalPage type={legalPage} onBack={() => setLegalPage(null)} />
+          ) : (
+            <LoginPage
+              onOpenPrivacy={() => setLegalPage('privacy')}
+              onOpenTerms={() => setLegalPage('terms')}
+              onOpenDeleteAccount={() => setLegalPage('delete')}
+            />
+          )
         ) : (
           <AppNavigator />
         )}
-      </View>
+      </Screens>
 
       <OverlayHost />
     </View>
