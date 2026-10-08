@@ -9,8 +9,12 @@ import YuvaSevaPage from '../pages/YuvaSevaPage';
 import NotificationsPage from '../pages/NotificationsPage';
 import LegalPage from '../pages/LegalPage';
 import ProfilePage from '../pages/ProfilePage';
+import MembersPage from '../pages/MembersPage';
+import UserDetailsPage from '../pages/UserDetailsPage';
 import { useAuth } from '../hooks/core';
+import { useMyPermissions } from '../hooks/useMyPermissions';
 import { canReadHelp, canSeeYuvaSeva } from '../constants/roles';
+import { ACTIONS, MODULES } from '../constants/permissions';
 
 type RouteName =
   | 'dashboard'
@@ -23,7 +27,9 @@ type RouteName =
   | 'legal-privacy'
   | 'legal-terms'
   | 'legal-delete'
-  | 'profile';
+  | 'profile'
+  | 'users'
+  | 'user-details';
 
 type AppNavigatorProps = {
   initialRoute?: RouteName;
@@ -40,7 +46,15 @@ export default function AppNavigator({
   const [roleId, setRoleId] = useState<number | null>(null);
   // The tab the profile opens on; null is its first one.
   const [profileTab, setProfileTab] = useState<string | null>(null);
+  // The member the details screen is showing.
+  const [memberId, setMemberId] = useState<number | null>(null);
   const { signOut } = useAuth();
+  // The Users entry follows the caller's own grant, as the web's menu does.
+  const permissions = useMyPermissions().data;
+  const usersModule = permissions?.byName?.[MODULES.USERS];
+  const showUsers = Boolean(
+    usersModule?.navVisible && permissions?.can(MODULES.USERS, ACTIONS.READ),
+  );
   const transition = useRef(new Animated.Value(1)).current;
   const route = history[history.length - 1];
   const canOpenHelp = canReadHelp(roleId);
@@ -79,6 +93,11 @@ export default function AppNavigator({
   const openSecurity = () => {
     setProfileTab('security');
     navigate('profile');
+  };
+
+  const openMember = (id: number) => {
+    setMemberId(id);
+    navigate('user-details');
   };
 
   const goBack = () => {
@@ -166,6 +185,29 @@ export default function AppNavigator({
         {...legalLinks}
         onProfile={openProfile}
       />
+    ) : displayedRoute === 'users' ? (
+      <MembersPage
+        onOpenMember={openMember}
+        onBack={goBack}
+        onMenu={openDrawer}
+        onHelp={openHelp}
+        onNotifications={() => navigate('notifications')}
+        {...legalLinks}
+        onProfile={openProfile}
+      />
+    ) : displayedRoute === 'user-details' ? (
+      // Opened from the Users list; back returns there. No `onEdit`: the app
+      // has no form for editing another member yet.
+      <UserDetailsPage
+        userId={memberId}
+        onBack={goBack}
+        onEdit={undefined}
+        onMenu={openDrawer}
+        onHelp={openHelp}
+        onNotifications={() => navigate('notifications')}
+        {...legalLinks}
+        onProfile={openProfile}
+      />
     ) : route === 'profile' ? (
       <ProfilePage
         onBack={goBack}
@@ -218,9 +260,12 @@ export default function AppNavigator({
         onDashboard={() => setHistory(['dashboard'])}
         onOpenEvents={() => navigate('events')}
         onOpenYuvaSeva={() => navigate('yuva-seva')}
+        onOpenUsers={() => navigate('users')}
         activeRoute={route}
         roleName={roleName}
         showYuvaSeva={canOpenYuvaSeva}
+        showUsers={showUsers}
+        usersLabel={usersModule?.label}
       />
     </View>
   );

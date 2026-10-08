@@ -19,6 +19,17 @@ export function useTodayBirthdays(enabled = true) {
   return { ...query, users };
 }
 
+/** Today and three days either side; each row carries a signed `days_away`. */
+export function useBirthdaysWeek(enabled = true) {
+  const query = useQuery({
+    queryKey: ['birthdays-week'],
+    queryFn: dashboardService.birthdaysWeek,
+    enabled,
+    ...LOOKUP_CACHE,
+  });
+  return { ...query, rows: Array.isArray(query.data) ? query.data : [] };
+}
+
 /** The wishes sent TO the signed-in member. */
 export function useMyBirthdayWishes(enabled = true) {
   const query = useQuery({
@@ -36,7 +47,10 @@ export function useSendBirthdayWish() {
     mutationFn: ({ userId, message }) =>
       dashboardService.sendBirthdayWish({ userId, message }),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['today-birthdays'] }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['today-birthdays'] }),
+        queryClient.invalidateQueries({ queryKey: ['birthdays-week'] }),
+      ]),
     meta: { refreshOnSuccess: false },
   });
 }

@@ -9,6 +9,12 @@ export const usersService = {
     api.post(`/api/v1/users/${parentId}/children`, payload, {
       envelope: true,
     }),
+  graduateChild: (userId, mobileNumber) =>
+    api.post(
+      `/api/v1/users/${userId}/graduate`,
+      { mobile_number: mobileNumber },
+      { envelope: true },
+    ),
   update: (userId, payload) =>
     api.patch(`/api/v1/users/${userId}`, payload, { envelope: true }),
 

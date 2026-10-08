@@ -26,6 +26,7 @@ export const dashboardService = {
   presentAbsent: () => api.get('/api/v1/dashboard/present-absent'),
   me: () => api.get('/api/v1/users/me'),
   birthdays: () => api.get('/api/v1/users/today-birthdays'),
+  birthdaysWeek: () => api.get('/api/v1/users/birthdays-week'),
   members: params => api.get('/api/v1/users/list', { params }),
   yuvaSevaReport: params =>
     api.get('/api/v1/reports/yuva-seva-report', {

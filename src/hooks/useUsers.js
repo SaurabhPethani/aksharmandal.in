@@ -256,7 +256,8 @@ export function useUserListCache() {
   return useCallback(
     (userId, changes) =>
       queryClient.setQueriesData({ queryKey: ['members'] }, (data) =>
-        patchRowInList(data, userId, changes)
+        // The members list keys its rows by `id`, not the cache's `user_id`.
+        patchRowInList(data, userId, changes, { idKey: 'id' })
       ),
     [queryClient]
   );

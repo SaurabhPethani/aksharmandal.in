@@ -1,4 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, {
+  memo,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   BackHandler,
   Linking,
@@ -25,13 +31,15 @@ import { DialogCancel } from '../components/FormDialog';
 import { Breadcrumbs, Tabs } from '../components/Navigation';
 import { FormField, Textarea } from '../components/form';
 import {
+  useBirthdaysWeek,
   useMyBirthdayWishes,
   useSendBirthdayWish,
-  useTodayBirthdays,
 } from '../hooks/useBirthdays';
-import { DEFAULT_WISH, birthdayMessage } from '../utils/birthdayWish';
+import { useMyPermissions } from '../hooks/useMyPermissions';
+import { birthdayMessage } from '../utils/birthdayWish';
 import { hasMobile, telUrl, whatsAppUrl } from '../utils/contact';
 import { readDate } from '../utils/dates';
+import { FONT_DISPLAY } from '../constants/typography';
 import {
   COLORS,
   RADII,
@@ -57,13 +65,61 @@ const MONTHS = [
   'Dec',
 ];
 
-const todayLabel = () => {
+const WEEKDAYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+
+/** Days either side of today the week spans — the backend's `_BIRTHDAY_WEEK_RADIUS`. */
+const WEEK_RADIUS = 3;
+
+function startOfToday() {
   const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-};
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function addDays(base, n) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+const weekday = d => WEEKDAYS[d.getDay()].slice(0, 3);
+
+/** "Fri, 2 Oct" */
+const shortDate = d => `${weekday(d)}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+
+/** "02 Oct" */
+const dayMonth = d =>
+  `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]}`;
+
+/** How a row's day reads against today, from its signed `days_away`. */
+function relativeDay(n) {
+  if (n === 0) return 'Today';
+  if (n === -1) return 'Yesterday';
+  if (n === 1) return 'Tomorrow';
+  return n < 0 ? `${-n} days ago` : `in ${n} days`;
+}
+
+function ageText(age, zone) {
+  if (age == null) return null;
+  if (zone === 'today') return `turns ${age} today`;
+  if (zone === 'recent') return `turned ${age}`;
+  return `turns ${age}`;
+}
 
 const nameOf = row =>
   String(row?.user_name ?? '').trim() || `Member #${row?.user_id ?? ''}`;
+
+// The row's buttons are small; this widens what a finger can hit without
+// reaching the button beside it.
+const ACTION_SLOP = { top: 8, bottom: 8, left: 3, right: 3 };
 
 function LinearFill({ id, stops, radius = 0 }) {
   return (
@@ -134,60 +190,20 @@ function LeaderCrown() {
   );
 }
 
-/** The age the member turns today. */
-function AgePill({ age }) {
-  return (
-    <View style={styles.agePill}>
-      <MaterialCommunityIcons
-        name="cake-variant-outline"
-        size={space(3.5)}
-        color={COLORS.accent}
-      />
-      <Text style={styles.ageText}>Turns {age} today</Text>
-    </View>
-  );
-}
-
-/**
- * Filled in by the backend only for callers of rank >= 20, so it is gated by
- * the data being there. The follow-up name shows on every enriched row; the
- * last-Sabha status only on rows the caller may contact.
- */
+/** The backend sends `followup_name` only to callers of rank >= 20. */
 function LeaderMeta({ row }) {
-  const hasFollowup = Boolean(row?.followup_name);
-  const hasStatus = row?.contact === true && row?.last_sabha_attended != null;
-  if (!hasFollowup && !hasStatus) return null;
-
-  const day = row?.last_sabha_date
-    ? readDate(row.last_sabha_date)?.date.replace(/\s\d{4}$/, '') || null
-    : null;
-
+  if (!row?.followup_name) return null;
   return (
-    <View style={styles.meta}>
-      {hasFollowup && (
-        <Text style={styles.metaText} numberOfLines={1}>
-          <Text style={styles.metaLabel}>Follow-up:</Text>{' '}
-          <Text style={styles.metaValue}>{row.followup_name}</Text>
-        </Text>
-      )}
-      {hasStatus && (
-        <Text style={styles.metaText} numberOfLines={1}>
-          <Text style={styles.metaLabel}>Last Sabha:</Text>{' '}
-          <Text
-            style={row.last_sabha_attended ? styles.attended : styles.absent}
-          >
-            {row.last_sabha_attended ? 'Attended' : 'Absent'}
-          </Text>
-          {day ? <Text style={TNUM}> · {day}</Text> : null}
-        </Text>
-      )}
-    </View>
+    <Text style={[styles.metaText, styles.followup]} numberOfLines={1}>
+      <Text style={styles.metaLabel}>Follow-up:</Text>{' '}
+      <Text style={styles.metaValue}>{row.followup_name}</Text>
+    </Text>
   );
 }
 
 /**
  * SPENT FOR THE DAY. `already_wished` is the server's answer, OR'd with the
- * wishes sent from this modal so the button flips before the list is re-read.
+ * wishes sent from this page so the button flips before the list is re-read.
  */
 function WishButton({ row, sent, onPress }) {
   const done = sent || row?.already_wished === true;
@@ -197,6 +213,7 @@ function WishButton({ row, sent, onPress }) {
       style={styles.wishButton}
       textStyle={styles.wishButtonText}
       onPress={onPress}
+      hitSlop={ACTION_SLOP}
       disabled={done || row?.user_id == null}
       accessibilityLabel={
         done
@@ -213,10 +230,29 @@ function WishButton({ row, sent, onPress }) {
   );
 }
 
+/** On a day already gone: the caller did wish this member on their birthday. */
+function SentTag() {
+  return (
+    <View
+      style={styles.sentTag}
+      accessible
+      accessibilityLabel="You wished this member on their birthday"
+    >
+      <MaterialCommunityIcons
+        name="check"
+        size={space(3.5)}
+        color={COLORS.primary}
+      />
+      <Text style={styles.sentTagText}>Sent</Text>
+    </View>
+  );
+}
+
 function RoundLink({ id, label, url, icon, stops }) {
   return (
     <Pressable
       onPress={() => Linking.openURL(url).catch(() => {})}
+      hitSlop={ACTION_SLOP}
       accessibilityRole="link"
       accessibilityLabel={label}
       style={({ pressed }) => [
@@ -252,7 +288,7 @@ function CallButton({ row, mobile }) {
 }
 
 /** Composes the wish and hands it to WhatsApp, from the reader's own number. */
-function WhatsAppButton({ row, mobile }) {
+function WhatsAppButton({ row, mobile, sender, belated = false }) {
   if (!hasMobile(mobile)) return null;
   // The member's WhatsApp number, falling back to the calling number.
   const whatsapp = row?.whatsapp_number || mobile;
@@ -260,7 +296,10 @@ function WhatsAppButton({ row, mobile }) {
     <RoundLink
       id="whatsapp"
       label={`Wish ${nameOf(row)} on WhatsApp`}
-      url={whatsAppUrl(whatsapp, birthdayMessage(nameOf(row)))}
+      url={whatsAppUrl(
+        whatsapp,
+        birthdayMessage(nameOf(row), sender, { belated }),
+      )}
       icon="whatsapp"
       stops={[
         [0, '#25D366'],
@@ -310,23 +349,27 @@ function Toast({ toast, onDismiss }) {
 }
 
 /**
- * The wish itself — one field and a Send button. The message is the sender's
- * own words, so it is shown and editable rather than sent silently, and Send
- * stays disabled while it is blank. Sealed while sending, so the row can always
- * say whether the wish went.
+ * The wish itself — one field and a Send button. The field starts with the
+ * full greeting and stays editable; Send is disabled while it is blank. Sealed
+ * while sending, so the row can always say whether the wish went.
  */
-function WishDialog({ person, isOpen, onClose, onSent, onToast }) {
+function WishDialog({ person, sender, isOpen, onClose, onSent, onToast }) {
   const wish = useSendBirthdayWish();
-  const [message, setMessage] = useState(DEFAULT_WISH);
+  const greeting = person
+    ? birthdayMessage(nameOf(person), sender, { bold: false })
+    : '';
+  const [message, setMessage] = useState(greeting);
   const [failure, setFailure] = useState(null);
 
-  // Back to the default for each person, so a message typed for one member is
-  // never sent to the next.
+  // Back to the greeting for each person, so a message typed for one member is
+  // never sent to the next. Not on `greeting` itself: that would reset the
+  // field mid-edit.
   useEffect(() => {
     if (isOpen) {
-      setMessage(DEFAULT_WISH);
+      setMessage(greeting);
       setFailure(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, person?.user_id]);
 
   const text = message.trim();
@@ -389,7 +432,7 @@ function WishDialog({ person, isOpen, onClose, onSent, onToast }) {
     >
       <FormField label="Message" required error={failure}>
         <Textarea
-          rows={4}
+          rows={11}
           value={message}
           onChangeText={setMessage}
           editable={!wish.isPending}
@@ -401,15 +444,377 @@ function WishDialog({ person, isOpen, onClose, onSent, onToast }) {
   );
 }
 
-/** TAB 1 — today's birthdays in the caller's scope, and the wishes to send them. */
-function SendWishes() {
-  const { users, isPending, error, refetch } = useTodayBirthdays();
-  /** user_ids wished from this modal — see WishButton. */
+/** A line per symbol that actually appears in the rows on screen. */
+function Legend({ rows }) {
+  const hasPersonal = rows.some(r => r?.tier === 'personal');
+  const hasLeader = rows.some(r => r?.is_leader === true);
+  if (!hasPersonal && !hasLeader) return null;
+  return (
+    <View style={styles.legend}>
+      {hasPersonal && (
+        <View style={styles.legendItem}>
+          <PersonalStar />
+          <Text style={styles.legendText}>= your personal follow-up</Text>
+        </View>
+      )}
+      {hasLeader && (
+        <View style={styles.legendItem}>
+          <LeaderCrown />
+          <Text style={styles.legendText}>= your leader</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** The amber card for a day, or a whole week, with no birthdays. */
+function Quiet({ title, hint, large = false }) {
+  return (
+    <View style={[styles.quiet, large && styles.quietLarge]}>
+      <LinearFill
+        id="quiet"
+        stops={[
+          [0, '#FEF3C7'],
+          [0.5, '#FFEDD5'],
+          [1, '#FFE4CC'],
+        ]}
+      />
+      <View style={[styles.quietIcon, large && styles.quietIconLarge]}>
+        <MaterialCommunityIcons
+          name="cake-variant-outline"
+          size={space(large ? 7 : 6)}
+          color="#B45309"
+        />
+      </View>
+      <Text style={styles.quietTitle}>{title}</Text>
+      <Text style={styles.quietHint}>{hint}</Text>
+    </View>
+  );
+}
+
+/**
+ * Seven cells, today-3 .. today+3, each with its count. Also a filter: tapping
+ * a day narrows the list to it, tapping it again shows the whole week. A day
+ * with no birthdays is not tappable.
+ */
+function DateStrip({ base, rows, selected, onSelect }) {
+  const cells = [];
+  for (let n = -WEEK_RADIUS; n <= WEEK_RADIUS; n += 1) {
+    cells.push({
+      n,
+      d: addDays(base, n),
+      count: rows.filter(r => r?.days_away === n).length,
+    });
+  }
+  return (
+    <View style={styles.strip}>
+      {cells.map(({ n, d, count }) => {
+        const isToday = n === 0;
+        const isSelected = selected === n;
+        const tappable = count > 0;
+        return (
+          <Pressable
+            key={n}
+            disabled={!tappable}
+            onPress={() => onSelect(isSelected ? null : n)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected, disabled: !tappable }}
+            accessibilityLabel={`${WEEKDAYS[d.getDay()]} ${d.getDate()} ${
+              MONTHS[d.getMonth()]
+            } — ${count} ${count === 1 ? 'birthday' : 'birthdays'}`}
+            style={({ pressed }) => [
+              styles.cell,
+              isToday && styles.cellToday,
+              pressed && styles.cellPressed,
+              isSelected && styles.cellSelected,
+              isSelected && pressed && styles.cellSelectedPressed,
+              !tappable && styles.cellQuiet,
+            ]}
+          >
+            <Text
+              style={[
+                styles.cellDay,
+                isToday && styles.inkToday,
+                isSelected && styles.inkSelectedSoft,
+              ]}
+            >
+              {weekday(d)}
+            </Text>
+            <Text
+              style={[
+                styles.cellDate,
+                isToday && styles.inkToday,
+                isSelected && styles.inkSelected,
+              ]}
+            >
+              {d.getDate()}
+            </Text>
+            {/* An em dash on a quiet day: a bare "0" reads as a broken cell. */}
+            <Text
+              style={[
+                styles.cellCount,
+                count > 0 && styles.cellCountSome,
+                count > 0 && isToday && styles.cellCountToday,
+                isSelected && styles.cellCountSelected,
+              ]}
+            >
+              {count || '—'}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const ZONES = {
+  today: { label: 'Today', icon: 'cake-variant-outline', hint: null },
+  upcoming: {
+    label: 'Upcoming',
+    icon: 'calendar-clock-outline',
+    hint: 'coming up — wish ahead by WhatsApp if you like',
+  },
+  recent: {
+    label: 'Recent',
+    icon: 'history',
+    hint: 'just gone — a belated wish still lands',
+  },
+};
+
+/**
+ * The in-app Wish is a TODAY-only act — the API records it against the
+ * birthday itself. Call and WhatsApp carry no date rule, so they stay on every
+ * row the caller may reach.
+ */
+const BirthdayCard = memo(function BirthdayCard({
+  row,
+  zone,
+  base,
+  sender,
+  sent,
+  onWish,
+}) {
+  const isToday = zone === 'today';
+  const personal = row?.tier === 'personal';
+  const leader = row?.is_leader === true;
+  // Only rows the caller may reach carry a number at all.
+  const mobile = row?.contact === true ? (row?.mobile_number ?? null) : null;
+  const reachable = hasMobile(mobile);
+  const wished = !isToday && row?.already_wished === true;
+  const name = nameOf(row);
+  const age = ageText(row?.age, zone);
+
+  return (
+    <View
+      style={[
+        styles.row,
+        leader && styles.rowLeader,
+        personal && styles.rowPersonal,
+      ]}
+    >
+      <Initial name={name} />
+
+      <View style={styles.member}>
+        <View style={styles.nameLine}>
+          <Text style={styles.name}>{name}</Text>
+          {personal && <PersonalStar />}
+          {leader && <LeaderCrown />}
+        </View>
+
+        <View style={styles.dateLine}>
+          <MaterialCommunityIcons
+            name="cake-variant-outline"
+            size={space(3)}
+            color={COLORS.textMuted}
+          />
+          <Text style={styles.metaText}>
+            {shortDate(addDays(base, row.days_away))} ·{' '}
+            {relativeDay(row.days_away)}
+          </Text>
+        </View>
+
+        {row?.sabha_name || age ? (
+          <View style={styles.sabhaLine}>
+            {row?.sabha_name ? (
+              <Text style={styles.metaText}>
+                <Text style={styles.metaLabel}>Sabha:</Text>{' '}
+                <Text style={styles.metaValue}>{row.sabha_name}</Text>
+              </Text>
+            ) : null}
+            {age ? (
+              <View style={styles.agePill}>
+                <Text style={styles.ageText}>{age}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+        {mobile ? <Text style={styles.mobile}>{mobile}</Text> : null}
+        <LeaderMeta row={row} />
+
+        {isToday || wished || reachable ? (
+          <View style={styles.actions}>
+            {isToday && (
+              <WishButton
+                row={row}
+                sent={sent}
+                onPress={() => onWish(row)}
+              />
+            )}
+            {wished && <SentTag />}
+            {reachable && (
+              <>
+                <CallButton row={row} mobile={mobile} />
+                <WhatsAppButton
+                  row={row}
+                  mobile={mobile}
+                  sender={sender}
+                  belated={zone === 'recent'}
+                />
+              </>
+            )}
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+});
+
+/** One group of rows under its heading. `label` and `hint` override the zone's own. */
+function ZoneRows({ zone, rows, label, hint, sent, ...card }) {
+  if (rows.length === 0) return null;
+  const meta = ZONES[zone];
+  const note = hint !== undefined ? hint : meta.hint;
+
+  return (
+    <View style={styles.zone}>
+      <View style={styles.zoneHead}>
+        <View style={styles.zoneTitle}>
+          <MaterialCommunityIcons
+            name={meta.icon}
+            size={space(4)}
+            color={COLORS.accent}
+          />
+          <Text style={styles.zoneLabel}>{label ?? meta.label}</Text>
+        </View>
+        <Text style={styles.zoneCount}>
+          {rows.length} {rows.length === 1 ? 'birthday' : 'birthdays'}
+          {note ? ` · ${note}` : ''}
+        </Text>
+      </View>
+
+      {rows.map((row, i) => (
+        <BirthdayCard
+          key={row?.user_id ?? `row-${i}`}
+          row={row}
+          zone={zone}
+          sent={sent.has(row?.user_id)}
+          {...card}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** The rows under the strip: one day when `selected` is an offset, else the week. */
+const WeekList = memo(function WeekList({
+  rows,
+  groups,
+  selected,
+  onSelect,
+  ...card
+}) {
+  const total =
+    groups.recent.length + groups.today.length + groups.upcoming.length;
+
+  if (total === 0) {
+    return (
+      <Quiet
+        large
+        title="No birthdays this week"
+        hint="Nobody in your scope is celebrating in the next few days — check back soon."
+      />
+    );
+  }
+
+  if (selected === null) {
+    return (
+      <>
+        <Legend rows={rows} />
+        <ZoneRows zone="recent" rows={groups.recent} {...card} />
+        <ZoneRows zone="today" rows={groups.today} {...card} />
+        <ZoneRows zone="upcoming" rows={groups.upcoming} {...card} />
+      </>
+    );
+  }
+
+  const dayRows = rows.filter(r => r?.days_away === selected);
+  const day = shortDate(addDays(card.base, selected));
+
+  return (
+    <>
+      <Pressable
+        onPress={() => onSelect(null)}
+        accessibilityRole="button"
+        hitSlop={WEEK_LINK_SLOP}
+        style={styles.weekLink}
+      >
+        {({ pressed }) => (
+          <>
+            <MaterialCommunityIcons
+              name="history"
+              size={space(3.5)}
+              color={COLORS.accent}
+            />
+            <Text
+              style={[styles.weekLinkText, pressed && styles.weekLinkPressed]}
+            >
+              Show the whole week
+            </Text>
+          </>
+        )}
+      </Pressable>
+      {dayRows.length > 0 ? (
+        <>
+          <Legend rows={dayRows} />
+          <ZoneRows
+            zone={selected === 0 ? 'today' : selected < 0 ? 'recent' : 'upcoming'}
+            rows={dayRows}
+            label={day}
+            hint={relativeDay(selected)}
+            {...card}
+          />
+        </>
+      ) : (
+        <Quiet
+          title={`No birthdays ${selected === 0 ? 'today' : `on ${day}`}`}
+          hint="Pick another day above, or show the whole week."
+        />
+      )}
+    </>
+  );
+});
+
+/**
+ * TAB 1 — the 7-day window, grouped Recent / Today / Upcoming. Opens on today;
+ * the whole week is reached from the link or by tapping the selected day again.
+ */
+function WeekWishes() {
+  const { rows, isPending, error, refetch } = useBirthdaysWeek();
+  // Signs the greeting: "From Sevak, <name>".
+  const sender = useMyPermissions().data?.userName;
+  /** user_ids wished from this page — see WishButton. */
   const [sent, setSent] = useState(() => new Set());
   const markSent = id => setSent(prev => new Set(prev).add(id));
   /** The member the wish dialog is open for, if any. */
   const [wishing, setWishing] = useState(null);
   const [toast, setToast] = useState(null);
+  /** The day the strip has filtered to — a signed offset, or null for the week. */
+  const [selected, setSelected] = useState(0);
+  // The strip answers a tap at once; the rows, which are the slow part to
+  // draw, follow it.
+  const listed = useDeferredValue(selected);
+  // Fixed for the life of the view, so the strip does not drift at midnight.
+  const base = useMemo(() => startOfToday(), []);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -417,8 +822,19 @@ function SendWishes() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const hasPersonal = users.some(r => r?.tier === 'personal');
-  const hasLeader = users.some(r => r?.is_leader === true);
+  const groups = useMemo(() => {
+    const dated = rows.filter(r => Number.isFinite(r?.days_away));
+    return {
+      // Closest day first; the backend's leader-then-tier order breaks ties.
+      recent: dated
+        .filter(r => r.days_away < 0)
+        .sort((a, b) => b.days_away - a.days_away),
+      today: dated.filter(r => r.days_away === 0),
+      upcoming: dated
+        .filter(r => r.days_away > 0)
+        .sort((a, b) => a.days_away - b.days_away),
+    };
+  }, [rows]);
 
   let content;
   if (isPending) {
@@ -435,101 +851,94 @@ function SendWishes() {
         <ErrorState
           error={error}
           onRetry={refetch}
-          title="Could not load today’s birthdays"
-        />
-      </Card>
-    );
-  } else if (users.length === 0) {
-    content = (
-      <Card>
-        <EmptyState
-          icon="cake-variant-outline"
-          title="No birthdays today"
-          hint="Nobody in your Mandal is celebrating today — check back tomorrow."
+          title="Could not load this week’s birthdays"
         />
       </Card>
     );
   } else {
+    const total =
+      groups.recent.length + groups.today.length + groups.upcoming.length;
+    const filtered = selected !== null;
+    const dayRows = filtered ? rows.filter(r => r?.days_away === selected) : [];
+    const card = { base, sender, sent, onWish: setWishing };
+
     content = (
       <>
-        {/* A line per symbol that actually appears in the list. */}
-        {(hasPersonal || hasLeader) && (
-          <View style={styles.legend}>
-            {hasPersonal && (
-              <View style={styles.legendItem}>
-                <PersonalStar />
-                <Text style={styles.legendText}>= your personal follow-up</Text>
-              </View>
+        <DateStrip
+          base={base}
+          rows={rows}
+          selected={selected}
+          onSelect={setSelected}
+        />
+
+        {total === 0 ? (
+          <Quiet
+            large
+            title="No birthdays this week"
+            hint="Nobody in your scope is celebrating in the next few days — check back soon."
+          />
+        ) : filtered ? (
+          <>
+            <Pressable
+              onPress={() => setSelected(null)}
+              accessibilityRole="button"
+              hitSlop={8}
+              style={styles.weekLink}
+            >
+              {({ pressed }) => (
+                <>
+                  <MaterialCommunityIcons
+                    name="history"
+                    size={space(3.5)}
+                    color={COLORS.accent}
+                  />
+                  <Text
+                    style={[
+                      styles.weekLinkText,
+                      pressed && styles.weekLinkPressed,
+                    ]}
+                  >
+                    Show the whole week
+                  </Text>
+                </>
+              )}
+            </Pressable>
+            {dayRows.length > 0 ? (
+              <>
+                <Legend rows={dayRows} />
+                <ZoneRows
+                  zone={
+                    selected === 0
+                      ? 'today'
+                      : selected < 0
+                        ? 'recent'
+                        : 'upcoming'
+                  }
+                  rows={dayRows}
+                  label={shortDate(addDays(base, selected))}
+                  hint={relativeDay(selected)}
+                  {...card}
+                />
+              </>
+            ) : (
+              <Quiet
+                title={`No birthdays ${
+                  selected === 0
+                    ? 'today'
+                    : `on ${shortDate(addDays(base, selected))}`
+                }`}
+                hint="Pick another day above, or show the whole week."
+              />
             )}
-            {hasLeader && (
-              <View style={styles.legendItem}>
-                <LeaderCrown />
-                <Text style={styles.legendText}>= your leader</Text>
-              </View>
-            )}
-          </View>
+          </>
+        ) : (
+          <>
+            <Legend rows={rows} />
+            <ZoneRows zone="recent" rows={groups.recent} {...card} />
+            <ZoneRows zone="today" rows={groups.today} {...card} />
+            <ZoneRows zone="upcoming" rows={groups.upcoming} {...card} />
+          </>
         )}
-
-        <View style={styles.table}>
-          <View style={styles.tableClip}>
-            <View style={styles.thead}>
-              <Text style={styles.th}>Member</Text>
-            </View>
-
-            {users.map((row, i) => {
-              const personal = row?.tier === 'personal';
-              const leader = row?.is_leader === true;
-              const canContact = row?.contact === true;
-              // Only rows the caller may reach carry a number at all.
-              const mobile = canContact ? (row?.mobile_number ?? null) : null;
-              const name = nameOf(row);
-
-              return (
-                <View key={row?.user_id ?? `row-${i}`} style={styles.tr}>
-                  <Initial name={name} />
-
-                  <View style={styles.member}>
-                    <View style={styles.nameLine}>
-                      <Text style={styles.name}>{name}</Text>
-                      {personal && <PersonalStar />}
-                      {leader && <LeaderCrown />}
-                    </View>
-                    {row?.sabha_name || row?.age != null ? (
-                      <View style={styles.sabhaLine}>
-                        {row?.sabha_name ? (
-                          <Text style={styles.metaText}>
-                            <Text style={styles.metaLabel}>Sabha:</Text>{' '}
-                            <Text style={styles.metaValue}>
-                              {row.sabha_name}
-                            </Text>
-                          </Text>
-                        ) : null}
-                        {row?.age != null ? <AgePill age={row.age} /> : null}
-                      </View>
-                    ) : null}
-                    {mobile ? (
-                      <Text style={styles.mobile}>{mobile}</Text>
-                    ) : null}
-                    <LeaderMeta row={row} />
-                    <View style={styles.actions}>
-                      <WishButton
-                        row={row}
-                        sent={sent.has(row?.user_id)}
-                        onPress={() => setWishing(row)}
-                      />
-                      {canContact && hasMobile(mobile) ? (
-                        <>
-                          <CallButton row={row} mobile={mobile} />
-                          <WhatsAppButton row={row} mobile={mobile} />
-                        </>
-                      ) : null}
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </View>
       </>
     );
   }
@@ -538,9 +947,10 @@ function SendWishes() {
     <>
       {toast ? <Toast toast={toast} onDismiss={() => setToast(null)} /> : null}
       {content}
-      {/* One dialog for the whole list — `wishing` carries whose birthday it is. */}
+      {/* One dialog for the whole page — `wishing` carries whose birthday it is. */}
       <WishDialog
         person={wishing}
+        sender={sender}
         isOpen={Boolean(wishing)}
         onClose={() => setWishing(null)}
         onSent={markSent}
@@ -625,7 +1035,7 @@ function ReceivedWishes() {
 }
 
 const TABS = [
-  { value: 'send', label: 'Send Wishes' },
+  { value: 'send', label: 'This week' },
   { value: 'received', label: 'My Wishes' },
 ];
 
@@ -650,6 +1060,11 @@ export default function BirthdaysPage({
     return () => sub.remove();
   }, [onBack]);
 
+  const base = startOfToday();
+  const weekRange = `${dayMonth(addDays(base, -WEEK_RADIUS))} – ${dayMonth(
+    addDays(base, WEEK_RADIUS),
+  )}`;
+
   return (
     <View style={styles.screen}>
       {/* The app's own bar, as every registered screen carries it. */}
@@ -672,7 +1087,7 @@ export default function BirthdaysPage({
           subtitle={
             tab === 'received'
               ? 'Wishes sent to you'
-              : `Everyone celebrating today, ${todayLabel()}`
+              : `This week · ${weekRange}`
           }
           breadcrumbs={
             <Breadcrumbs items={[{ label: 'Birthdays' }]} onHome={onBack} />
@@ -681,7 +1096,7 @@ export default function BirthdaysPage({
 
         <Tabs tabs={TABS} value={tab} onChange={setTab} />
         <View style={styles.tabBody}>
-          {tab === 'received' ? <ReceivedWishes /> : <SendWishes />}
+          {tab === 'received' ? <ReceivedWishes /> : <WeekWishes />}
         </View>
 
         <View style={styles.footerBleed}>
@@ -708,40 +1123,97 @@ const styles = StyleSheet.create({
   skeletonRow: { height: space(12), width: '100%' },
   skeletonWish: { height: space(16), width: '100%' },
 
-  // .card with p-0 — the shadow on the outer view, the clip on the inner, as
-  // `overflow: hidden` would cut the shadow off on iOS.
-  table: {
+  strip: { flexDirection: 'row', gap: space(1.5) },
+  cell: {
+    flex: 1,
+    alignItems: 'center',
     borderRadius: RADII.card,
     borderWidth: 1,
     borderColor: COLORS.lineSoft,
     backgroundColor: COLORS.surface,
-    ...SHADOWS.card,
+    paddingHorizontal: space(1),
+    paddingVertical: space(2),
   },
-  tableClip: { borderRadius: RADII.card - 1, overflow: 'hidden' },
-  // .table-th
-  thead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.bg,
-    paddingHorizontal: space(5),
-    paddingVertical: space(3.5),
+  cellToday: {
+    borderColor: COLORS.accent,
+    backgroundColor: 'rgba(255,134,42,0.1)',
   },
-  th: {
-    fontSize: TEXT.xs,
+  cellPressed: {
+    borderColor: COLORS.accent,
+    backgroundColor: 'rgba(255,134,42,0.22)',
+  },
+  cellSelected: {
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.accent,
+  },
+  cellSelectedPressed: {
+    borderColor: COLORS.accentHover,
+    backgroundColor: COLORS.accentHover,
+  },
+  cellQuiet: { opacity: 0.6 },
+  cellDay: { fontSize: 11, color: COLORS.textFaint },
+  cellDate: {
+    fontSize: TEXT.base,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.primary,
+  },
+  cellCount: { ...TNUM, fontSize: 11, color: COLORS.textFaint },
+  cellCountSome: { color: COLORS.textMuted },
+  cellCountToday: { fontWeight: WEIGHT.semibold, color: COLORS.accent },
+  cellCountSelected: {
     fontWeight: WEIGHT.semibold,
-    letterSpacing: TEXT.xs * 0.025,
-    textTransform: 'uppercase',
-    color: COLORS.textMuted,
+    color: 'rgba(255,255,255,0.9)',
   },
-  tr: {
+  inkToday: { color: COLORS.accent },
+  inkSelected: { color: COLORS.white },
+  inkSelectedSoft: { color: 'rgba(255,255,255,0.9)' },
+
+  // Padded to a finger-sized box; the negative margin gives the space back.
+  weekLink: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space(3),
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lineSoft,
-    paddingHorizontal: space(5),
+    gap: space(1.5),
     paddingVertical: space(3),
+    marginVertical: -space(3),
   },
+  weekLinkText: {
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.accent,
+  },
+  weekLinkPressed: { textDecorationLine: 'underline' },
+
+  zone: { gap: space(2) },
+  zoneHead: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: space(2),
+    rowGap: space(0.5),
+    paddingHorizontal: space(1),
+  },
+  zoneTitle: { flexDirection: 'row', alignItems: 'center', gap: space(1.5) },
+  zoneLabel: {
+    fontSize: TEXT.sm,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.primary,
+  },
+  zoneCount: { fontSize: TEXT.xs, color: COLORS.textMuted },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space(3),
+    borderRadius: RADII.card,
+    borderWidth: 1,
+    borderColor: COLORS.lineSoft,
+    backgroundColor: COLORS.surface,
+    padding: space(4),
+    ...SHADOWS.card,
+  },
+  rowPersonal: { borderColor: 'rgba(255,134,42,0.4)' },
+  rowLeader: { borderColor: 'rgba(0,49,88,0.3)' },
   member: { flex: 1, minWidth: 0 },
   nameLine: {
     flexDirection: 'row',
@@ -755,51 +1227,68 @@ const styles = StyleSheet.create({
     fontWeight: WEIGHT.bold,
     color: COLORS.primary,
   },
+  dateLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(1),
+    marginTop: space(1),
+  },
   sabhaLine: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     columnGap: space(2),
     rowGap: space(1),
-    marginTop: space(0.5),
+    marginTop: space(1),
   },
   agePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space(1),
     borderRadius: RADII.full,
-    backgroundColor: 'rgba(255,134,42,0.12)',
+    backgroundColor: 'rgba(255,134,42,0.1)',
     paddingHorizontal: space(2),
     paddingVertical: space(0.5),
   },
   ageText: {
     fontSize: TEXT.xs,
-    fontWeight: WEIGHT.bold,
+    fontWeight: WEIGHT.semibold,
+    textTransform: 'capitalize',
     color: COLORS.accent,
   },
   mobile: {
     ...TNUM,
-    marginTop: space(0.5),
+    marginTop: space(1),
     fontSize: TEXT.xs,
     color: COLORS.textMuted,
   },
-  meta: { marginTop: space(1), gap: space(0.5) },
+  followup: { marginTop: space(1) },
   metaText: { fontSize: TEXT.xs, color: COLORS.textMuted },
   metaLabel: { color: COLORS.textFaint },
   metaValue: { fontWeight: WEIGHT.medium },
-  attended: { fontWeight: WEIGHT.semibold, color: COLORS.successFg },
-  absent: { fontWeight: WEIGHT.semibold, color: COLORS.dangerFg },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: space(2),
-    marginTop: space(2),
+    marginTop: space(3),
   },
 
   // `!py-2 !text-xs` on the web's Button
   wishButton: { paddingVertical: space(2) },
   wishButtonText: { fontSize: TEXT.xs },
+
+  sentTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(1),
+    borderRadius: RADII.control,
+    backgroundColor: COLORS.primary50,
+    paddingHorizontal: space(2),
+    paddingVertical: space(1),
+  },
+  sentTagText: {
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.primary,
+  },
 
   roundLink: {
     width: space(9),
@@ -820,6 +1309,53 @@ const styles = StyleSheet.create({
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: space(1.5) },
   legendText: { fontSize: TEXT.xs, color: COLORS.textMuted },
+
+  quiet: {
+    alignItems: 'center',
+    borderRadius: RADII.card,
+    overflow: 'hidden',
+    paddingHorizontal: space(6),
+    paddingVertical: space(10),
+  },
+  quietLarge: { paddingVertical: space(12) },
+  quietIcon: {
+    width: space(12),
+    height: space(12),
+    borderRadius: RADII['2xl'],
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quietIconLarge: {
+    width: space(14),
+    height: space(14),
+    marginBottom: space(1),
+  },
+  quietTitle: {
+    marginTop: space(3),
+    fontFamily: FONT_DISPLAY,
+    fontSize: TEXT.base,
+    fontWeight: WEIGHT.bold,
+    color: '#7C2D12',
+    textAlign: 'center',
+  },
+  quietHint: {
+    marginTop: space(1),
+    fontSize: TEXT.sm,
+    color: '#9A3412',
+    textAlign: 'center',
+  },
+
+  // .card with p-0 — the shadow on the outer view, the clip on the inner, as
+  // `overflow: hidden` would cut the shadow off on iOS.
+  table: {
+    borderRadius: RADII.card,
+    borderWidth: 1,
+    borderColor: COLORS.lineSoft,
+    backgroundColor: COLORS.surface,
+    ...SHADOWS.card,
+  },
+  tableClip: { borderRadius: RADII.card - 1, overflow: 'hidden' },
 
   wishCount: {
     backgroundColor: '#FFF7ED',

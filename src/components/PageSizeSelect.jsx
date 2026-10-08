@@ -1,25 +1,42 @@
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Select } from './form';
+import { Text } from './Typography';
 import { PAGE_SIZE_OPTIONS } from '../constants/pagination';
+import { COLORS, TEXT, WEIGHT, space } from '../constants/theme';
 
-export default function PageSizeSelect({ value, onChange, id = 'page-size' }) {
+const OPTIONS = PAGE_SIZE_OPTIONS.map(size => ({
+  value: String(size),
+  label: String(size),
+}));
+
+export default function PageSizeSelect({ value, onChange }) {
   if (!onChange) return null;
 
   return (
-    <div className="flex items-center gap-1.5">
-      <label htmlFor={id} className="text-xs font-semibold text-text-muted">
-        Show
-      </label>
-      <select
-        id={id}
-        value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        className="h-9 rounded-control border border-line-strong bg-surface px-2 text-xs font-semibold text-primary outline-none transition-colors focus:border-primary/50"
-      >
-        {PAGE_SIZE_OPTIONS.map(size => (
-          <option key={size} value={size}>
-            {size}
-          </option>
-        ))}
-      </select>
-    </div>
+    <View style={styles.row}>
+      <Text style={styles.label}>Show</Text>
+      <Select
+        label="Rows per page"
+        value={String(value)}
+        options={OPTIONS}
+        onChange={next => onChange(Number(next))}
+        style={styles.select}
+      />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: space(1.5) },
+  label: {
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.textMuted,
+  },
+  select: {
+    width: space(22),
+    paddingHorizontal: space(3),
+    paddingVertical: space(1.5),
+  },
+});

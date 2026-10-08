@@ -1,7 +1,37 @@
-export const DEFAULT_WISH = 'Jai Swaminarayan! Happy birthday.';
+const EMOJI = {
+  pray: String.fromCodePoint(0x1f64f),
+  blossom: String.fromCodePoint(0x1f338),
+  cake: String.fromCodePoint(0x1f382),
+  party: String.fromCodePoint(0x1f389),
+};
 
-export const birthdayMessage = (name) =>
-  `Jai Swaminarayan ${String(name ?? '').trim() || 'Das na Das'}! Wishing you a very happy birthday. May Bhagwan Swaminarayan bless you with health, wisdom, and unwavering devotion.`;
+/**
+ * The greeting, signed by the member sending it. `bold` wraps the highlights in
+ * WhatsApp's `*…*`; the in-app wish is stored as plain text, so it passes false.
+ * `belated` is for a birthday that has already passed.
+ */
+export const birthdayMessage = (
+  name,
+  senderName,
+  { bold = true, belated = false } = {},
+) => {
+  const b = s => (bold ? `*${s}*` : s);
+  const to = String(name ?? '').trim() || 'Das na Das';
+  const from = String(senderName ?? '').trim();
+  const wishLine = belated
+    ? 'Wishing you a very happy belated birthday!'
+    : 'Wishing you a very happy birthday!';
+  return [
+    `${EMOJI.pray} ${b('Jai Swaminarayan')} ${EMOJI.pray}`,
+    '',
+    `Param Bhakt ${b(to)},`,
+    '',
+    `May Bhagwan Swaminarayan bless you with health, wisdom, and unwavering devotion. ${EMOJI.blossom}`,
+    '',
+    `${EMOJI.cake} ${b(wishLine)} ${EMOJI.party}`,
+    ...(from ? ['', 'From Sevak,', b(from)] : []),
+  ].join('\n');
+};
 
 export function readBirthdayWishes(body) {
   if (Array.isArray(body)) return body;

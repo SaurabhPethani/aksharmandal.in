@@ -20,23 +20,13 @@ function createOverlayStore() {
       return () => listeners.delete(listener);
     },
     getEntries: () => entries,
-    /** An overlay on its way out no longer counts. */
-    isOpen: () => entries.some(e => !e.leaving),
+    isOpen: () => entries.length > 0,
     /** Adds the overlay, or replaces its content — keeping its place in the stack. */
     set(id, entry) {
       const at = entries.findIndex(e => e.id === id);
       const next = entries.slice();
       if (at === -1) next.push({ id, ...entry });
       else next[at] = { id, ...entry };
-      entries = next;
-      emit();
-    },
-    /** Stays drawn while it animates away, but is no longer open. */
-    retire(id) {
-      const at = entries.findIndex(e => e.id === id);
-      if (at === -1 || entries[at].leaving) return;
-      const next = entries.slice();
-      next[at] = { ...next[at], leaving: true };
       entries = next;
       emit();
     },
@@ -68,11 +58,9 @@ export function useOverlayOpen() {
 /**
  * One component's place on the overlay layer.
  *
- *   show({ content, onRequestClose, leaving })  draws it, or redraws it where
- *       it already is in the stack. `onRequestClose` is what Android's back
+ *   show({ content, onRequestClose })  draws it, or redraws it where it
+ *       already is in the stack. `onRequestClose` is what Android's back
  *       button calls on the topmost overlay.
- *   retire()  leaves it drawn while it animates away, but no longer open: the
- *       screen behind is sharp again and takes touches.
  *   remove()  takes it down. Unmounting does the same.
  */
 export function useOverlay() {
@@ -93,7 +81,6 @@ export function useOverlay() {
       show: entry => {
         if (mounted.current) store.set(id, entry);
       },
-      retire: () => store.retire(id),
       remove: () => store.remove(id),
     }),
     [id, store],
@@ -114,10 +101,7 @@ export function OverlayHost() {
     if (!open) return undefined;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       // Read at press time: the top of the stack may have changed since.
-      const top = store
-        .getEntries()
-        .filter(e => !e.leaving)
-        .pop();
+      const top = store.getEntries()[store.getEntries().length - 1];
       top?.onRequestClose?.();
       return true;
     });
@@ -133,7 +117,7 @@ export function OverlayHost() {
       {entries.map(entry => (
         <View
           key={entry.id}
-          pointerEvents={entry.leaving ? 'none' : 'box-none'}
+          pointerEvents="box-none"
           style={StyleSheet.absoluteFill}
         >
           {entry.content}

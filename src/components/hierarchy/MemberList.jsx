@@ -1,172 +1,120 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeftRight, Pencil, Phone, Plus } from 'lucide-react';
-import { BusyOverlay, EmptyState, ErrorState, Skeleton, Toggle } from '../ui';
+import React, { useState } from 'react';
+import { Image, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
+import {
+  BusyOverlay,
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  Toggle,
+} from '../ui';
 import PageSizeSelect from '../PageSizeSelect';
+import { Text } from '../Typography';
+import { absoluteUrl } from '../../api/client';
 import { isAttending } from '../../utils/memberFlags';
+import { telUrl } from '../../utils/contact';
+import { COLORS, RADII, TEXT, WEIGHT, space } from '../../constants/theme';
 
-const PILL =
-  'rounded-full border border-[#E2EAF4] bg-[#EEF2FA] px-2.5 py-1 text-xs font-semibold text-[#6B7FA3]';
-
-const PILL_SM =
-  'rounded-full border border-[#E2EAF4] bg-[#EEF2FA] px-2 py-0.5 text-xs font-semibold text-[#6B7FA3]';
-
-// One definition, in utils/memberFlags.js — re-exported so this module's
-// existing importers keep working.
 export { isAttending, statusLabel } from '../../utils/memberFlags';
 
-function StatusSwitch({ row, onToggle, busy, compact = false }) {
+const PILL_LINE = '#E2EAF4';
+const PILL_BG = '#EEF2FA';
+const PILL_FG = '#6B7FA3';
+const DASH = '#C0CDE0';
+
+function StatusSwitch({ row, onToggle, busy }) {
   if (row.status === null || row.status === undefined || row.status === '') {
-    return <span className="text-sm text-[#C0CDE0]">—</span>;
+    return <Text style={styles.dash}>—</Text>;
   }
 
   const attending = isAttending(row.status);
 
   return (
-    <div
-      className={`flex items-center ${compact ? 'gap-2' : 'gap-2.5'}`}
-      onClick={e => e.stopPropagation()}
-    >
+    <View style={styles.status}>
       <Toggle
         checked={attending}
         disabled={busy}
         onChange={() => onToggle?.(row)}
         label={`Mark ${row.user_name} as ${attending ? 'Not Attending' : 'Attending'}`}
       />
-      <span
-        className={`whitespace-nowrap text-xs font-semibold ${
-          attending ? 'text-success-fg' : 'text-danger-fg'
-        }`}
+      <Text
+        style={[
+          styles.statusText,
+          attending ? styles.statusOk : styles.statusBad,
+        ]}
       >
         {attending ? 'Attending' : 'Not Attending'}
-      </span>
-    </div>
-  );
-}
-
-function EditLink({ to, name }) {
-  return (
-    <Link
-      to={to}
-      onClick={e => e.stopPropagation()}
-      aria-label={`Edit ${name || 'member'}`}
-      className="text-sm font-semibold text-accent transition-colors hover:text-accent-hover hover:underline"
-    >
-      Edit
-    </Link>
+      </Text>
+    </View>
   );
 }
 
 function FamilyBadge({ row }) {
   if (!row?.is_family_member) return null;
   return (
-    <span
-      className="shrink-0 rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
-      title={
+    <View
+      style={styles.family}
+      accessibilityLabel={
         row.managed_by_name
           ? `Family member of ${row.managed_by_name}`
           : 'Family member — shares a family number'
       }
     >
-      Family
-    </span>
-  );
-}
-
-/** Name + mobile. Presentational — whatever wraps it decides where it leads. */
-function Identity({ row }) {
-  return (
-    <div className="min-w-0">
-      <div className="flex items-center gap-1.5">
-        <p className="truncate text-sm font-semibold text-primary">
-          {row.user_name || '—'}
-        </p>
-        <FamilyBadge row={row} />
-      </div>
-      <p className="text-xs text-[#6B7FA3]">
-        {/* A parent-managed child's `mobile_number` is a placeholder (…C1) with
-            no SIM; show/dial their reachable `contact_number` (the parent's). */}
-        {row.contact_number || row.mobile_number || ''}
-      </p>
-    </div>
+      <Text style={styles.familyText}>Family</Text>
+    </View>
   );
 }
 
 function CallLink({ mobile, name }) {
-  if (!mobile) return null;
-  if (/[a-z]/i.test(String(mobile))) return null;
-  const dial = String(mobile).replace(/[^\d+]/g, '');
+  // A managed child's placeholder number has letters in it and cannot be dialled.
+  if (!mobile || /[a-z]/i.test(String(mobile))) return null;
   return (
-    <a
-      href={`tel:${dial}`}
-      onClick={e => e.stopPropagation()}
-      aria-label={`Call ${name || 'member'} on ${mobile}`}
-      className="mt-0.5 inline-flex items-center gap-1 text-xs text-[#6B7FA3] transition-colors hover:text-accent hover:underline"
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`Call ${name || 'member'} on ${mobile}`}
+      onPress={() => Linking.openURL(telUrl(mobile))}
+      hitSlop={6}
+      style={styles.call}
     >
-      <Phone className="h-3 w-3 shrink-0" />
-      {mobile}
-    </a>
-  );
-}
-
-function ActionIcon({ icon: Icon }) {
-  return (
-    <span className="shrink-0 rounded-md p-1 text-[#9BB5CB]">
-      <Icon className="h-3.5 w-3.5" />
-    </span>
-  );
-}
-
-function ActionCell({ onClick, label, className = '', children }) {
-  if (!onClick) {
-    return (
-      <td className={`whitespace-nowrap px-3 py-2.5 ${className}`}>
-        {children}
-      </td>
-    );
-  }
-
-  return (
-    <td className={`whitespace-nowrap p-0 ${className}`}>
-      <button
-        type="button"
-        onClick={e => {
-          e.stopPropagation();
-          onClick();
-        }}
-        title={label}
-        aria-label={label}
-        className="flex h-full w-full items-center gap-1.5 px-3 py-2.5 text-left"
-      >
-        {children}
-      </button>
-    </td>
-  );
-}
-
-/** The same whole-surface action for the mobile cards, where the box is a pill. */
-function ActionPill({ onClick, label, className, children }) {
-  if (!onClick) {
-    return (
-      <span className={`${className} inline-flex items-center gap-1`}>
-        {children}
-      </span>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={e => {
-        e.stopPropagation();
-        onClick();
+      {({ pressed }) => {
+        const color = pressed ? COLORS.accent : PILL_FG;
+        return (
+          <>
+            <MaterialCommunityIcons name="phone" size={space(3)} color={color} />
+            <Text style={[styles.callText, { color }]}>{mobile}</Text>
+          </>
+        );
       }}
-      title={label}
-      aria-label={label}
-      className={`${className} inline-flex items-center gap-1`}
+    </Pressable>
+  );
+}
+
+function ActionIcon({ name }) {
+  return (
+    <MaterialCommunityIcons
+      name={name}
+      size={space(3.5)}
+      color={COLORS.textFaint}
+    />
+  );
+}
+
+/** A pill that is the whole target for its action, or plain when there is none. */
+function ActionPill({ onPress, label, accent = false, children }) {
+  const box = [styles.pill, accent && styles.pillAccent];
+  if (!onPress) return <View style={box}>{children}</View>;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [box, pressed && styles.pillPressed]}
     >
       {children}
-    </button>
+    </Pressable>
   );
 }
 
@@ -174,26 +122,31 @@ function FollowupBody({ row, actionable }) {
   const name = row.followup_by_id_name;
 
   if (!name) {
-    if (!actionable) return <span className="text-[#C0CDE0]">—</span>;
+    if (!actionable) return <Text style={styles.dash}>—</Text>;
     return (
-      // No size of its own: it reads at whatever the surrounding cell or pill
-      // sets, so the table and the cards stay in step.
-      <span className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-accent">
-        <Plus className="h-3 w-3 shrink-0" />
-        Assign followup
-      </span>
+      <>
+        <MaterialCommunityIcons
+          name="plus"
+          size={space(3)}
+          color={COLORS.accent}
+        />
+        <Text style={[styles.pillText, styles.pillTextAccent]}>
+          Assign followup
+        </Text>
+      </>
     );
   }
 
   return (
     <>
-      <span className="truncate">{name}</span>
-      {actionable && <ActionIcon icon={Pencil} />}
+      <Text numberOfLines={1} style={[styles.pillText, styles.pillTextAccent]}>
+        {name}
+      </Text>
+      {actionable && <ActionIcon name="pencil" />}
     </>
   );
 }
 
-/** The label the Follow-up cell announces, which depends on whether one is set. */
 const followupLabel = row =>
   row.followup_by_id_name
     ? `Change follow-up for ${row.user_name || 'member'}`
@@ -203,391 +156,227 @@ const transferLabel = row =>
   `Transfer ${row.user_name || 'member'} to another Sabha`;
 const roleLabel = row => `Assign a role to ${row.user_name || 'member'}`;
 
-// The member's photo when they have one, their initial otherwise. The image URL
-// is served publicly (no auth header needed for an <img>), and `src` is only set
-// for members who actually have a photo — so there is no 404 per photo-less row.
-// A missing file still falls back to the initial via `onError`.
-function Avatar({ name, src, size = 'h-8 w-8' }) {
+/** The member's photo when they have one, their initial otherwise. */
+function Avatar({ name, src }) {
   const [failed, setFailed] = useState(false);
   const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
-  const showImage = Boolean(src) && !failed;
+  const uri = absoluteUrl(src);
+
   return (
-    <div
-      className={`${size} flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-bold text-white`}
-    >
-      {showImage ? (
-        <img
-          src={src}
-          alt=""
-          loading="lazy"
-          className="h-full w-full object-cover"
+    <View style={styles.avatar}>
+      {uri && !failed ? (
+        <Image
+          source={{ uri }}
+          style={styles.avatarImage}
           onError={() => setFailed(true)}
         />
       ) : (
-        initial
+        <Text style={styles.avatarText}>{initial}</Text>
       )}
-    </div>
+    </View>
   );
 }
 
-// ── Mobile cards ───────────────────────────────────────────────────────────
-function MemberCards({
-  rows,
-  onSelect,
+function MemberCard({
+  row,
   canChangeStatus,
   onStatusToggle,
   statusBusy,
-  editPath,
-  detailPath,
+  onOpen,
+  onEdit,
   onQuickTransfer,
   onChangeFollowup,
   onAssignRole,
 }) {
+  const name = row.user_name || '—';
+
   return (
-    <div className="space-y-3">
-      {rows.map(row => (
-        <div
-          key={row.id}
-          onClick={() => onSelect?.(row)}
-          className={`card p-4 transition-colors ${onSelect ? 'cursor-pointer active:bg-[#F6F9FD]' : ''}`}
+    <Card style={styles.card}>
+      {onOpen ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`View ${row.user_name || 'member'}`}
+          onPress={() => onOpen(row)}
         >
-          <div className="flex items-start gap-3">
-            <Avatar
+          <Avatar name={row.user_name} src={row.profile_image} />
+        </Pressable>
+      ) : (
+        <Avatar name={row.user_name} src={row.profile_image} />
+      )}
+
+      <View style={styles.body}>
+        <View style={styles.head}>
+          <View style={styles.identity}>
+            <View style={styles.nameRow}>
+              {onOpen ? (
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={`View ${row.user_name || 'member'}`}
+                  onPress={() => onOpen(row)}
+                  hitSlop={6}
+                  style={styles.nameLink}
+                >
+                  <Text numberOfLines={1} style={styles.name}>
+                    {name}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text numberOfLines={1} style={[styles.name, styles.nameLink]}>
+                  {name}
+                </Text>
+              )}
+              <FamilyBadge row={row} />
+            </View>
+            {/* A managed child is reached on the parent's number. */}
+            <CallLink
+              mobile={row.contact_number || row.mobile_number}
               name={row.user_name}
-              src={row.profile_image}
-              size="h-10 w-10"
             />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                {/* Name links to the profile; the mobile number is a separate
-                    tap-to-call link (they can't nest — an <a> inside an <a> is
-                    invalid). */}
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    {detailPath ? (
-                      <Link
-                        to={detailPath(row)}
-                        onClick={e => e.stopPropagation()}
-                        aria-label={`View ${row.user_name || 'member'}`}
-                        className="block min-w-0"
-                      >
-                        <p className="truncate text-sm font-semibold text-primary">
-                          {row.user_name || '—'}
-                        </p>
-                      </Link>
-                    ) : (
-                      <p className="truncate text-sm font-semibold text-primary">
-                        {row.user_name || '—'}
-                      </p>
-                    )}
-                    <FamilyBadge row={row} />
-                  </div>
-                  <CallLink
-                    mobile={row.contact_number || row.mobile_number}
-                    name={row.user_name}
-                  />
-                </div>
-                {editPath && (
-                  <EditLink to={editPath(row)} name={row.user_name} />
-                )}
-              </div>
+          </View>
 
-              {/* Each pill is the whole target for its action, the same way each
-                  table cell is — the pencil inside it is a hint, not the hit
-                  area. */}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {row.role_name && (
-                  <ActionPill
-                    onClick={onAssignRole && (() => onAssignRole(row))}
-                    label={roleLabel(row)}
-                    className={PILL}
-                  >
-                    {row.role_name}
-                    {onAssignRole && <ActionIcon icon={Pencil} />}
-                  </ActionPill>
-                )}
-                {row.sabha_name && (
-                  <ActionPill
-                    onClick={onQuickTransfer && (() => onQuickTransfer(row))}
-                    label={transferLabel(row)}
-                    className={PILL}
-                  >
-                    {row.sabha_name}
-                    {onQuickTransfer && <ActionIcon icon={ArrowLeftRight} />}
-                  </ActionPill>
-                )}
-                {(row.followup_by_id_name || onChangeFollowup) && (
-                  <ActionPill
-                    onClick={onChangeFollowup && (() => onChangeFollowup(row))}
-                    label={followupLabel(row)}
-                    className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent"
-                  >
-                    <FollowupBody
-                      row={row}
-                      actionable={Boolean(onChangeFollowup)}
-                    />
-                  </ActionPill>
-                )}
-              </div>
+          {onEdit && (
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={`Edit ${row.user_name || 'member'}`}
+              onPress={() => onEdit(row)}
+              hitSlop={8}
+            >
+              <Text style={styles.edit}>Edit</Text>
+            </Pressable>
+          )}
+        </View>
 
-              {/* Without the grant the card ends at the pills — no divider, no
-                  row, nothing standing in for a control that isn't there. */}
-              {canChangeStatus && (
-                <div className="mt-3 border-t border-[#F0F4F9] pt-3">
-                  <StatusSwitch
-                    row={row}
-                    onToggle={onStatusToggle}
-                    busy={statusBusy}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
+        <View style={styles.pills}>
+          {row.role_name ? (
+            <ActionPill
+              onPress={onAssignRole && (() => onAssignRole(row))}
+              label={roleLabel(row)}
+            >
+              <Text style={styles.pillText}>{row.role_name}</Text>
+              {onAssignRole && <ActionIcon name="pencil" />}
+            </ActionPill>
+          ) : null}
+          {row.sabha_name ? (
+            <ActionPill
+              onPress={onQuickTransfer && (() => onQuickTransfer(row))}
+              label={transferLabel(row)}
+            >
+              <Text style={styles.pillText}>{row.sabha_name}</Text>
+              {onQuickTransfer && <ActionIcon name="swap-horizontal" />}
+            </ActionPill>
+          ) : null}
+          {(row.followup_by_id_name || onChangeFollowup) && (
+            <ActionPill
+              accent
+              onPress={onChangeFollowup && (() => onChangeFollowup(row))}
+              label={followupLabel(row)}
+            >
+              <FollowupBody row={row} actionable={Boolean(onChangeFollowup)} />
+            </ActionPill>
+          )}
+        </View>
+
+        {canChangeStatus && (
+          <View style={styles.statusRow}>
+            <StatusSwitch
+              row={row}
+              onToggle={onStatusToggle}
+              busy={statusBusy}
+            />
+          </View>
+        )}
+      </View>
+    </Card>
   );
 }
 
-// ── Desktop table ──────────────────────────────────────────────────────────
-// Headings only — the columns are not sortable. The list is server-paged in
-// 100-record blocks, so a sort has to be a server sort; it is not offered here.
-//
-// Status is the one conditional column — appended only with
-// USERS:BULK_STATUS_UPDATE, so the header count and the cells below it stay in
-// step. Both places read `canChangeStatus`; neither may be changed alone.
-const COLUMNS = [
-  { key: 'user_name', label: 'Name' },
-  { key: 'sabha_name', label: 'Sabha' },
-  { key: 'followup_by_id_name', label: 'Follow-up' },
-  { key: 'role_name', label: 'Role' },
-];
-
-const STATUS_COLUMN = { key: 'status', label: 'Status' };
-
-function MemberTable({
-  rows,
-  onSelect,
-  canChangeStatus,
-  onStatusToggle,
-  statusBusy,
-  editPath,
-  detailPath,
-  onQuickTransfer,
-  onChangeFollowup,
-  onAssignRole,
-}) {
-  const columns = canChangeStatus ? [...COLUMNS, STATUS_COLUMN] : COLUMNS;
-
-  return (
-    <div className="card overflow-hidden !p-0">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr>
-              {columns.map(c => (
-                <th key={c.key} className="table-th px-3 py-2.5">
-                  {c.label}
-                </th>
-              ))}
-              {editPath && (
-                <th className="table-th w-px px-3 py-2.5">
-                  <span className="sr-only">Actions</span>
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(row => (
-              <tr
-                key={row.id}
-                onClick={() => onSelect?.(row)}
-                className={`border-t border-[#F0F4F9] transition-colors hover:bg-[#F9FBFD] ${
-                  onSelect ? 'cursor-pointer' : ''
-                }`}
-              >
-                {/* Name — the whole cell, avatar included, opens the member. */}
-                {detailPath ? (
-                  <td className="whitespace-nowrap p-0">
-                    <Link
-                      to={detailPath(row)}
-                      onClick={e => e.stopPropagation()}
-                      aria-label={`View ${row.user_name || 'member'}`}
-                      className="flex h-full w-full items-center gap-3 px-3 py-2.5"
-                    >
-                      <Avatar name={row.user_name} src={row.profile_image} />
-                      <Identity row={row} />
-                    </Link>
-                  </td>
-                ) : (
-                  <td className="whitespace-nowrap px-3 py-2.5">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={row.user_name} src={row.profile_image} />
-                      <Identity row={row} />
-                    </div>
-                  </td>
-                )}
-
-                <ActionCell
-                  onClick={onQuickTransfer && (() => onQuickTransfer(row))}
-                  label={transferLabel(row)}
-                  className="text-[#6B7FA3]"
-                >
-                  <span className="truncate">{row.sabha_name || '—'}</span>
-                  {onQuickTransfer && <ActionIcon icon={ArrowLeftRight} />}
-                </ActionCell>
-
-                <ActionCell
-                  onClick={onChangeFollowup && (() => onChangeFollowup(row))}
-                  label={followupLabel(row)}
-                  className="text-[#6B7FA3]"
-                >
-                  <FollowupBody
-                    row={row}
-                    actionable={Boolean(onChangeFollowup)}
-                  />
-                </ActionCell>
-
-                <ActionCell
-                  onClick={onAssignRole && (() => onAssignRole(row))}
-                  label={roleLabel(row)}
-                >
-                  {row.role_name ? (
-                    <span className={PILL_SM}>{row.role_name}</span>
-                  ) : (
-                    <span className="text-[#C0CDE0]">—</span>
-                  )}
-                  {onAssignRole && <ActionIcon icon={Pencil} />}
-                </ActionCell>
-                {canChangeStatus && (
-                  <td className="whitespace-nowrap px-3 py-2.5">
-                    <StatusSwitch
-                      row={row}
-                      onToggle={onStatusToggle}
-                      busy={statusBusy}
-                      compact
-                    />
-                  </td>
-                )}
-                {editPath && (
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                    <EditLink to={editPath(row)} name={row.user_name} />
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
+/**
+ * The members list, as cards. Every action is a callback, and one that is not
+ * passed is not drawn: the grant behind it is the caller's business.
+ */
 export default function MemberList({
   rows = [],
   loading,
   error,
   onRetry,
-  onSelect,
   /** A refetch while rows are already on screen — paging or filtering. */
   busy = false,
-  /**
-   * USERS:BULK_STATUS_UPDATE. Not "may the switch be operated" but "does the
-   * Status column exist" — false removes the column and the cards' status row
-   * outright, rather than showing a read-only label.
-   */
+  /** Without it the status row is left off the cards altogether. */
   canChangeStatus = false,
   onStatusToggle,
   statusBusy = false,
-  /** (row) => path. Omitted entirely when the user lacks the Edit permission. */
-  editPath = null,
-  /** (row) => path for the member's details page. Without it the name is plain text. */
-  detailPath = null,
-  /** (row) => void. Omitted without TRANSFER:QUICK_TRANSFER — no icon is rendered. */
+  /** (row) => void. Opens the member's details; without it the name is plain. */
+  onOpen = null,
+  onEdit = null,
   onQuickTransfer = null,
-  /** (row) => void. Omitted without the grant — no pencil is rendered. */
   onChangeFollowup = null,
-  /** (row) => void. Omitted without USERS:UPDATE — no pencil is rendered. */
   onAssignRole = null,
 }) {
   if (loading) {
     return (
-      <div className="card space-y-4">
+      <Card style={styles.skeletons}>
         {Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-3.5 w-1/4" />
-              <Skeleton className="h-2.5 w-1/6" />
-            </div>
-            <Skeleton className="h-6 w-24 rounded-full" />
-          </div>
+          <View key={i} style={styles.skeletonRow}>
+            <Skeleton style={styles.skeletonAvatar} />
+            <View style={styles.skeletonCopy}>
+              <Skeleton style={styles.skeletonName} />
+              <Skeleton style={styles.skeletonSub} />
+            </View>
+            <Skeleton style={styles.skeletonPill} />
+          </View>
         ))}
-      </div>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <div className="card">
+      <Card>
         <ErrorState
           error={error}
           onRetry={onRetry}
           title="Failed to load users"
         />
-      </div>
+      </Card>
     );
   }
 
   if (rows.length === 0) {
     return (
-      <div className="card">
+      <Card>
         <EmptyState
           title="No members found"
           hint="Try clearing the search or filters."
         />
-      </div>
+      </Card>
     );
   }
 
-  const shared = {
-    rows,
-    onSelect,
-    canChangeStatus,
-    onStatusToggle,
-    statusBusy,
-    editPath,
-    detailPath,
-    onQuickTransfer,
-    onChangeFollowup,
-    onAssignRole,
-  };
-
   return (
-    // `busy` is a refetch over rows that are already showing — a page change, a
-    // a filter. `loading` above is the first fetch, when there is nothing
-    // to cover yet and the skeleton stands in instead.
-    <div className="relative">
+    <View>
       {busy && <BusyOverlay />}
-      <div className="md:hidden">
-        <MemberCards {...shared} />
-      </div>
-      <div className="hidden md:block">
-        <MemberTable {...shared} />
-      </div>
-    </div>
+      <View style={styles.list}>
+        {rows.map(row => (
+          <MemberCard
+            key={row.id}
+            row={row}
+            canChangeStatus={canChangeStatus}
+            onStatusToggle={onStatusToggle}
+            statusBusy={statusBusy}
+            onOpen={onOpen}
+            onEdit={onEdit}
+            onQuickTransfer={onQuickTransfer}
+            onChangeFollowup={onChangeFollowup}
+            onAssignRole={onAssignRole}
+          />
+        ))}
+      </View>
+    </View>
   );
 }
 
-/** Previous / numbered / Next pager, matching the reference's controls. */
-export function MemberPager({
-  page,
-  pageCount,
-  total,
-  onChange,
-  pageSize,
-  onPageSize,
-}) {
+/** Previous / numbered / Next, with the page-size dropdown beside the count. */
+export function MemberPager({ page, pageCount, onChange, pageSize, onPageSize }) {
   // The size dropdown outlives the page buttons: with 30 members there is one
   // page at 50, and hiding the control would make 50 unreachable.
   if (pageCount <= 1 && !onPageSize) return null;
@@ -609,58 +398,225 @@ export function MemberPager({
   }
 
   return (
-    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-      <div className="flex flex-wrap items-center gap-3">
-        <PageSizeSelect
-          value={pageSize}
-          onChange={onPageSize}
-          id="member-page-size"
-        />
-        <span className="text-sm text-[#6B7FA3]">
+    <View style={styles.pager}>
+      <View style={styles.pagerInfo}>
+        <PageSizeSelect value={pageSize} onChange={onPageSize} />
+        <Text style={styles.pagerCount}>
           Page {page} of {pageCount}
-        </span>
-      </div>
-      <div
-        className={`flex flex-wrap items-center gap-1.5 ${pageCount <= 1 ? 'hidden' : ''}`}
-      >
-        <button
-          onClick={() => onChange(page - 1)}
-          disabled={page <= 1}
-          className="btn-outline px-3 py-2 text-sm disabled:opacity-40"
-        >
-          Previous
-        </button>
-        {items.map((item, i) =>
-          item === 'ellipsis' ? (
-            <span
-              key={`e-${i}`}
-              className="select-none px-1.5 text-sm text-[#9AA8C0]"
-            >
-              …
-            </span>
-          ) : (
-            <button
-              key={item}
-              onClick={() => onChange(item)}
-              aria-current={page === item ? 'page' : undefined}
-              className={`min-w-[36px] rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors ${
-                page === item
-                  ? 'bg-primary text-white'
-                  : 'border border-[#E2EAF4] text-[#6B7FA3] hover:bg-primary-50 hover:text-primary'
-              }`}
-            >
-              {item}
-            </button>
-          ),
-        )}
-        <button
-          onClick={() => onChange(page + 1)}
-          disabled={page >= pageCount}
-          className="btn-outline px-3 py-2 text-sm disabled:opacity-40"
-        >
-          Next
-        </button>
-      </div>
-    </div>
+        </Text>
+      </View>
+
+      {pageCount > 1 && (
+        <View style={styles.pagerButtons}>
+          <Button
+            onPress={() => onChange(page - 1)}
+            disabled={page <= 1}
+            style={styles.pagerStep}
+            textStyle={styles.pagerStepText}
+          >
+            Previous
+          </Button>
+          {items.map((item, i) =>
+            item === 'ellipsis' ? (
+              <Text key={`e-${i}`} style={styles.pagerEllipsis}>
+                …
+              </Text>
+            ) : (
+              <Pressable
+                key={item}
+                accessibilityRole="button"
+                accessibilityLabel={`Page ${item}`}
+                accessibilityState={{ selected: page === item }}
+                onPress={() => onChange(item)}
+                style={[
+                  styles.pagerPage,
+                  page === item && styles.pagerPageActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.pagerPageText,
+                    page === item && styles.pagerPageTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </Pressable>
+            ),
+          )}
+          <Button
+            onPress={() => onChange(page + 1)}
+            disabled={page >= pageCount}
+            style={styles.pagerStep}
+            textStyle={styles.pagerStepText}
+          >
+            Next
+          </Button>
+        </View>
+      )}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  list: { gap: space(3) },
+  card: { flexDirection: 'row', alignItems: 'flex-start', gap: space(3) },
+  body: { flex: 1, minWidth: 0 },
+  head: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: space(3),
+  },
+  identity: { flex: 1, minWidth: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: space(1.5) },
+  nameLink: { flexShrink: 1 },
+  name: {
+    fontSize: TEXT.sm,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.primary,
+  },
+  edit: {
+    fontSize: TEXT.sm,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.accent,
+  },
+
+  avatar: {
+    width: space(10),
+    height: space(10),
+    borderRadius: RADII.full,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: { width: '100%', height: '100%' },
+  avatarText: {
+    fontSize: TEXT.sm,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.white,
+  },
+
+  family: {
+    borderRadius: RADII.full,
+    backgroundColor: COLORS.primary50,
+    paddingHorizontal: space(1.5),
+    paddingVertical: space(0.5),
+  },
+  familyText: {
+    fontSize: 10,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.primary,
+  },
+
+  call: {
+    alignSelf: 'flex-start',
+    marginTop: space(0.5),
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(1),
+  },
+  callText: { fontSize: TEXT.xs },
+
+  pills: {
+    marginTop: space(2),
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space(2),
+  },
+  pill: {
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(1),
+    borderRadius: RADII.full,
+    borderWidth: 1,
+    borderColor: PILL_LINE,
+    backgroundColor: PILL_BG,
+    paddingHorizontal: space(2.5),
+    paddingVertical: space(1),
+  },
+  pillAccent: {
+    borderColor: 'rgba(255,134,42,0.2)',
+    backgroundColor: 'rgba(255,134,42,0.1)',
+  },
+  pillPressed: { opacity: 0.7 },
+  pillText: {
+    flexShrink: 1,
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.semibold,
+    color: PILL_FG,
+  },
+  pillTextAccent: { color: COLORS.accent },
+  dash: { fontSize: TEXT.sm, color: DASH },
+
+  statusRow: {
+    marginTop: space(3),
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F9',
+    paddingTop: space(3),
+  },
+  status: { flexDirection: 'row', alignItems: 'center', gap: space(2.5) },
+  statusText: { fontSize: TEXT.xs, fontWeight: WEIGHT.semibold },
+  statusOk: { color: COLORS.successFg },
+  statusBad: { color: COLORS.dangerFg },
+
+  skeletons: { gap: space(4) },
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: space(3) },
+  skeletonAvatar: {
+    width: space(10),
+    height: space(10),
+    borderRadius: RADII.full,
+  },
+  skeletonCopy: { flex: 1, gap: space(2) },
+  skeletonName: { height: space(3.5), width: '50%' },
+  skeletonSub: { height: space(2.5), width: '30%' },
+  skeletonPill: {
+    height: space(6),
+    width: space(20),
+    borderRadius: RADII.full,
+  },
+
+  pager: { gap: space(3) },
+  pagerInfo: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space(3),
+  },
+  pagerCount: { fontSize: TEXT.sm, color: PILL_FG },
+  pagerButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space(1.5),
+  },
+  pagerStep: { paddingHorizontal: space(3), paddingVertical: space(2) },
+  pagerStepText: { fontSize: TEXT.sm },
+  pagerEllipsis: {
+    paddingHorizontal: space(1.5),
+    fontSize: TEXT.sm,
+    color: '#9AA8C0',
+  },
+  pagerPage: {
+    minWidth: 36,
+    alignItems: 'center',
+    borderRadius: RADII.lg,
+    borderWidth: 1,
+    borderColor: PILL_LINE,
+    paddingHorizontal: space(2.5),
+    paddingVertical: space(2),
+  },
+  pagerPageActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
+  },
+  pagerPageText: {
+    fontSize: TEXT.sm,
+    fontWeight: WEIGHT.semibold,
+    color: PILL_FG,
+  },
+  pagerPageTextActive: { color: COLORS.white },
+});

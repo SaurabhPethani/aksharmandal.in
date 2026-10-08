@@ -293,9 +293,12 @@ const DRAWER_SHADOW = 24;
  * @property {() => void} [onDashboard]
  * @property {() => void} [onOpenEvents]
  * @property {() => void} [onOpenYuvaSeva]
+ * @property {() => void} [onOpenUsers]
  * @property {string} [activeRoute]
  * @property {string} [roleName]
  * @property {boolean} [showYuvaSeva]
+ * @property {boolean} [showUsers]
+ * @property {string} [usersLabel]
  */
 
 /**
@@ -310,9 +313,12 @@ export const Drawer = forwardRef(function Drawer(
     onDashboard,
     onOpenEvents,
     onOpenYuvaSeva,
+    onOpenUsers,
     activeRoute = 'dashboard',
     roleName,
     showYuvaSeva = true,
+    showUsers = false,
+    usersLabel,
   },
   ref,
 ) {
@@ -414,28 +420,27 @@ export const Drawer = forwardRef(function Drawer(
               'view-dashboard-outline',
               'Dashboard',
               activeRoute === 'dashboard',
+              onDashboard,
             ],
-
+            showUsers && [
+              'account-group-outline',
+              usersLabel || 'Users',
+              activeRoute === 'users' || activeRoute === 'user-details',
+              onOpenUsers,
+            ],
             showYuvaSeva && [
               'hand-heart',
               'Yuva Seva',
               activeRoute === 'yuva-seva',
+              onOpenYuvaSeva,
             ],
-            ['calendar-star', 'Events', activeRoute === 'events'],
+            ['calendar-star', 'Events', activeRoute === 'events', onOpenEvents],
           ]
             .filter(Boolean)
-            .map(([icon, label, active]) => (
+            .map(([icon, label, active, action]) => (
               <Pressable
                 key={label}
-                onPress={() =>
-                  go(
-                    label === 'Dashboard'
-                      ? onDashboard
-                      : label === 'Events'
-                        ? onOpenEvents
-                        : onOpenYuvaSeva,
-                  )
-                }
+                onPress={() => go(action)}
                 style={[styles.drawerItem, active && styles.drawerItemActive]}
               >
                 <MaterialCommunityIcons

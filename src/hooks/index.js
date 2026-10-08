@@ -31,6 +31,7 @@ export { useNavigation } from './useNavigation';
 export {
   usePradeshList, useMandals, useSabhas, useSabhaById, useMandalById,
   useMyGroupLeaderships,
+  useTransferDestinationMandals, useTransferDestinationSabhas,
 } from './useHierarchy';
 
 export {

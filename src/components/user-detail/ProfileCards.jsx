@@ -10,6 +10,7 @@ import {
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Card, EmptyState, Loader } from '../ui';
 import { Tabs } from '../Navigation';
+import { PhotoViewer } from '../Overlays';
 import { Text } from '../Typography';
 import { FONT_DISPLAY } from '../../constants/typography';
 import {
@@ -361,12 +362,19 @@ export function ProfileHero({
 }) {
   const { width } = useWindowDimensions();
   const wide = width >= 640;
+  const [viewing, setViewing] = useState(false);
 
   return (
     <Card style={styles.heroCard}>
       <View style={[styles.hero, wide && styles.heroWide]}>
         <View style={styles.avatarWrap}>
-          <View style={styles.avatar}>
+          <Pressable
+            accessibilityRole="imagebutton"
+            accessibilityLabel="View profile photo"
+            disabled={!photo}
+            onPress={() => setViewing(true)}
+            style={styles.avatar}
+          >
             {photo ? (
               <Image source={{ uri: photo }} style={styles.avatarImage} />
             ) : (
@@ -376,7 +384,7 @@ export function ProfileHero({
                 color={COLORS.primary}
               />
             )}
-          </View>
+          </Pressable>
           {photoSlot}
         </View>
 
@@ -401,6 +409,12 @@ export function ProfileHero({
 
         {actions && <View style={styles.heroActions}>{actions}</View>}
       </View>
+
+      <PhotoViewer
+        uri={viewing ? photo : null}
+        title={name}
+        onClose={() => setViewing(false)}
+      />
     </Card>
   );
 }

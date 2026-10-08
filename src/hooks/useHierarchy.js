@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { hierarchyService } from '../services/hierarchyService';
 import { groupsService } from '../services/groupsService';
+import { transferService } from '../services/transferService';
 import { HIERARCHY_CACHE } from './cache';
 
 /**
@@ -78,5 +79,53 @@ export function useMandalById(mandalId, enabled = true) {
     queryFn: () => hierarchyService.mandalById(mandalId),
     enabled: Boolean(mandalId) && enabled,
     ...HIERARCHY_CACHE,
+  });
+}
+
+/**
+ * TRANSFER-ONLY destination pickers (id + name). These call the transfer
+ * feature's own endpoints, which are clamped ONE band wider than READ (Sabha
+ * authority → own Mandal, Mandal authority → own Pradesh) — so a Sabha Head can
+ * actually see the sibling Sabhas they are allowed to transfer INTO, which the
+ * H5-clamped `useSabhas`/`useMandals` (READ scope) cannot show. Use these ONLY
+ * in the transfer dialog; never for the hierarchy tree.
+ */
+export function useTransferDestinationMandals(enabled) {
+  return useHierarchyLevel(
+    ['transfer-dest-mandals'],
+    () => transferService.destinationMandals(),
+    enabled
+  );
+}
+
+export function useTransferDestinationSabhas(mandalId, enabled) {
+  return useHierarchyLevel(
+    ['transfer-dest-sabhas', mandalId ?? 'none'],
+    () => transferService.destinationSabhas(mandalId),
+    // Never fall back to an unscoped list: without a Mandal there is nothing to
+    // ask for, and a blank id would post a bad query param.
+    enabled && Boolean(mandalId)
+  );
+}
+
+/**
+ * Active groups + their member entities, for the Hierarchy mind-map overlay.
+ *
+ * ONE read-only call (`GET /groups/in-scope`), gated on HIERARCHY:READ — so every
+ * hierarchy reader sees group nodes, not only GROUP:MANAGE holders. Returns each
+ * group's `members` (entity ids to nest under a parent) and `leaders` (names)
+ * already assembled server-side. `api.get` unwraps the envelope, so the result
+ * is the array directly. Fails soft to [] so the tree never breaks on a group
+ * read error.
+ */
+export function useHierarchyGroups(enabled) {
+  return useQuery({
+    queryKey: ['hierarchy-groups-overlay'],
+    enabled: Boolean(enabled),
+    ...HIERARCHY_CACHE,
+    queryFn: async () => {
+      const rows = await groupsService.inScope();
+      return Array.isArray(rows) ? rows : [];
+    },
   });
 }

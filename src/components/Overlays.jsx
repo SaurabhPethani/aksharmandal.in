@@ -9,6 +9,7 @@ import React, {
 import {
   Animated,
   Easing,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   PanResponder,
@@ -40,11 +41,14 @@ const MAX_HEIGHT = 0.7;
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 1.2;
 
-// The card rises this far (dp) into place as it opens, and slides off the
-// bottom of the screen as it closes.
+// The card rises this far (dp) into place as it opens.
 const ENTER_RISE = 24;
 const ENTER_MS = 180;
+// A card pulled down slides off the screen for this long before it closes.
 const LEAVE_MS = 160;
+// How long an owner has to close a dialog that took itself down, before the
+// dialog is put back.
+const REOPEN_MS = 300;
 
 // `2xl` exists for dialogs that lay content out in columns.
 const SIZES = {
@@ -96,81 +100,74 @@ export function Modal({
   const { height } = useWindowDimensions();
   const overlay = useOverlay();
 
-  // How far below its place the card sits: a drag, or the slide away.
+  // How far below its place the card sits while it is pulled down.
   const drag = useRef(new Animated.Value(0)).current;
   // 0 → 1 as the card arrives.
   const shown = useRef(new Animated.Value(0)).current;
-  // 'closed', 'open', or 'leaving' while the card slides away.
-  const phase = useRef('closed');
+  // Set from the moment the dialog takes itself down until its owner answers:
+  // a token, so that an old close cannot answer for a newer one.
+  const dismissed = useRef(null);
   const entry = useRef(null);
   // The responder and the callbacks are created once, so they read the
   // current props through this.
   const latest = useRef({ isOpen, dismissible, onClose, height });
   latest.current = { isOpen, dismissible, onClose, height };
 
-  // Slides the card off the screen. It stops counting as open straight away,
-  // so the screen behind is sharp and usable while it goes.
-  const leave = useCallback(() => {
-    phase.current = 'leaving';
-    overlay.retire();
-    Animated.timing(drag, {
-      toValue: latest.current.height,
-      duration: LEAVE_MS,
-      easing: Easing.in(Easing.quad),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished || phase.current !== 'leaving') return;
-      if (latest.current.isOpen) {
-        // The owner kept it open, so it comes back.
-        phase.current = 'open';
+  // ✕, Cancel, the backdrop, Android's back button and a pull down all end
+  // here. The dialog is taken down first and its owner told a tick later, so
+  // the owner's re-render cannot hold the close up. Nothing here waits on an
+  // animation: on a phone one does not always report that it finished.
+  const close = useCallback(() => {
+    const now = latest.current;
+    if (!now.isOpen || !now.dismissible || dismissed.current) return;
+    const mine = {};
+    dismissed.current = mine;
+    overlay.remove();
+    setTimeout(() => {
+      latest.current.onClose?.();
+      // An owner that keeps it open gets the dialog back.
+      setTimeout(() => {
+        if (dismissed.current !== mine || !latest.current.isOpen) return;
+        dismissed.current = null;
         drag.setValue(0);
         overlay.show(entry.current);
-      } else {
-        phase.current = 'closed';
-        overlay.remove();
-      }
-    });
+      }, REOPEN_MS);
+    }, 0);
   }, [drag, overlay]);
 
-  // ✕, the backdrop, Android's back button and a pull down all end here. The
-  // card goes at once; the owner is told a tick later, so that its re-render
-  // does not hold the slide up.
-  const close = useCallback(() => {
-    if (!latest.current.dismissible || phase.current !== 'open') return;
-    leave();
-    setTimeout(() => latest.current.onClose?.(), 0);
-  }, [leave]);
-
   useEffect(() => {
-    if (isOpen) {
-      // A card caught while sliding away is simply put back; a new one comes
-      // in from below.
-      if (phase.current === 'closed') shown.setValue(0);
-      phase.current = 'open';
-      // Every opening starts at rest, not where the last drag left the card.
-      drag.setValue(0);
-      // A card opened over a keyboard would sit behind it: the keyboard
-      // wrapper only learns of a keyboard that opens after it mounts. So the
-      // keyboard goes first, before the card's own fields can take focus.
-      Keyboard.dismiss();
-    } else if (phase.current === 'open') {
-      // Closed by the owner: Cancel, a pick, or a save that went through.
-      leave();
+    dismissed.current = null;
+    if (!isOpen) {
+      overlay.remove();
+      return;
     }
-  }, [isOpen, drag, shown, leave]);
+    // Every opening starts at rest, and comes in from below.
+    drag.setValue(0);
+    shown.setValue(0);
+    // A card opened over a keyboard would sit behind it: the keyboard wrapper
+    // only learns of a keyboard that opens after it mounts. So the keyboard
+    // goes first, before the card's own fields can take focus.
+    Keyboard.dismiss();
+  }, [isOpen, drag, shown, overlay]);
 
   const swipe = useRef(
     PanResponder.create({
       // Only a mostly-vertical pull downward, so a tap still reaches ✕.
       onMoveShouldSetPanResponder: (_, g) =>
         latest.current.dismissible &&
-        phase.current === 'open' &&
         g.dy > 6 &&
         Math.abs(g.dy) > Math.abs(g.dx),
       onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
       onPanResponderRelease: (_, g) => {
         if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) {
-          close();
+          // The slide is only for show: the close is on a timer of its own.
+          Animated.timing(drag, {
+            toValue: latest.current.height,
+            duration: LEAVE_MS,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }).start();
+          setTimeout(close, LEAVE_MS);
         } else {
           Animated.spring(drag, {
             toValue: 0,
@@ -341,8 +338,7 @@ export function Modal({
 
   // Rendered on the app's own overlay layer, not in a window of its own — see
   // contexts/OverlayContext. Nothing is drawn here.
-  // No dependency list: the content is fresh on every render while open. Once
-  // closed it is left as it was, which is what slides away.
+  // No dependency list: the content is fresh on every render while open.
   entry.current = {
     content: (
       <CloseContext.Provider value={close}>{content}</CloseContext.Provider>
@@ -350,9 +346,82 @@ export function Modal({
     onRequestClose: close,
   };
   useEffect(() => {
-    if (isOpen) {
-      overlay.show({ ...entry.current, leaving: phase.current !== 'open' });
+    if (isOpen && !dismissed.current) overlay.show(entry.current);
+  });
+  return null;
+}
+
+/**
+ * A photo at full size over a dark backdrop, under a back arrow and `title`.
+ * A tap anywhere closes it.
+ */
+export function PhotoViewer({ uri, title, onClose }) {
+  const insets = useSafeAreaInsets();
+  const overlay = useOverlay();
+  const shown = useRef(new Animated.Value(0)).current;
+  const open = Boolean(uri);
+
+  useEffect(() => {
+    if (!open) {
+      overlay.remove();
+      return;
     }
+    shown.setValue(0);
+    Keyboard.dismiss();
+  }, [open, shown, overlay]);
+
+  const entry = {
+    content: (
+      <Animated.View
+        style={[
+          styles.viewer,
+          {
+            opacity: shown,
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+          },
+        ]}
+      >
+        <Arrive value={shown} />
+        {/* Sized and placed like the app header, so it sits over it. */}
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={styles.viewerBar}
+        >
+          <View style={styles.viewerBack}>
+            <MaterialCommunityIcons
+              name="arrow-left"
+              size={24}
+              color={COLORS.white}
+            />
+          </View>
+          {title ? (
+            <Text numberOfLines={1} style={styles.viewerTitle}>
+              {title}
+            </Text>
+          ) : null}
+        </Pressable>
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close photo"
+          style={styles.viewerBody}
+        >
+          <Image
+            source={{ uri }}
+            resizeMode="contain"
+            accessibilityLabel={title ? `${title} photo` : 'Photo'}
+            style={styles.fill}
+          />
+        </Pressable>
+      </Animated.View>
+    ),
+    onRequestClose: onClose,
+  };
+  useEffect(() => {
+    if (open) overlay.show(entry);
   });
   return null;
 }
@@ -373,6 +442,32 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10,15,40,0.55)',
   },
   fill: { flex: 1 },
+  viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)' },
+  viewerBar: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space(2),
+    paddingHorizontal: 16,
+  },
+  viewerBack: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerTitle: {
+    flex: 1,
+    fontFamily: FONT_DISPLAY,
+    fontSize: TEXT.base,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.white,
+  },
+  viewerBody: {
+    flex: 1,
+    paddingHorizontal: space(4),
+    paddingBottom: space(4),
+  },
   grabber: { alignItems: 'center', paddingTop: space(2) },
   grabberBar: {
     width: 40,
