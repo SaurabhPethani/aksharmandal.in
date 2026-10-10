@@ -69,6 +69,7 @@ export default function EventCard({
       accessibilityLabel={openable ? `Register for ${event.title}` : undefined}
       style={({ pressed }) => [styles.card, openable && pressed && styles.cardPressed]}
     >
+      <View style={styles.cardClip}>
       <View style={styles.banner}>
         {src ? (
           <Image source={{ uri: src }} style={styles.bannerImage} resizeMode="contain" />
@@ -183,19 +184,23 @@ export default function EventCard({
           </View>
         ) : null}
       </View>
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  // The shadow, border and radius stay on the outer Pressable (no overflow, so
+  // Android keeps the elevation shadow); `cardClip` clips the edge-to-edge
+  // banner to the rounded corners from just inside that border.
   card: {
-    overflow: 'hidden',
     borderRadius: RADII.card,
     borderWidth: 1,
     borderColor: COLORS.lineSoft,
     backgroundColor: COLORS.surface,
     ...SHADOWS.card,
   },
+  cardClip: { borderRadius: RADII.card - 1, overflow: 'hidden' },
   cardPressed: { opacity: 0.9 },
   banner: { height: rem(9), backgroundColor: COLORS.bg },
   bannerImage: { width: '100%', height: '100%' },

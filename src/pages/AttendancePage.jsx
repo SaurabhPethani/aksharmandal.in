@@ -292,16 +292,20 @@ export default function AttendancePage({
   } else {
     content = (
       <View style={styles.landing}>
-        <PageHeader
-          title="Attendance"
-          actions={
-            tools.length ? (
-              <Button variant="ghost" onPress={() => setToolsOpen(true)}>
-                <MaterialCommunityIcons name="dots-vertical" size={space(5)} color={COLORS.primary} />
-              </Button>
-            ) : null
-          }
-        />
+        {/* Cancel PageHeader's own marginBottom so the header-to-tabs gap equals
+            the space(5) gap the landing stack uses everywhere else. */}
+        <View style={styles.headerFlush}>
+          <PageHeader
+            title="Attendance"
+            actions={
+              tools.length ? (
+                <Button variant="ghost" onPress={() => setToolsOpen(true)}>
+                  <MaterialCommunityIcons name="dots-vertical" size={space(5)} color={COLORS.primary} />
+                </Button>
+              ) : null
+            }
+          />
+        </View>
 
         <Tabs
           tabs={TAB_LIST.map(t => ({ value: t.value, label: t.label, count: t.count }))}
@@ -453,6 +457,7 @@ const styles = StyleSheet.create({
   state: { flex: 1, padding: space(4.5) },
   tabSkeleton: { height: space(10), width: '100%' },
   landing: { gap: space(5) },
+  headerFlush: { marginBottom: -space(6) },
   muted: { fontSize: TEXT.sm, color: COLORS.textMuted },
   cardStack: { gap: space(4) },
   cardSkeleton: { height: space(36), width: '100%' },

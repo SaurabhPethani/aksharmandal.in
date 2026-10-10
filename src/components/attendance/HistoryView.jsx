@@ -451,7 +451,7 @@ export default function HistoryView({ onBack }) {
             {busy ? <Skeleton style={styles.curveSkeleton} /> : <ArrivalCurve sitting={sitting} curve={history.curve ?? []} />}
           </Card>
 
-          <Card style={styles.marksCard}>
+          <Card clip>
             <View style={styles.marksHead}>
               <View style={styles.marksTitleRow}>
                 <MaterialCommunityIcons name="clock-outline" size={space(4)} color={COLORS.accent} />
@@ -542,7 +542,6 @@ const styles = StyleSheet.create({
   curveHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space(2), marginBottom: space(2) },
   cardTitle: { fontSize: TEXT.sm, fontWeight: WEIGHT.bold, color: COLORS.primary },
   curveSkeleton: { height: 220, width: '100%' },
-  marksCard: { padding: 0, overflow: 'hidden' },
   marksHead: { gap: space(2), borderBottomWidth: 1, borderBottomColor: COLORS.lineSoft, padding: space(4) },
   marksTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space(2) },
   sortRow: { flexDirection: 'row', gap: space(1), alignSelf: 'flex-start', borderRadius: RADII.xl, borderWidth: 1, borderColor: COLORS.lineSoft, padding: 2 },

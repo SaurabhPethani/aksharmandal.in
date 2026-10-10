@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from '../Typography';
+import { FONT_DISPLAY } from '../../constants/typography';
 import {
   COLORS,
   RADII,
@@ -27,10 +28,22 @@ import {
 // Mobile port: `className` becomes `style`, and an `icon` is a
 // MaterialDesignIcons name rather than a lucide component.
 
-export function Card({ style, children, ...rest }) {
+export function Card({ style, children, clip = false, ...rest }) {
+  // `clip` rounds-and-clips the card's content (a header with a bottom rule, a
+  // table that runs to the edges) WITHOUT putting `overflow: 'hidden'` on the
+  // card itself — on Android that clips the elevation shadow away with it. The
+  // shadow, border and radius stay on the outer view; an inner view one pixel
+  // inside the border does the clipping, so the corners still line up.
+  if (!clip) {
+    return (
+      <View style={[styles.card, style]} {...rest}>
+        {children}
+      </View>
+    );
+  }
   return (
-    <View style={[styles.card, style]} {...rest}>
-      {children}
+    <View style={[styles.card, styles.cardClip, style]} {...rest}>
+      <View style={styles.cardClipInner}>{children}</View>
     </View>
   );
 }
@@ -377,6 +390,10 @@ const styles = StyleSheet.create({
     padding: space(4),
     ...SHADOWS.card,
   },
+  // A clipping card (see Card's `clip` prop): the outer keeps the shadow and
+  // border, the inner clips content to just inside that border.
+  cardClip: { padding: 0 },
+  cardClipInner: { borderRadius: RADII.card - 1, overflow: 'hidden' },
   // .panel
   panel: {
     borderRadius: RADII['2xl'],
@@ -571,6 +588,7 @@ const styles = StyleSheet.create({
   statSkeleton: { height: space(8), width: space(24) },
   statValueRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space(2.5) },
   statValue: {
+    fontFamily: FONT_DISPLAY,
     ...TNUM,
     fontSize: TEXT.stat,
     lineHeight: TEXT.stat,
@@ -608,6 +626,7 @@ const styles = StyleSheet.create({
   // Shrinks, so a long subtitle wraps instead of running off the screen.
   pageHeaderCopy: { flexShrink: 1 },
   pageTitle: {
+    fontFamily: FONT_DISPLAY,
     fontSize: TEXT.xl,
     fontWeight: WEIGHT.bold,
     color: COLORS.primary,

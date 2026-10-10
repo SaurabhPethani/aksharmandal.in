@@ -78,6 +78,25 @@ export const MODULES = {
   /** The Compare report — its own module, one action (VIEW), managed via RBAC
    *  independently of Reports. Route /compare, nav item after Reports. */
   COMPARE: 'COMPARE',
+  /** Reports sub-modules — each an independent VIEW right, nested under Reports
+   *  in the sidebar submenu + Roles. Replace the old coarse REPORTS:READ (which
+   *  gated Weekly Trend + Sabha Wise together) / DOWNLOAD. */
+  REPORT_TREND: 'REPORT_TREND',        // Weekly Trend (+ overview KPIs)
+  REPORT_SABHA: 'REPORT_SABHA',        // Sabha Wise
+  REPORT_DOWNLOAD: 'REPORT_DOWNLOAD',  // Download
+  REPORT_SPECIAL: 'REPORT_SPECIAL',    // Special Sabha History (+ per-sitting special report)
+  /** Yuvak Status — the 6 soul KPI cards; a Reports sub-module (VIEW) open to
+   *  all roles rank >= 20. */
+  REPORT_YUVAK_STATUS: 'REPORT_YUVAK_STATUS',
+  /** Yuva Seva Report — per-follow-up-person scorecard. A Reports sub-module
+   *  (VIEW), gated to Sabha Head and above (rank >= 40). Distinct from YUVA_SEVA
+   *  (the follow-up entry worklist). */
+  REPORT_YUVA_SEVA: 'REPORT_YUVA_SEVA',
+  /** Focus 30 — the per-Sabha follow-up worklist. A Reports sub-module (VIEW). */
+  FOCUS: 'FOCUS',
+  /** Annual Seva report — route /seva/report, breadcrumb "Annual Seva › Report".
+   *  One action (VIEW). */
+  SEVA_REPORT: 'SEVA_REPORT',
   /**
    * The follow-up worklist — who each Nimit Sevak is responsible for, and the
    * contacts logged against them. Declares ADD and nothing else, so a READ check

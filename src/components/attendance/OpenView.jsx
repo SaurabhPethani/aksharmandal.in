@@ -86,7 +86,7 @@ export default function OpenView({ onBack }) {
         </FormField>
       </Card>
 
-      <Card style={styles.listCard}>
+      <Card clip>
         <View style={styles.listHead}>
           <Text style={styles.listHeadText}>Sabhas on this date</Text>
         </View>
@@ -115,7 +115,6 @@ export default function OpenView({ onBack }) {
 const styles = StyleSheet.create({
   stack: { gap: space(5) },
   intro: { fontSize: TEXT.sm, color: COLORS.textMuted, lineHeight: TEXT.sm * 1.4 },
-  listCard: { padding: 0, overflow: 'hidden' },
   listHead: { borderBottomWidth: 1, borderBottomColor: COLORS.lineSoft, paddingHorizontal: space(4), paddingVertical: space(3) },
   listHeadText: { fontSize: TEXT.sm, fontWeight: WEIGHT.semibold, color: COLORS.primary },
   pad: { padding: space(4) },

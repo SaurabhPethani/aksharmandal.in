@@ -128,6 +128,7 @@ function EventGroup({ group, canEdit, busy, onEdit, onCancel, onRestore }) {
 
   return (
     <View style={styles.group}>
+      <View style={styles.groupClip}>
       <Pressable
         onPress={() => setOpen(v => !v)}
         accessibilityRole="button"
@@ -174,6 +175,7 @@ function EventGroup({ group, canEdit, busy, onEdit, onCancel, onRestore }) {
           ))}
         </View>
       ) : null}
+      </View>
     </View>
   );
 }
@@ -200,14 +202,17 @@ export default function RegistrationsByEvent({ rows, canEdit, busy, onEdit, onCa
 
 const styles = StyleSheet.create({
   stack: { gap: space(4) },
+  // Shadow/border/radius on the outer view (no overflow, so Android keeps the
+  // elevation shadow); `groupClip` clips the header + rows to the rounded
+  // corners from just inside the border.
   group: {
-    overflow: 'hidden',
     borderRadius: RADII.card,
     borderWidth: 1,
     borderColor: COLORS.lineSoft,
     backgroundColor: COLORS.surface,
     ...SHADOWS.card,
   },
+  groupClip: { borderRadius: RADII.card - 1, overflow: 'hidden' },
   header: {
     flexDirection: 'row',
     flexWrap: 'wrap',

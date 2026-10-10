@@ -91,6 +91,7 @@ export { useRandomThought, useTodaysThoughtImage, useAllThoughts, useThoughtMuta
 export {
   useOverview, useCompare, useOverviewMembers, useWeeklyTrends, useWeeklyReports, useActivityLogs, useModuleList,
   useSabhaReport, useSabhaReportExport, useWeeklySabhaReport, useSittingReportHeads,
+  useSpecialSabhaRules, useSpecialSabhaHistory,
   useYuvaSevaReport, useAddYuvaSeva,
   useReportDownload, useReportExportFilters,
 } from './useReports';

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listService, reportService, yuvaSevaService } from '../services/reportService';
 import { activityService } from '../services/activityService';
+import { downloadFile } from '../utils/fileDownload';
 import { useDebounced } from './core';
 import { useServerPagination } from './usePagination';
 
@@ -227,6 +228,35 @@ export function useSittingReportHeads(sabhaDetailId, enabled = true) {
 }
 
 /**
+ * The recurring Special Sabha rules the caller may report on — the report's
+ * dropdown. Scope-clamped server-side; gated SPECIAL_SABHA:REPORT (additive with
+ * REPORTS:READ). Returns the whole envelope, since the rows sit under `.data`.
+ */
+export function useSpecialSabhaRules(enabled = true) {
+  return useQuery({
+    queryKey: ['special-sabha-rules'],
+    queryFn: () => reportService.specialSabhaRules(),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * The longitudinal report for one recurring Special Sabha — a per-member P/A
+ * grid across recent weeks, a weekly present-count trend, summary tiles, and
+ * at-risk follow-up lists. `params` is `{ schedule_id, weeks?, week_date? }`;
+ * `enabled` gates it until a schedule is known. The whole envelope is returned —
+ * the payload lives under `.data`.
+ */
+export function useSpecialSabhaHistory(params, enabled = true) {
+  return useQuery({
+    queryKey: ['special-sabha-history', params ?? null],
+    queryFn: () => reportService.specialSabhaHistory(params),
+    enabled: enabled && Boolean(params?.schedule_id),
+  });
+}
+
+/**
  * That report's Excel — the Present attendees of one sitting.
  *
  * Its own hook because the screen that runs it knows the Sabha and nothing else;
@@ -245,15 +275,26 @@ export function useSabhaReportExport() {
   };
 }
 
+/** `{ path, params }` -> `/path?a=1&b=2`, dropping null/undefined values. */
+function withQuery(path, params) {
+  const pairs = Object.entries(params ?? {}).filter(([, v]) => v != null && v !== '');
+  if (!pairs.length) return path;
+  const qs = pairs
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
+  return `${path}${path.includes('?') ? '&' : '?'}${qs}`;
+}
+
 /**
  * Downloads any of the report exports as an Excel file.
  *
- * The blob is turned into a click on an object URL, which is the only way a
- * browser saves bytes it received over XHR — the request carries the bearer
- * token, so a plain link to the same URL would come back 401.
+ * On React Native the bytes are pulled outside axios (which has no reliable
+ * binary response here) by `downloadFile` — it fetches with the bearer token,
+ * saves to the Downloads folder on Android, and otherwise hands the file to the
+ * share sheet. It returns `{ ok, mode?, reason? }` instead of throwing, so this
+ * hook throws on failure to keep the `mutateAsync` contract the screens expect.
  *
- * One hook for all of them: they differ only in path, parameters and file name,
- * and each having its own would be six copies of this.
+ * One hook for all of them: they differ only in path, parameters and file name.
  */
 export function useReportDownload() {
   return useMutation({
@@ -261,17 +302,11 @@ export function useReportDownload() {
     // does not refresh every query afterwards — see utils/queryClient.js.
     meta: { refreshOnSuccess: false },
     mutationFn: async ({ path, params, filename }) => {
-      const blob = await reportService.download(path, params);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || 'report.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // Revoked on the next tick: released synchronously, the click may not have
-      // been served yet and the download arrives empty.
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const res = await downloadFile(withQuery(path, params), filename || 'report.xlsx');
+      if (!res.ok) {
+        if (res.reason === 'cancelled') return false;
+        throw new Error(res.reason || 'Could not download the file.');
+      }
       return true;
     },
   });

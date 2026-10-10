@@ -58,10 +58,15 @@ export function useSpecialSchedules(enabled = true) {
  * This is the source of truth the member rows render from, so marking refetches
  * it rather than mutating anything locally.
  */
-export function useAttendanceSummary(sabhaDetailId) {
+export function useAttendanceSummary(sabhaDetailId, { reportScope = false } = {}) {
+  // `reportScope` clamps a Special sitting's roster to the caller's own Sabha
+  // (Sabha-level roles) — the report page passes it; the Mark screen omits it and
+  // gets the whole roster. The flag rides in the key so the two reads never
+  // collide, while a mark's `['attendance', id]` invalidation still matches both
+  // by prefix.
   return useQuery({
-    queryKey: ['attendance', sabhaDetailId ?? null],
-    queryFn: () => attendanceService.summary(sabhaDetailId),
+    queryKey: ['attendance', sabhaDetailId ?? null, reportScope ? 'scoped' : 'full'],
+    queryFn: () => attendanceService.summary(sabhaDetailId, { reportScope }),
     enabled: Boolean(sabhaDetailId),
   });
 }
