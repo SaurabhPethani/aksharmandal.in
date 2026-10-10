@@ -5,6 +5,31 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
+ENVFILES = {
+  'Debug-dev' => '.env.dev',
+  'Release-dev' => '.env.dev',
+  
+  'Debug-uat' => '.env.uat',
+  'Release-uat' => '.env.uat',
+  
+  'Debug-prod' => '.env.prod',
+  'Release-prod' => '.env.prod', 
+}
+
+project 'aksharconnect', {
+  'Debug' => :debug,
+  'Release' => :release,
+
+  'Debug-dev' => :debug,
+  'Release-dev' => :release,
+
+  'Debug-uat' => :debug,
+  'Release-uat' => :release,
+
+  'Debug-prod' => :debug,
+  'Release-prod' => :release,
+}
+
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
@@ -30,5 +55,18 @@ target 'aksharconnect' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
-  end
+
+    installer.pods_project.targets.each do |target|
+      next unless target.name == 'react-native-config'
+      
+      target.build_configurations.each do |config|
+        env_file = ENVFILES[config.name]
+        
+        if env_file
+          config.build_settings['ENVFILE'] = env_file
+        end
+      end
+    end
+        
+    end
 end

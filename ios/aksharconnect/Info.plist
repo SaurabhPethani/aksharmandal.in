@@ -24,8 +24,6 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Akshar Connect requires access to the photo library to let you select and upload images.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -35,12 +33,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Akshar Connect lets you choose a photo for your profile.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Akshar Connect saves Today's Thought images to your photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Akshar Connect lets you choose a photo for your profile.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIAppFonts</key>
