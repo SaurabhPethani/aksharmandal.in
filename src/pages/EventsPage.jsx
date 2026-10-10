@@ -1,470 +1,573 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
-import { MaterialDesignIcons as Icon } from '@react-native-vector-icons/material-design-icons/static';
+import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
+import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import AppHeader from '../components/AppHeader';
+import ScrollViewWithTop from '../components/ScrollToTop';
 import SiteFooter from '../components/SiteFooter';
 import { Text } from '../components/Typography';
-import { dashboardService } from '../services/dashboardService';
+import { Tabs } from '../components/Navigation';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  PageHeader,
+  Skeleton,
+} from '../components/ui';
+import EventCard from '../components/events/EventCard';
+import EventFormDialog from '../components/events/EventFormDialog';
+import EventRegisterDialog from '../components/events/EventRegisterDialog';
+import EventResultsDialog from '../components/events/EventResultsDialog';
+import EventRegistrationData from '../components/events/EventRegistrationData';
+import RegistrationsByEvent from '../components/events/RegistrationsByEvent';
+import EditRegistrationDialog from '../components/events/EditRegistrationDialog';
+import { useToast } from '../hooks/core';
+import { useMyPermissions } from '../hooks/useMyPermissions';
+import { useCategories, useMe } from '../hooks/useLookups';
+import {
+  useEventMutations,
+  useEvents,
+  useMyRegistrations,
+} from '../hooks/useEvents';
+import { ACTIONS, MODULES } from '../constants/permissions';
+import { COLORS, RADII, TEXT, WEIGHT, space } from '../constants/theme';
 
-const C = {
-  navy: '#003158',
-  muted: '#5C7A96',
-  faint: '#7894AA',
-  background: '#F0F4F8',
-  surface: '#FFFFFF',
-  border: '#DDE9F3',
-  accent: '#FF862A',
-  green: '#15803D',
-  red: '#B42318',
-};
-
+/**
+ * Events — the mobile port of the web's EventsPage.jsx. Three tabs, each
+ * gated by its own EVENTS action:
+ *
+ *   Events tab      EVENTS:READ      every event, filterable by status
+ *   Registered tab  EVENTS:REGISTER  the members this caller has registered
+ *   Registered Data scope-gated      full registrant data + Excel, own band
+ *
+ *   EVENTS:CREATE   creating an event, and editing / deactivating one
+ *
+ * The four EVENTS actions are INDEPENDENT server-side — see
+ * services/eventsService.js. Nimit Sevak and Yuvak hold REGISTER alone, so
+ * `GET /events` 403s for them; the frontend must not fetch the event list
+ * before checking READ.
+ *
+ * The grants are the caller's own, from hooks/useMyPermissions. Nothing is
+ * drawn until they load, so no role is shown a tab or button it does not hold.
+ */
 const FILTERS = [
   { key: 'all', label: 'All', status: undefined },
   { key: 'active', label: 'Active', status: 'active' },
   { key: 'inactive', label: 'Inactive', status: 'inactive' },
 ];
 
-function dateLabel(value) {
-  if (!value) return 'Date not set';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? String(value)
-    : date.toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-}
-
-function EventCard({ event, canRegister }) {
-  const active = event.status !== false && event.status !== 'inactive';
-  return (
-    <Pressable
-      disabled={!canRegister}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      accessibilityRole={canRegister ? 'button' : undefined}
-      accessibilityLabel={
-        canRegister ? `Register for ${event.title || 'event'}` : undefined
-      }
-    >
-      <View style={styles.cardBanner}>
-        <Icon name="calendar-star" size={30} color={C.accent} />
-        <View
-          style={[
-            styles.status,
-            active ? styles.activeStatus : styles.inactiveStatus,
-          ]}
-        >
-          <Text style={styles.statusText}>
-            {active ? 'Active' : 'Inactive'}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.cardBody}>
-        <Text style={styles.eventTitle}>{event.title || 'Untitled event'}</Text>
-        {event.category ? (
-          <Text style={styles.category}>{event.category}</Text>
-        ) : null}
-        <View style={styles.eventLine}>
-          <Icon name="calendar-outline" size={16} color={C.muted} />
-          <Text style={styles.meta}>
-            {dateLabel(event.date)}
-            {event.time ? ` · ${event.time}` : ''}
-          </Text>
-        </View>
-        {event.location ? (
-          <View style={styles.eventLine}>
-            <Icon name="map-marker-outline" size={16} color={C.muted} />
-            <Text style={styles.meta}>{event.location}</Text>
-          </View>
-        ) : null}
-        {event.description ? (
-          <Text style={styles.description} numberOfLines={4}>
-            {event.description}
-          </Text>
-        ) : null}
-        {event.total_count != null ||
-        event.confirmed_count != null ||
-        event.denied_count != null ? (
-          <View style={styles.counts}>
-            <Text style={styles.count}>Total {event.total_count ?? 0}</Text>
-            <Text style={styles.count}>
-              Confirmed {event.confirmed_count ?? 0}
-            </Text>
-            <Text style={styles.count}>Denied {event.denied_count ?? 0}</Text>
-          </View>
-        ) : null}
-      </View>
-    </Pressable>
-  );
-}
-
 export default function EventsPage({
   onBack,
   onMenu,
   onHelp,
   onNotifications,
+  onOpenPrivacy,
+  onOpenTerms,
+  onOpenDeleteAccount,
+  onProfile,
 }) {
-  // Mobile currently has no PermissionProvider. Keep the read-only event
-  // surface available, while hiding web-only organizer and registration
-  // controls until their native flows are implemented.
-  const canWrite = false;
-  const canRegister = true;
-  const tabs = [
-    { key: 'events', label: 'Events' },
-    { key: 'registered', label: 'Registered' },
-    { key: 'data', label: 'Registered Data' },
-  ];
-  const [tab, setTab] = useState(tabs[0]?.key || 'events');
-  const [filter, setFilter] = useState('all');
-  const [events, setEvents] = useState([]);
-  const [registrations, setRegistrations] = useState([]);
-  const [dataEvents, setDataEvents] = useState([]);
-  const [dataRows, setDataRows] = useState([]);
-  const [selectedDataEvent, setSelectedDataEvent] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
+  const permissionsQ = useMyPermissions();
+  const permissions = permissionsQ.data;
+  const toast = useToast();
 
-  const activeFilter = FILTERS.find(item => item.key === filter) || FILTERS[0];
-  const load = async (refresh = false) => {
-    if (refresh) setRefreshing(true);
-    else setLoading(true);
-    setError('');
-    try {
-      if (tab === 'registered') {
-        const result = await dashboardService.eventRegistrations();
-        setRegistrations(Array.isArray(result) ? result : result?.items || []);
-      } else if (tab === 'data') {
-        const result = await dashboardService.eventDataEvents();
-        const next = Array.isArray(result) ? result : result?.items || [];
-        setDataEvents(next);
-        if (next[0]?.id) {
-          setSelectedDataEvent(String(next[0].id));
-          const rows = await dashboardService.eventDataRegistrations(
-            next[0].id,
-          );
-          setDataRows(Array.isArray(rows) ? rows : rows?.items || []);
-        }
-      } else {
-        const result = await dashboardService.events(
-          canWrite ? activeFilter.status : 'active',
-        );
-        setEvents(Array.isArray(result) ? result : result?.items || []);
-      }
-    } catch (caught) {
-      setError(
-        caught?.message ||
-          `Could not load ${
-            tab === 'registered'
-              ? 'your registrations'
-              : tab === 'data'
-                ? 'registered data'
-                : 'events'
-          }.`,
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const allowed = (moduleName, actionName) =>
+    Boolean(permissions?.can(moduleName, actionName));
+
+  const canRead = allowed(MODULES.EVENTS, ACTIONS.READ);
+  // One grant for create AND update — see EventFormDialog / the web note.
+  const canWrite = allowed(MODULES.EVENTS, ACTIONS.CREATE);
+  // REGISTER **and** READ, by explicit request — registering is something you
+  // do to an event you can already see, so no READ means no register.
+  const canRegister = canRead && allowed(MODULES.EVENTS, ACTIONS.REGISTER);
+  // Registered Data is scope-gated, NOT permission-gated: anyone with a band
+  // above 'self' sees registrant data within their own scope.
+  const scopeLevel = permissions?.scopeLevel;
+  const canSeeData = Boolean(scopeLevel) && scopeLevel !== 'self';
+
+  // Says only what this caller can do here.
+  const subtitle = canWrite
+    ? 'Create events, register members, and keep track of registrations.'
+    : canSeeData
+      ? 'Discover events, register, and keep track of your registrations.'
+      : canRegister
+        ? 'Discover events and register.'
+        : 'Discover upcoming events.';
+
+  // const TABS = [
+  //   { key: 'events', label: 'Events', show: canRead },
+  //   { key: 'registered', label: 'Registered', show: canRegister },
+  //   { key: 'data', label: 'Registered Data', show: canSeeData },
+  // ].filter(t => t.show);
+
+  // const [activeTab, setActiveTab] = useState(TABS[0]?.key);
+  // const tab = TABS.find(t => t.key === activeTab) ?? TABS[0];
+
+  const TABS = useMemo(
+    () =>
+      [
+        { key: 'events', label: 'Events', show: canRead },
+        { key: 'registered', label: 'Registered', show: canRegister },
+        { key: 'data', label: 'Registered Data', show: canSeeData },
+      ].filter(t => t.show),
+    [canRead, canRegister, canSeeData],
+  );
+
+  const [activeTab, setActiveTab] = useState(TABS[0]?.key);
 
   useEffect(() => {
-    load();
-    // The request intentionally reruns when the selected tab or filter changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, filter, canWrite]);
+    if (!TABS.some(t => t.key === activeTab)) {
+      setActiveTab(TABS[0]?.key);
+    }
+  }, [TABS, activeTab]);
 
-  const sortedEvents = useMemo(
-    () => events.slice().sort((a, b) => new Date(a.date) - new Date(b.date)),
-    [events],
+  const tab = TABS.find(t => t.key === activeTab) ?? TABS[0];
+
+  const [filter, setFilter] = useState('all');
+  const activeFilter = FILTERS.find(f => f.key === filter) ?? FILTERS[0];
+
+  // Each tab fetches only while it is the one on screen.
+  const eventsQ = useEvents(
+    canWrite ? activeFilter.status : 'active',
+    canRead && tab?.key === 'events',
   );
+  const registrationsQ = useMyRegistrations(
+    canRegister && tab?.key === 'registered',
+  );
+  // Own record, for pre-filling self-registration. Fetched only when usable.
+  const meQ = useMe(canRegister);
+
+  const { saveEvent, setStatus, register, updateRegistration } =
+    useEventMutations();
+
+  const [dialog, setDialog] = useState(null);
+  /** The event whose popup is open — set by tapping its card. */
+  const [openEvent, setOpenEvent] = useState(null);
+  /** The event whose poll-results dialog is open — organiser only. */
+  const [resultsEvent, setResultsEvent] = useState(null);
+  const [editingRegistration, setEditingRegistration] = useState(null);
+
+  /**
+   * Categories have exactly two readers: the event CARDS (turning
+   * `user_category` ids into names) and the event FORM (audience picker). Fetched
+   * for those two and nothing else.
+   */
+  const categoriesQ = useCategories(
+    canRead && (tab?.key === 'events' || Boolean(dialog)),
+  );
+  const categories = useMemo(
+    () => (Array.isArray(categoriesQ.data) ? categoriesQ.data : []),
+    [categoriesQ.data],
+  );
+  const categoryNames = useMemo(
+    () => new Map(categories.map(c => [c.id, c.name])),
+    [categories],
+  );
+
+  const events = useMemo(
+    () =>
+      (Array.isArray(eventsQ.data) ? eventsQ.data : [])
+        .slice()
+        .sort((a, b) => new Date(a.date) - new Date(b.date)),
+    [eventsQ.data],
+  );
+  const registrations = Array.isArray(registrationsQ.data)
+    ? registrationsQ.data
+    : [];
+
+  // Android's back button goes where the breadcrumb does.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBack?.();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onBack]);
+
+  const openCreate = () => {
+    saveEvent.reset();
+    setDialog({ event: null });
+  };
+  const openEdit = event => {
+    saveEvent.reset();
+    setDialog({ event });
+  };
+
+  const submitEvent = payload =>
+    saveEvent.mutate(
+      { id: dialog.event?.id ?? null, payload },
+      {
+        onSuccess: res => {
+          toast.success(res?.detail ?? 'Event saved.');
+          setDialog(null);
+        },
+        onError: err =>
+          toast.error(err?.message ?? 'Could not save the event.'),
+      },
+    );
+
+  const toggleStatus = event =>
+    setStatus.mutate(
+      { id: event.id, status: event.status === false },
+      {
+        onSuccess: res => toast.success(res?.detail ?? 'Event updated.'),
+        onError: err =>
+          toast.error(err?.message ?? 'Could not update the event.'),
+      },
+    );
+
+  const saveRegistration = payload =>
+    updateRegistration.mutate(
+      { id: editingRegistration.id, payload },
+      {
+        onSuccess: res => {
+          toast.success(res?.detail ?? 'Registration updated.');
+          setEditingRegistration(null);
+        },
+        onError: err =>
+          toast.error(err?.message ?? 'Could not save the registration.'),
+      },
+    );
+
+  /**
+   * Cancelling a registration is a status flip, not a delete — the endpoint has
+   * no delete, and the row stays visible as Denied so it is clear what happened.
+   */
+  const cancelRegistration = row =>
+    updateRegistration.mutate(
+      { id: row.id, payload: { status: false } },
+      {
+        onSuccess: res =>
+          toast.success(res?.detail ?? 'Registration cancelled.'),
+        onError: err =>
+          toast.error(err?.message ?? 'Could not cancel the registration.'),
+      },
+    );
+
+  /** The mirror of `cancelRegistration` — flips the same status back. */
+  const restoreRegistration = row =>
+    updateRegistration.mutate(
+      { id: row.id, payload: { status: true } },
+      {
+        onSuccess: res =>
+          toast.success(res?.detail ?? 'Registration confirmed again.'),
+        onError: err =>
+          toast.error(err?.message ?? 'Could not confirm the registration.'),
+      },
+    );
+
+  const submitRegistration = items =>
+    register.mutate(items, {
+      onSuccess: res => {
+        toast.success(res?.detail ?? 'Registration saved.');
+        setOpenEvent(null);
+      },
+      onError: err =>
+        toast.error(err?.message ?? 'Could not save the registration.'),
+    });
+
+  const header = (
+    <AppHeader
+      onMenu={onMenu}
+      onHelp={onHelp}
+      onNotifications={onNotifications}
+      onProfile={onProfile}
+      onBack={onBack}
+      // breadcrumbs={['Dashboard', 'Events']}
+    />
+  );
+
+  if (!permissions) {
+    return (
+      <View style={styles.safe}>
+        {header}
+        <View style={styles.state}>
+          {permissionsQ.error ? (
+            <ErrorState
+              error={permissionsQ.error}
+              onRetry={permissionsQ.refetch}
+              title="Could not load your access"
+            />
+          ) : (
+            <Skeleton style={styles.tabSkeleton} />
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  if (!TABS.length) {
+    return (
+      <View style={styles.safe}>
+        {header}
+        <View style={styles.state}>
+          <EmptyState
+            title="No access"
+            hint="Viewing events requires the Events · Read permission."
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.safe}>
-      <AppHeader
-        onMenu={onMenu}
-        onHelp={onHelp}
-        onNotifications={onNotifications}
-        onBack={onBack}
-        breadcrumbs={['Dashboard', 'Events']}
-      />
-      <ScrollView
+      {header}
+      <ScrollViewWithTop
         style={styles.flex}
         contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => load(true)}
-            tintColor={C.navy}
-          />
-        }
       >
-        <Text style={styles.title}>Events</Text>
-        <Text style={styles.subtitle}>
-          Discover events, register, and keep track of your registrations.
-        </Text>
-        {tabs.length > 1 ? (
-          <View style={styles.tabs}>
-            {tabs.map(item => (
-              <Pressable
-                key={item.key}
-                onPress={() => setTab(item.key)}
-                style={[styles.tab, tab === item.key && styles.selectedTab]}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    tab === item.key && styles.selectedTabText,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+        <PageHeader
+          title="Events"
+          subtitle={subtitle}
+          actions={
+            canWrite ? (
+              <Button variant="accent" onPress={openCreate}>
+                <MaterialCommunityIcons name="plus" size={space(4)} />
+                Create Event
+              </Button>
+            ) : null
+          }
+        />
+
+        {TABS.length > 1 ? (
+          <Tabs
+            tabs={TABS.map(({ key, label }) => ({
+              value: key,
+              label,
+            }))}
+            value={tab?.key}
+            onChange={setActiveTab}
+            variant="solid"
+            style={styles.tabs}
+          />
         ) : null}
-        {tab === 'events' && canWrite ? (
-          <View style={styles.filters}>
-            {FILTERS.map(item => (
-              <Pressable
-                key={item.key}
-                onPress={() => setFilter(item.key)}
-                style={[
-                  styles.filter,
-                  filter === item.key && styles.selectedFilter,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-                    filter === item.key && styles.selectedFilterText,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-        {loading ? (
-          <ActivityIndicator size="large" color={C.navy} />
-        ) : error ? (
-          <View style={styles.state}>
-            <Icon name="alert-circle-outline" size={34} color={C.red} />
-            <Text style={styles.stateText}>{error}</Text>
-            <Pressable onPress={() => load()}>
-              <Text style={styles.retry}>Retry</Text>
-            </Pressable>
-          </View>
-        ) : tab === 'data' ? (
-          dataEvents.length ? (
-            <>
-              <View style={styles.dataEventList}>
-                {dataEvents.map(event => (
+
+        {tab?.key === 'events' ? (
+          <>
+            {/* Status filter for organisers only — `GET /events` returns
+                inactive events only to a caller with EVENTS:CREATE. */}
+            {canWrite ? (
+              <View style={styles.filters}>
+                {FILTERS.map(f => (
                   <Pressable
-                    key={event.id}
-                    onPress={async () => {
-                      setSelectedDataEvent(String(event.id));
-                      const result =
-                        await dashboardService.eventDataRegistrations(event.id);
-                      setDataRows(
-                        Array.isArray(result) ? result : result?.items || [],
-                      );
-                    }}
+                    key={f.key}
+                    onPress={() => setFilter(f.key)}
                     style={[
-                      styles.dataEvent,
-                      selectedDataEvent === String(event.id) &&
-                        styles.dataEventSelected,
+                      styles.filter,
+                      filter === f.key && styles.filterActive,
                     ]}
                   >
-                    <Text style={styles.dataEventText}>
-                      {event.title || event.name || 'Event'}
+                    <Text
+                      style={[
+                        styles.filterText,
+                        filter === f.key && styles.filterTextActive,
+                      ]}
+                    >
+                      {f.label}
                     </Text>
                   </Pressable>
                 ))}
               </View>
-              {dataRows.length ? (
-                dataRows.map((row, index) => (
-                  <View key={row.id || index} style={styles.registration}>
-                    <Text style={styles.eventTitle}>
-                      {row.name ||
-                        row.user_name ||
-                        row.mobile_number ||
-                        'Registrant'}
-                    </Text>
-                    <Text style={styles.meta}>
-                      {row.mobile_number ||
-                        row.gender ||
-                        row.status ||
-                        'Registration'}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Empty
-                  title="No registrations yet"
-                  hint="This event has no registered members."
-                />
-              )}
-            </>
-          ) : (
-            <Empty
-              title="No events available"
-              hint="There are no events with registration data."
-            />
-          )
-        ) : tab === 'registered' ? (
-          registrations.length ? (
-            registrations.map(row => (
-              <View
-                key={row.id || `${row.event_id}-${row.mobile_number}`}
-                style={styles.registration}
-              >
-                <Text style={styles.eventTitle}>
-                  {row.event_title || row.event_name || 'Event registration'}
-                </Text>
-                <Text style={styles.meta}>
-                  {row.name ||
-                    row.user_name ||
-                    row.mobile_number ||
-                    'Registration'}
-                </Text>
-                <Text style={styles.meta}>
-                  {row.status === false ? 'Denied' : 'Confirmed'}
-                </Text>
-              </View>
-            ))
-          ) : (
-            <Empty
-              title="No registrations yet"
-              hint="Members you register for an event will appear here."
-            />
-          )
-        ) : sortedEvents.length ? (
-          sortedEvents.map(event => (
-            <EventCard
-              key={event.id || event.title}
-              event={event}
-              canRegister={canRegister}
-            />
-          ))
-        ) : (
-          <Empty
-            title={filter === 'all' ? 'No events yet' : `No ${filter} events`}
-            hint={
-              filter === 'all'
-                ? 'Nothing has been created.'
-                : 'Try another filter.'
-            }
-          />
-        )}
-      </ScrollView>
-      <SiteFooter />
-    </View>
-  );
-}
+            ) : null}
 
-function Empty({ title, hint }) {
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.stateText}>{hint}</Text>
+            {eventsQ.isLoading ? (
+              <View style={styles.skeletons}>
+                {[0, 1, 2].map(i => (
+                  <Skeleton key={i} style={styles.cardSkeleton} />
+                ))}
+              </View>
+            ) : eventsQ.error ? (
+              <ErrorState
+                error={eventsQ.error}
+                onRetry={eventsQ.refetch}
+                title="Could not load events"
+              />
+            ) : events.length === 0 ? (
+              <Card>
+                <EmptyState
+                  title={
+                    filter === 'all' ? 'No events yet' : `No ${filter} events`
+                  }
+                  hint={
+                    filter === 'all'
+                      ? 'Nothing has been created.'
+                      : 'Try another filter.'
+                  }
+                />
+              </Card>
+            ) : (
+              <View style={styles.cards}>
+                {events.map(event => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    categoryNames={categoryNames}
+                    canUpdate={canWrite}
+                    busy={setStatus.isPending || saveEvent.isPending}
+                    // No REGISTER grant, no tap: the popup only registers, so
+                    // opening one with nothing to do would be worse than a card
+                    // that stays a card.
+                    onOpen={
+                      canRegister
+                        ? e => {
+                            register.reset();
+                            setOpenEvent(e);
+                          }
+                        : null
+                    }
+                    onEdit={openEdit}
+                    onToggleStatus={toggleStatus}
+                    onResults={canWrite ? setResultsEvent : null}
+                  />
+                ))}
+              </View>
+            )}
+          </>
+        ) : null}
+
+        {tab?.key === 'registered' ? (
+          registrationsQ.isLoading ? (
+            <Skeleton style={styles.tabSkeleton} />
+          ) : registrationsQ.error ? (
+            <ErrorState
+              error={registrationsQ.error}
+              onRetry={registrationsQ.refetch}
+              title="Could not load your registrations"
+            />
+          ) : registrations.length === 0 ? (
+            <Card>
+              <EmptyState
+                title="No registrations yet"
+                hint="Members you register for an event will appear here."
+              />
+            </Card>
+          ) : (
+            <RegistrationsByEvent
+              rows={registrations}
+              canEdit={canRegister}
+              busy={updateRegistration.isPending}
+              onEdit={row => {
+                updateRegistration.reset();
+                setEditingRegistration(row);
+              }}
+              onCancel={cancelRegistration}
+              onRestore={restoreRegistration}
+            />
+          )
+        ) : null}
+
+        {tab?.key === 'data' ? (
+          <EventRegistrationData enabled={tab.key === 'data'} />
+        ) : null}
+
+        <View style={styles.footerBleed}>
+          <SiteFooter
+            onPrivacy={onOpenPrivacy}
+            onTerms={onOpenTerms}
+            onDeleteAccount={onOpenDeleteAccount}
+          />
+        </View>
+      </ScrollViewWithTop>
+
+      {dialog ? (
+        // Keyed on the event so the form seeds from the row being edited rather
+        // than from whichever one opened it first.
+        <EventFormDialog
+          key={dialog.event?.id ?? 'new-event'}
+          event={dialog.event}
+          categories={categories}
+          isOpen
+          busy={saveEvent.isPending}
+          error={saveEvent.error?.message ?? null}
+          onClose={() => {
+            if (!saveEvent.isPending) setDialog(null);
+          }}
+          onSubmit={submitEvent}
+        />
+      ) : null}
+
+      {openEvent ? (
+        // Keyed on the event so the member rows and the chosen tab reset
+        // between one event's popup and the next.
+        <EventRegisterDialog
+          key={openEvent.id}
+          event={openEvent}
+          me={meQ.data}
+          canRegister={canRegister}
+          isOpen
+          busy={register.isPending}
+          error={register.error?.message ?? null}
+          onResetError={register.reset}
+          onClose={() => {
+            if (!register.isPending) setOpenEvent(null);
+          }}
+          onSubmit={submitRegistration}
+        />
+      ) : null}
+
+      {editingRegistration ? (
+        <EditRegistrationDialog
+          key={editingRegistration.id}
+          registration={editingRegistration}
+          isOpen
+          busy={updateRegistration.isPending}
+          error={updateRegistration.error?.message ?? null}
+          onClose={() => {
+            if (!updateRegistration.isPending) setEditingRegistration(null);
+          }}
+          onSubmit={saveRegistration}
+        />
+      ) : null}
+
+      {resultsEvent ? (
+        <EventResultsDialog
+          key={resultsEvent.id}
+          event={resultsEvent}
+          isOpen
+          onClose={() => setResultsEvent(null)}
+        />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.background },
+  safe: { flex: 1, backgroundColor: COLORS.bg },
   flex: { flex: 1 },
-  content: { padding: 18, gap: 12 },
-  title: { color: C.navy, fontSize: 26, fontWeight: '800' },
-  subtitle: { color: C.muted, lineHeight: 20 },
-  tabs: { flexDirection: 'row', gap: 4 },
-  tab: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
-  selectedTab: {
-    backgroundColor: C.surface,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+  content: {
+    flexGrow: 1,
+    padding: space(4.5),
+    paddingBottom: 0,
+    gap: space(5),
   },
-  tabText: { color: C.muted, fontWeight: '600' },
-  selectedTabText: { color: C.navy, fontWeight: '800' },
-  filters: { flexDirection: 'row', gap: 8 },
+  state: { flex: 1, padding: space(4.5) },
+  footerBleed: {
+    marginTop: 'auto',
+    marginHorizontal: -space(4.5),
+    paddingTop: space(3.5),
+  },
+  tabs: { marginTop: -space(1) },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: space(2) },
   filter: {
     borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 18,
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    backgroundColor: C.surface,
+    borderColor: COLORS.lineStrong,
+    borderRadius: RADII.full,
+    paddingHorizontal: space(3.5),
+    paddingVertical: space(1.5),
+    backgroundColor: COLORS.surface,
   },
-  selectedFilter: { borderColor: C.navy, backgroundColor: C.navy },
-  filterText: { color: C.navy, fontWeight: '600', fontSize: 13 },
-  selectedFilterText: { color: C.surface },
-  card: {
-    backgroundColor: C.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: C.border,
-    overflow: 'hidden',
+  filterActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
   },
-  cardPressed: { opacity: 0.8 },
-  cardBanner: {
-    height: 86,
-    backgroundColor: '#E6EEF5',
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  filterText: {
+    color: COLORS.primary,
+    fontWeight: WEIGHT.semibold,
+    fontSize: TEXT.sm,
   },
-  status: { borderRadius: 12, paddingHorizontal: 9, paddingVertical: 4 },
-  activeStatus: { backgroundColor: '#DCFCE7' },
-  inactiveStatus: { backgroundColor: '#FEE4E2' },
-  statusText: { fontSize: 11, fontWeight: '700', color: C.green },
-  cardBody: { padding: 15, gap: 7 },
-  eventTitle: { color: C.navy, fontSize: 17, fontWeight: '800' },
-  category: { color: C.accent, fontSize: 12, fontWeight: '700' },
-  eventLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meta: { color: C.muted, fontSize: 13 },
-  description: { color: C.muted, lineHeight: 19, marginTop: 2 },
-  counts: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    paddingTop: 8,
-    marginTop: 4,
-  },
-  count: { color: C.muted, fontSize: 11, fontWeight: '600' },
-  registration: {
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 12,
-    padding: 14,
-    gap: 5,
-  },
-  state: { alignItems: 'center', gap: 10, padding: 28 },
-  stateText: { color: C.muted, textAlign: 'center' },
-  retry: { color: C.navy, fontWeight: '700' },
-  empty: {
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 14,
-    alignItems: 'center',
-    padding: 30,
-    gap: 8,
-  },
-  emptyTitle: { color: C.navy, fontWeight: '800', fontSize: 16 },
+  filterTextActive: { color: COLORS.white },
+  skeletons: { gap: space(3) },
+  cardSkeleton: { height: space(56), width: '100%' },
+  tabSkeleton: { height: space(40), width: '100%' },
+  cards: { gap: space(4) },
 });

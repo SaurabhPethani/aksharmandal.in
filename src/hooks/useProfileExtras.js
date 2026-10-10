@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { absoluteUrl } from '../api/client';
 import { profileService } from '../services/profileService';
 import { MAX_UPLOAD_BYTES, prepareProfilePhoto, tooLargeMessage } from '../utils/imageUpload';
 import { STORAGE_KEYS } from '../constants/storage';
@@ -238,12 +239,28 @@ export function useMyResumes(enabled = true) {
 }
 
 /**
- * Rewrites the member's QR JPEG. The image URL does not change — the filename
- * is derived from the id — so the caller busts the browser's cache itself
- * rather than expecting a new address back.
+ * The address of the member's QR image. Its filename carries a random token,
+ * so it is read from the backend and never built from the id. An error here
+ * (404) means the code has not been generated yet.
  */
+export function useQrInfo(userId) {
+  return useQuery({
+    queryKey: ['qr-info', String(userId)],
+    queryFn: () => profileService.qrInfo(userId),
+    enabled: userId != null,
+    staleTime: 5 * 60 * 1000,
+    select: info => absoluteUrl(info?.public_url),
+  });
+}
+
+/** Rewrites the member's QR JPEG, then re-reads its address. */
 export function useRegenerateQr(userId) {
-  return useMutation({ mutationFn: () => profileService.regenerateQr(userId) });
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => profileService.regenerateQr(userId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['qr-info', String(userId)] }),
+  });
 }
 
 export function useResumeMutations() {

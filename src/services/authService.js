@@ -32,6 +32,13 @@ export const authService = {
 
   logout: () => api.post(AUTH_PATHS.logout),
 
+  /** Change the password from inside the app — no OTP, session survives. */
+  changePassword: (current_password, new_password) =>
+    api.post(AUTH_PATHS.changePassword, { current_password, new_password }, { envelope: true }),
+
+  changePin: (current_pin, new_pin) =>
+    api.post(AUTH_PATHS.changePin, { current_pin, new_pin }, { envelope: true }),
+
   me: () => api.get(AUTH_PATHS.me),
 
   /** The accounts this person may open: themselves + any managed children. */

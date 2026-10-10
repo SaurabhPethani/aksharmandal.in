@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import { Text } from '../Typography';
+import { FONT_DISPLAY } from '../../constants/typography';
 import {
   COLORS,
   RADII,
@@ -571,6 +572,7 @@ const styles = StyleSheet.create({
   statSkeleton: { height: space(8), width: space(24) },
   statValueRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space(2.5) },
   statValue: {
+    fontFamily: FONT_DISPLAY,
     ...TNUM,
     fontSize: TEXT.stat,
     lineHeight: TEXT.stat,
@@ -608,6 +610,7 @@ const styles = StyleSheet.create({
   // Shrinks, so a long subtitle wraps instead of running off the screen.
   pageHeaderCopy: { flexShrink: 1 },
   pageTitle: {
+    fontFamily: FONT_DISPLAY,
     fontSize: TEXT.xl,
     fontWeight: WEIGHT.bold,
     color: COLORS.primary,

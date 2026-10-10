@@ -8,6 +8,7 @@ import {
 } from 'react';
 
 import {
+  getAccessToken,
   setAccessToken,
   setAuthLostHandler,
   rememberSession,
@@ -45,6 +46,8 @@ export function AuthProvider({ children }) {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
 
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+
+  const [biometricPromptDue, setBiometricPromptDue] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -109,8 +112,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   /**
-   * Apply the login screen's biometric checkbox using the
-   * token from a fresh PIN/password login.
+   * Carry biometric login across a fresh PIN/password login.
+   * `enable` is true while it is on, or was on until its
+   * token expired; it is switched on and off in Profile →
+   * Security.
    *
    * The token is re-saved on every login, so a token revoked
    * by a PIN/password change (e.g. on the web) is replaced as
@@ -144,6 +149,25 @@ export function AuthProvider({ children }) {
   }, []);
 
   /**
+   * After a PIN/password login, have the dashboard offer
+   * biometric login when the phone supports it and it is off.
+   */
+  const offerBiometric = useCallback(async () => {
+    const [available, enabled] = await Promise.all([
+      isBiometricAvailable(),
+      isBiometricLoginEnabled(),
+    ]);
+
+    if (mounted.current) {
+      setBiometricPromptDue(available && !enabled);
+    }
+  }, []);
+
+  const dismissBiometricPrompt = useCallback(() => {
+    setBiometricPromptDue(false);
+  }, []);
+
+  /**
    * Normal PIN login.
    */
   const loginWithPin = useCallback(
@@ -156,9 +180,11 @@ export function AuthProvider({ children }) {
         interactive: true,
       });
 
+      await offerBiometric();
+
       return { ...result, biometricSaved };
     },
-    [applyBiometricChoice, establish],
+    [applyBiometricChoice, establish, offerBiometric],
   );
 
   /**
@@ -174,10 +200,69 @@ export function AuthProvider({ children }) {
         interactive: true,
       });
 
+      await offerBiometric();
+
       return { ...result, biometricSaved };
     },
-    [applyBiometricChoice, establish],
+    [applyBiometricChoice, establish, offerBiometric],
   );
+
+  /**
+   * Profile → Security: save the current session's token
+   * behind the phone's biometrics. Throws when it could not
+   * be saved (prompt cancelled, nothing enrolled).
+   */
+  const enableBiometric = useCallback(async () => {
+    await enableBiometricLogin(getAccessToken());
+
+    const enabled = await isBiometricLoginEnabled();
+
+    if (mounted.current) {
+      setBiometricEnabled(enabled);
+    }
+
+    if (!enabled) {
+      throw new Error('Biometric login could not be turned on.');
+    }
+
+    if (mounted.current) {
+      setBiometricPromptDue(false);
+    }
+  }, []);
+
+  /**
+   * Profile → Security: remove the saved token. The member
+   * stays signed in.
+   */
+  const disableBiometric = useCallback(async () => {
+    const removed = await disableBiometricLogin();
+
+    const enabled = await isBiometricLoginEnabled();
+
+    if (mounted.current) {
+      setBiometricEnabled(enabled);
+    }
+
+    if (!removed || enabled) {
+      throw new Error('Biometric login could not be turned off.');
+    }
+  }, []);
+
+  /**
+   * Re-read what the phone supports: a fingerprint can be
+   * added in the phone's settings while the app is open.
+   */
+  const refreshBiometric = useCallback(async () => {
+    const available = await isBiometricAvailable();
+
+    const enabled = await isBiometricLoginEnabled();
+
+    if (mounted.current) {
+      setBiometricAvailable(available);
+
+      setBiometricEnabled(available && enabled);
+    }
+  }, []);
 
   /**
    * Switch account.
@@ -299,6 +384,7 @@ export function AuthProvider({ children }) {
       setSession(null);
       setAccounts([]);
       setAccountChoicePending(false);
+      setBiometricPromptDue(false);
       setStatus('anonymous');
     }
   }, [queryClient]);
@@ -429,9 +515,19 @@ export function AuthProvider({ children }) {
 
       biometricEnabled,
 
+      biometricPromptDue,
+
+      dismissBiometricPrompt,
+
       getBiometricType,
 
       loginWithBiometric,
+
+      enableBiometric,
+
+      disableBiometric,
+
+      refreshBiometric,
 
       reloadPermissions: async () => null,
 
@@ -448,7 +544,12 @@ export function AuthProvider({ children }) {
       loginWithPin,
       biometricAvailable,
       biometricEnabled,
+      biometricPromptDue,
+      dismissBiometricPrompt,
       loginWithBiometric,
+      enableBiometric,
+      disableBiometric,
+      refreshBiometric,
       signOut,
     ],
   );
