@@ -13,6 +13,7 @@ import {
 import PageSizeSelect from '../PageSizeSelect';
 import { Text } from '../Typography';
 import { absoluteUrl } from '../../api/client';
+import { useStagedCount } from '../../hooks/useStagedCount';
 import { isAttending } from '../../utils/memberFlags';
 import { telUrl } from '../../utils/contact';
 import { COLORS, RADII, TEXT, WEIGHT, space } from '../../constants/theme';
@@ -177,7 +178,8 @@ function Avatar({ name, src }) {
   );
 }
 
-function MemberCard({
+// Memoised: typing in the page's search re-renders the list, not its rows.
+const MemberCard = React.memo(function MemberCard({
   row,
   canChangeStatus,
   onStatusToggle,
@@ -288,7 +290,7 @@ function MemberCard({
       </View>
     </Card>
   );
-}
+});
 
 /**
  * The members list, as cards. Every action is a callback, and one that is not
@@ -312,6 +314,13 @@ export default function MemberList({
   onChangeFollowup = null,
   onAssignRole = null,
 }) {
+  // The first screenful is drawn at once and the rest just after, so a full
+  // page of cards does not hold the screen until the last one is built.
+  const shown = useStagedCount(
+    rows.length,
+    rows.length ? `${rows[0].id}:${rows[rows.length - 1].id}` : '',
+  );
+
   if (loading) {
     return (
       <Card style={styles.skeletons}>
@@ -356,7 +365,7 @@ export default function MemberList({
     <View>
       {busy && <BusyOverlay />}
       <View style={styles.list}>
-        {rows.map(row => (
+        {rows.slice(0, shown).map(row => (
           <MemberCard
             key={row.id}
             row={row}

@@ -6,7 +6,8 @@ import { api } from '../api/client';
 const lookup = (path, params) => api.get(`/api/v1/${path}`, { params });
 
 export const masterDataService = {
-  categories: () => lookup('user-categories'),
+  categories: gender =>
+    lookup('user-categories', gender ? { gender } : undefined),
   roles: () => api.get('/api/v1/role-permissions/roles'),
   educationLevels: () => lookup('education-levels'),
   jobIndustries: () => lookup('job-industries'),
@@ -14,10 +15,24 @@ export const masterDataService = {
   relations: () => lookup('relations'),
   mandalUsers: () => api.get('/api/v1/users/get-all-mandal-users'),
 
-  followupPersons: sabhaId =>
-    api.get('/api/v1/users/get-followup-person-list', {
-      params: sabhaId ? { sabha_id: sabhaId } : undefined,
-    }),
+  // One Sabha, or several as `sabha_ids` — sent as repeated keys, which is
+  // the only form the API reads a list in.
+  followupPersons: sabhaId => {
+    const ids = Array.isArray(sabhaId)
+      ? sabhaId.filter(id => id != null && id !== '')
+      : null;
+    const params = ids
+      ? ids.length
+        ? { sabha_ids: ids }
+        : undefined
+      : sabhaId
+        ? { sabha_id: sabhaId }
+        : undefined;
+    return api.get('/api/v1/users/get-followup-person-list', {
+      params,
+      paramsSerializer: { indexes: null },
+    });
+  },
 
   checkMobile: mobileNumber =>
     api.get(`/api/v1/users/check-mobile/${mobileNumber}`),

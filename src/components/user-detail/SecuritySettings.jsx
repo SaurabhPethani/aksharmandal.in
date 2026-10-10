@@ -6,8 +6,10 @@ import { Text } from '../Typography';
 import { FONT_DISPLAY } from '../../constants/typography';
 import { Button, Toggle } from '../ui';
 import { FormField, Input } from '../form';
+import FormDialog from '../FormDialog';
 import { useAuth, useToast } from '../../hooks/core';
 import { authService } from '../../services/authService';
+import { AUTH, LOGIN_LOCKOUT_LIMIT } from '../../constants/messages';
 import { COLORS, RADII, TEXT, WEIGHT, space } from '../../constants/theme';
 
 /**
@@ -58,12 +60,19 @@ function BiometricSection() {
   const {
     biometricAvailable: available,
     biometricEnabled: enabled,
+    confirmCredential,
     enableBiometric,
     disableBiometric,
     refreshBiometric,
   } = useAuth();
   const [busy, setBusy] = useState(false);
   const working = useRef(false);
+  // The switch only asks: it changes once the PIN or password is confirmed.
+  const [asking, setAsking] = useState(false);
+  const [kind, setKind] = useState('pin');
+  const [secret, setSecret] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [problem, setProblem] = useState(null);
 
   // A fingerprint added in the phone's settings shows up on the way back.
   useEffect(() => {
@@ -98,6 +107,56 @@ function BiometricSection() {
     }
   };
 
+  const ask = () => {
+    if (working.current) return;
+    setKind('pin');
+    setSecret('');
+    setProblem(null);
+    setAsking(true);
+  };
+
+  const pickKind = next => {
+    if (next === kind) return;
+    setKind(next);
+    setSecret('');
+    setProblem(null);
+  };
+
+  const ready =
+    kind === 'pin' ? secret.length === PIN_LENGTH : secret.length > 0;
+
+  const confirm = async () => {
+    if (checking || !ready) return;
+    setChecking(true);
+    setProblem(null);
+    try {
+      await confirmCredential(
+        kind === 'pin' ? { pin: secret } : { password: secret },
+      );
+    } catch (err) {
+      const failed = err?.failure;
+      const left =
+        failed && !failed.isLocked && failed.failedAttempts != null
+          ? Math.max(0, LOGIN_LOCKOUT_LIMIT - failed.failedAttempts)
+          : 0;
+      setProblem(
+        [
+          err?.message || 'Could not confirm it is you. Please try again.',
+          left > 0 ? AUTH.attemptsLeft(left) : null,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+      setSecret('');
+      setChecking(false);
+      return;
+    }
+    setChecking(false);
+    setAsking(false);
+    setSecret('');
+    toggle();
+  };
+
   return (
     <Section
       icon="fingerprint"
@@ -120,9 +179,61 @@ function BiometricSection() {
           label="Enable biometric login"
           checked={enabled}
           disabled={!available || busy}
-          onChange={toggle}
+          onChange={ask}
         />
       </View>
+
+      <FormDialog
+        isOpen={asking}
+        onClose={() => setAsking(false)}
+        title={
+          enabled ? 'Turn off biometric login' : 'Turn on biometric login'
+        }
+        description="Enter your PIN or password to confirm it is you."
+        submitLabel="Confirm"
+        submitVariant="accent"
+        onSubmit={confirm}
+        submitDisabled={!ready}
+        busy={checking}
+        error={problem}
+      >
+        <View style={styles.kindRow}>
+          <Button
+            variant={kind === 'pin' ? 'primary' : 'outline'}
+            style={styles.kind}
+            disabled={checking}
+            onPress={() => pickKind('pin')}
+          >
+            PIN
+          </Button>
+          <Button
+            variant={kind === 'password' ? 'primary' : 'outline'}
+            style={styles.kind}
+            disabled={checking}
+            onPress={() => pickKind('password')}
+          >
+            Password
+          </Button>
+        </View>
+        <FormField
+          label={kind === 'pin' ? `${PIN_LENGTH}-digit PIN` : 'Password'}
+        >
+          <Input
+            key={kind}
+            autoFocus
+            secureTextEntry
+            keyboardType={kind === 'pin' ? 'number-pad' : 'default'}
+            autoComplete="off"
+            value={secret}
+            disabled={checking}
+            onChangeText={v => {
+              setSecret(kind === 'pin' ? onlyDigits(v, PIN_LENGTH) : v);
+              setProblem(null);
+            }}
+            onSubmitEditing={confirm}
+          />
+        </FormField>
+      </FormDialog>
     </Section>
   );
 }
@@ -317,4 +428,6 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   switchHint: { fontSize: TEXT.xs, color: COLORS.textMuted },
+  kindRow: { flexDirection: 'row', gap: space(2) },
+  kind: { flex: 1 },
 });

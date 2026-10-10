@@ -72,7 +72,7 @@ export const useModalClose = () => useContext(CloseContext);
  * it a render after the Modal, so an animation started from the Modal itself
  * can finish before the views exist.
  */
-function Arrive({ value }) {
+export function Arrive({ value }) {
   useEffect(() => {
     Animated.timing(value, {
       toValue: 1,

@@ -114,6 +114,14 @@ export const canSeeYuvaSeva = (roleId) =>
   roleId == null || !YUVA_SEVA_DENIED_ROLE_IDS.includes(Number(roleId));
 
 /**
+ * Who gets the follow-up filter on the Users list: everyone but Yuva Seva (9)
+ * and Yuvak (10). The web's rule, and by id as it is there.
+ */
+export const FOLLOWUP_FILTER_DENIED_ROLE_IDS = [9, 10];
+export const canFilterByFollowup = (roleId) =>
+  !FOLLOWUP_FILTER_DENIED_ROLE_IDS.includes(Number(roleId));
+
+/**
  * ROLES THAT MAY NOT OPEN THE REPORTS KPI DRILL-DOWN — the third ID-keyed rule
  * here, carrying the same ⚠ as the two above.
  *

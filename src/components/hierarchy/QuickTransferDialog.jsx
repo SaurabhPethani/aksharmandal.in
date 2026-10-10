@@ -173,9 +173,10 @@ export default function QuickTransferDialog({ member, onClose }) {
                 accessibilityState={{ selected, disabled: busy }}
                 disabled={busy}
                 onPress={() => switchMode(m.key)}
-                style={[
+                style={({ pressed }) => [
                   styles.mode,
                   wide && styles.modeWide,
+                  pressed && !selected && styles.modePressed,
                   selected && styles.modeSelected,
                   busy && styles.modeDisabled,
                 ]}
@@ -350,11 +351,14 @@ const styles = StyleSheet.create({
     paddingVertical: space(3),
   },
   modeWide: { flex: 1 },
+  // The web's `bg-primary-50/60`, flattened over white: Android draws a
+  // card's shadow underneath it, and a see-through fill lets it show.
   modeSelected: {
     borderColor: COLORS.primary,
-    backgroundColor: 'rgba(229,238,245,0.6)',
+    backgroundColor: '#EFF5F9',
     ...SHADOWS.card,
   },
+  modePressed: { borderColor: 'rgba(0,49,88,0.4)' },
   modeDisabled: { opacity: 0.5 },
   modeLabel: {
     fontSize: TEXT.sm,

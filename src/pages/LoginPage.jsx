@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +30,10 @@ const PIN_LENGTH = 6;
 const MIN_PASSWORD_LENGTH = 6;
 const LOCKOUT_LIMIT = 5;
 
+// The biometric prompt opens by itself only when the app is opened, not when
+// this page comes back after a sign-out or a legal page.
+let launchPromptDue = true;
+
 const iconNames = {
   eye: 'eye',
   eyeOff: 'eye-off',
@@ -42,24 +52,31 @@ function NativeIcon({ name, size = 20, color = '#9BB5CB' }) {
   );
 }
 
-function Field({
-  label,
-  icon,
-  rightElement,
-  value,
-  valid = false,
-  statusElement,
-  error = false,
-  onChangeText,
-  secureTextEntry,
-  keyboardType = 'default',
-  placeholder,
-  editable = true,
-  onSubmitEditing,
-  returnKeyType,
-}) {
+const Field = forwardRef(function Field(
+  {
+    label,
+    icon,
+    rightElement,
+    value,
+    valid = false,
+    statusElement,
+    error = false,
+    onChangeText,
+    secureTextEntry,
+    keyboardType = 'default',
+    placeholder,
+    editable = true,
+    onSubmitEditing,
+    returnKeyType,
+  },
+  ref,
+) {
   const [focused, setFocused] = useState(false);
   const inputRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+  }));
 
   return (
     <Pressable
@@ -104,22 +121,31 @@ function Field({
       </View>
     </Pressable>
   );
-}
+});
 
-function CodeInput({
-  label,
-  value,
-  onChangeText,
-  secureTextEntry = false,
-  editable = true,
-  rightElement,
-}) {
+const CodeInput = forwardRef(function CodeInput(
+  {
+    label,
+    value,
+    onChangeText,
+    secureTextEntry = false,
+    editable = true,
+    rightElement,
+  },
+  ref,
+) {
   const inputRefs = useRef([]);
   const [focusedIndex, setFocusedIndex] = useState(null);
   const digits = Array.from(
     { length: PIN_LENGTH },
     (_, index) => value[index] || '',
   );
+
+  // Lands on the first empty box.
+  useImperativeHandle(ref, () => ({
+    focus: () =>
+      inputRefs.current[Math.min(value.length, PIN_LENGTH - 1)]?.focus(),
+  }));
 
   const updateDigits = (index, rawValue) => {
     const cleanValue = rawValue.replace(/\D/g, '');
@@ -173,11 +199,16 @@ function CodeInput({
             value={digit}
             onChangeText={text => updateDigits(index, text)}
             onKeyPress={({ nativeEvent }) => {
+              // An empty box has nothing to delete, so the press takes the
+              // digit before it.
               if (
                 nativeEvent.key === 'Backspace' &&
                 !digits[index] &&
                 index > 0
               ) {
+                const nextDigits = [...digits];
+                nextDigits[index - 1] = '';
+                onChangeText(nextDigits.join(''));
                 inputRefs.current[index - 1]?.focus();
               }
             }}
@@ -200,7 +231,7 @@ function CodeInput({
       </View>
     </View>
   );
-}
+});
 
 /**
  * @typedef {Object} LoginPageProps
@@ -242,6 +273,7 @@ export default function LoginPage({
   // keeps it on across a PIN/password sign-in, which saves a fresh token.
   const [useBiometric, setUseBiometric] = useState(auth.biometricEnabled);
   const biometricStateLoaded = useRef(auth.biometricEnabled);
+  const credentialRef = useRef(null);
 
   useEffect(() => {
     if (auth.biometricEnabled && !biometricStateLoaded.current) {
@@ -295,7 +327,7 @@ export default function LoginPage({
     }
   };
 
-  const biometricLogin = async () => {
+  const biometricLogin = async ({ quiet = false } = {}) => {
     if (biometricBusy || !auth.biometricAvailable || !auth.biometricEnabled) {
       return;
     }
@@ -311,11 +343,21 @@ export default function LoginPage({
       // The saved token was revoked and removed; the next PIN/password
       // sign-in saves a fresh one.
       if (biometricError?.biometricExpired) setUseBiometric(true);
-      setError(biometricError?.message || 'Biometric authentication failed.');
+      // Cancelling a prompt the app opened by itself is not an error.
+      if (!(quiet && biometricError?.biometricCancelled)) {
+        setError(biometricError?.message || 'Biometric authentication failed.');
+      }
     } finally {
       setBiometricBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!launchPromptDue) return;
+    launchPromptDue = false;
+    biometricLogin({ quiet: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = (pinValue = pin) =>
     run(async () => {
@@ -519,9 +561,14 @@ export default function LoginPage({
                   error={mobile.length > 0 && !mobileValid}
                   value={mobile}
                   onChangeText={text => {
-                    setMobile(text.replace(/\D/g, '').slice(0, 10));
+                    const next = text.replace(/\D/g, '').slice(0, 10);
+                    setMobile(next);
                     setFailure(null);
                     clearMessages();
+                    // Move on once the tenth digit goes in.
+                    if (next.length === 10 && mobile.length < 10) {
+                      credentialRef.current?.focus();
+                    }
                   }}
                   keyboardType="number-pad"
                   placeholder="Enter mobile number"
@@ -534,6 +581,7 @@ export default function LoginPage({
                 )}
                 {tab === 'pin' ? (
                   <CodeInput
+                    ref={credentialRef}
                     label={`${PIN_LENGTH}-digit PIN`}
                     value={pin}
                     onChangeText={changePin}
@@ -542,6 +590,7 @@ export default function LoginPage({
                   />
                 ) : (
                   <Field
+                    ref={credentialRef}
                     label="Password"
                     icon={<NativeIcon name="lock" size={19} />}
                     valid={password.length >= MIN_PASSWORD_LENGTH}
@@ -596,7 +645,7 @@ export default function LoginPage({
                         (biometricBusy || busy) && styles.disabled,
                         pressed && styles.pressed,
                       ]}
-                      onPress={biometricLogin}
+                      onPress={() => biometricLogin()}
                       disabled={biometricBusy || busy}
                       accessibilityRole="button"
                     >

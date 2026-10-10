@@ -27,6 +27,22 @@ export const STORAGE_KEYS = {
    */
   birthdayWishesSeen: 'ac.birthdayWishes.seen',
   /**
+   * localStorage: `{ "<userId>": "YYYY-MM-DD" }` — the local day each member
+   * last closed the "My QR Code" popup on this device.
+   *
+   * ONCE A DAY WHILE SIGNED IN, AND AGAIN AFTER EVERY FRESH SIGN-IN, by request.
+   * Most members never sign out of the app on their phone, so the day is what
+   * brings it back; signing out and in again brings it back the same day.
+   *
+   * Removed on an INTERACTIVE login (AuthContext `establish`) and on sign-out
+   * (`signOut`, so a biometric login after it shows the code too), not by
+   * `forgetSession`: that also runs when a reload finds an expired access token
+   * and quietly refreshes it, which is not a new login and must not show the
+   * code again. Keyed by user id so a second family account on the same phone
+   * still gets its own code on its own first visit of the day.
+   */
+  qrPopupShownOn: 'ac.qrPopup.shownOn',
+  /**
    * localStorage: `{ "<userId>": <epoch ms> }` — when each member's photo was
    * last replaced from this device.
    *

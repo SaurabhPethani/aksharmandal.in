@@ -28,7 +28,14 @@ function useLookup(key, queryFn, enabled = true) {
  */
 export const useFeatures = () => useLookup('features', featuresService.getAll);
 
-export const useCategories = (enabled) => useLookup('user-categories', masterDataService.categories, enabled);
+/** With a gender, only the categories a member of that gender may hold. */
+export const useCategories = (enabled, gender = null) =>
+  useQuery({
+    queryKey: ['lookup', 'user-categories', gender ?? null],
+    queryFn: () => masterDataService.categories(gender),
+    enabled,
+    ...LOOKUP_CACHE,
+  });
 export const useRoles = (enabled) => useLookup('roles', masterDataService.roles, enabled);
 export const useEducationLevels = (enabled) => useLookup('education-levels', masterDataService.educationLevels, enabled);
 export const useJobIndustries = (enabled) => useLookup('job-industries', masterDataService.jobIndustries, enabled);
@@ -46,7 +53,13 @@ export const useRelations = (enabled) => useLookup('relations', masterDataServic
  */
 export const useFollowupPersons = (enabled, sabhaId) =>
   useQuery({
-    queryKey: ['lookup', 'followup-persons', sabhaId ?? null],
+    queryKey: [
+      'lookup',
+      'followup-persons',
+      Array.isArray(sabhaId)
+        ? sabhaId.slice().sort((a, b) => a - b).join(',')
+        : sabhaId ?? null,
+    ],
     queryFn: () => masterDataService.followupPersons(sabhaId),
     enabled,
     ...LOOKUP_CACHE,

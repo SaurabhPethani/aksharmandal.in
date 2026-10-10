@@ -11,6 +11,7 @@ import LegalPage from '../pages/LegalPage';
 import ProfilePage from '../pages/ProfilePage';
 import MembersPage from '../pages/MembersPage';
 import UserDetailsPage from '../pages/UserDetailsPage';
+import MemberFormPage from '../pages/MemberFormPage';
 import { useAuth } from '../hooks/core';
 import { useMyPermissions } from '../hooks/useMyPermissions';
 import { canReadHelp, canSeeYuvaSeva } from '../constants/roles';
@@ -29,7 +30,9 @@ type RouteName =
   | 'legal-delete'
   | 'profile'
   | 'users'
-  | 'user-details';
+  | 'user-details'
+  | 'user-new'
+  | 'user-edit';
 
 type AppNavigatorProps = {
   initialRoute?: RouteName;
@@ -46,9 +49,11 @@ export default function AppNavigator({
   const [roleId, setRoleId] = useState<number | null>(null);
   // The tab the profile opens on; null is its first one.
   const [profileTab, setProfileTab] = useState<string | null>(null);
+  // The tab the Birthdays page opens on; null is its first one.
+  const [birthdaysTab, setBirthdaysTab] = useState<string | null>(null);
   // The member the details screen is showing.
   const [memberId, setMemberId] = useState<number | null>(null);
-  const { signOut } = useAuth();
+  const { signOut, activeUserId } = useAuth();
   // The Users entry follows the caller's own grant, as the web's menu does.
   const permissions = useMyPermissions().data;
   const usersModule = permissions?.byName?.[MODULES.USERS];
@@ -100,6 +105,17 @@ export default function AppNavigator({
     navigate('user-details');
   };
 
+  // Your own record is edited on the profile, where some changes go for
+  // approval; anyone else's opens the member form.
+  const openMemberEdit = (id: number) => {
+    if (String(id) === String(activeUserId)) {
+      openProfile();
+      return;
+    }
+    setMemberId(id);
+    navigate('user-edit');
+  };
+
   const goBack = () => {
     setHistory(previous =>
       previous.length > 1 ? previous.slice(0, -1) : previous,
@@ -128,7 +144,14 @@ export default function AppNavigator({
       <DashboardPage
         onOpenHelp={openHelp}
         onOpenMenu={openDrawer}
-        onOpenBirthdays={() => navigate('birthdays')}
+        onOpenBirthdays={() => {
+          setBirthdaysTab(null);
+          navigate('birthdays');
+        }}
+        onOpenMyWishes={() => {
+          setBirthdaysTab('received');
+          navigate('birthdays');
+        }}
         onOpenNotLoggedIn={() => navigate('not-logged-in')}
         onOpenEvents={() => navigate('events')}
         onOpenUntouchedUsers={() => navigate('yuva-seva')}
@@ -143,6 +166,7 @@ export default function AppNavigator({
     ) : displayedRoute === 'birthdays' ? (
       // Opened from the dashboard's birthday tiles; back returns there.
       <BirthdaysPage
+        initialTab={birthdaysTab}
         onBack={goBack}
         onMenu={openDrawer}
         onHelp={openHelp}
@@ -188,6 +212,8 @@ export default function AppNavigator({
     ) : displayedRoute === 'users' ? (
       <MembersPage
         onOpenMember={openMember}
+        onAddUser={() => navigate('user-new')}
+        onEditMember={openMemberEdit}
         onBack={goBack}
         onMenu={openDrawer}
         onHelp={openHelp}
@@ -196,12 +222,23 @@ export default function AppNavigator({
         onProfile={openProfile}
       />
     ) : displayedRoute === 'user-details' ? (
-      // Opened from the Users list; back returns there. No `onEdit`: the app
-      // has no form for editing another member yet.
+      // Opened from the Users list; back returns there.
       <UserDetailsPage
         userId={memberId}
         onBack={goBack}
-        onEdit={undefined}
+        onEdit={openMemberEdit}
+        onMenu={openDrawer}
+        onHelp={openHelp}
+        onNotifications={() => navigate('notifications')}
+        {...legalLinks}
+        onProfile={openProfile}
+      />
+    ) : displayedRoute === 'user-new' || displayedRoute === 'user-edit' ? (
+      // Saving returns to wherever the form was opened from.
+      <MemberFormPage
+        userId={displayedRoute === 'user-edit' ? memberId : null}
+        onBack={goBack}
+        onDone={goBack}
         onMenu={openDrawer}
         onHelp={openHelp}
         onNotifications={() => navigate('notifications')}

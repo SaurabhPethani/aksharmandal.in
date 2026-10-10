@@ -23,7 +23,18 @@ import { LOOKUP_CACHE } from './cache';
  * request when the user stops typing rather than one per keystroke.
  */
 export function useMembers(
-  { sabhaId, search, alpha, status, followupById, initialPage, onPageChange } = {},
+  {
+    sabhaId,
+    search,
+    alpha,
+    status,
+    followupById,
+    filterSabhaIds,
+    categoryIds,
+    tags,
+    initialPage,
+    onPageChange,
+  } = {},
   enabled
 ) {
   const debouncedSearch = useDebounced(search, 350);
@@ -39,9 +50,22 @@ export function useMembers(
       // Omitted entirely when nothing is chosen, so the unfiltered call carries
       // no followup_by_id at all and the backend applies the caller's own scope.
       followup_by_id: followupById || undefined,
+      filter_sabha_id: filterSabhaIds?.length ? filterSabhaIds : undefined,
+      category_id: categoryIds?.length ? categoryIds : undefined,
+      tag: tags?.length ? tags : undefined,
       status: status === '' || status == null ? undefined : status === 'true' || status === true,
     },
     enabled,
+  });
+}
+
+/** The area-filter options for the member list, already inside the caller's scope. */
+export function useUserListFilters(enabled = true) {
+  return useQuery({
+    queryKey: ['user-list-filters'],
+    queryFn: () => usersService.listFilters(),
+    enabled: Boolean(enabled),
+    ...LOOKUP_CACHE,
   });
 }
 
@@ -432,11 +456,15 @@ export function useUpdateRole() {
 
 /** Reassign a member's follow-up person. */
 export function useUpdateFollowup() {
+  const queryClient = useQueryClient();
   const updateUserInList = useUserListCache();
   return useMutation({
     mutationFn: ({ userId, followupById }) => usersService.updateFollowup(userId, followupById),
-    onSuccess: (_data, { userId, followupName }) =>
-      updateUserInList(userId, { followup_by_id_name: followupName }),
+    onSuccess: (_data, { userId, followupName }) => {
+      updateUserInList(userId, { followup_by_id_name: followupName });
+      // The member's own record names the old person until it is re-read.
+      queryClient.invalidateQueries({ queryKey: ['user', String(userId)] });
+    },
   });
 }
 

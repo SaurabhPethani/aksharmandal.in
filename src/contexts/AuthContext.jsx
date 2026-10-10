@@ -22,6 +22,12 @@ import { authService } from '../services/authService';
 
 import { clearAllFilterState } from '../hooks/useFilterState';
 
+import { birthdayWishesMark } from '../utils/birthdayWish';
+
+import { removeStored } from '../utils/deviceStorage';
+
+import { STORAGE_KEYS } from '../constants/storage';
+
 import {
   getBiometricType,
   isBiometricAvailable,
@@ -55,6 +61,10 @@ export function AuthProvider({ children }) {
 
   const booted = useRef(false);
 
+  // The number typed at a PIN/password sign-in. Unknown
+  // after a biometric one.
+  const loginMobile = useRef(null);
+
   useEffect(() => {
     mounted.current = true;
 
@@ -69,6 +79,16 @@ export function AuthProvider({ children }) {
    */
   const establish = useCallback(async (token, { interactive = false } = {}) => {
     const record = await rememberSession(token);
+
+    // A fresh sign-in shows "My QR Code" again, even on a day it was already
+    // closed (see STORAGE_KEYS.qrPopupShownOn), and the birthday greeting with
+    // it. Interactive logins only: a silent resume, a biometric unlock or an
+    // account switch is the same sign-in, so those stay once a day. Awaited, so
+    // it is cleared before the dashboard can render — after `status` flips.
+    if (interactive) {
+      await removeStored(STORAGE_KEYS.qrPopupShownOn);
+      birthdayWishesMark.clear();
+    }
 
     let userId = record.user_id;
 
@@ -174,6 +194,8 @@ export function AuthProvider({ children }) {
     async (mobile, pin, { biometric = false } = {}) => {
       const token = await authService.loginWithPin(mobile, pin);
 
+      loginMobile.current = mobile;
+
       const biometricSaved = await applyBiometricChoice(token, biometric);
 
       const result = await establish(token, {
@@ -194,6 +216,8 @@ export function AuthProvider({ children }) {
     async (mobile, password, { biometric = false } = {}) => {
       const token = await authService.loginWithPassword(mobile, password);
 
+      loginMobile.current = mobile;
+
       const biometricSaved = await applyBiometricChoice(token, biometric);
 
       const result = await establish(token, {
@@ -205,6 +229,45 @@ export function AuthProvider({ children }) {
       return { ...result, biometricSaved };
     },
     [applyBiometricChoice, establish, offerBiometric],
+  );
+
+  /**
+   * Profile → Security: the member proves who they are with
+   * their PIN (`{ pin }`) or password (`{ password }`) before
+   * biometric login is switched on or off. Throws the
+   * backend's error when it is wrong.
+   */
+  const confirmCredential = useCallback(
+    async credential => {
+      let mobile = loginMobile.current;
+
+      if (!mobile) {
+        // Signed in by biometrics. The open profile carries
+        // the login number only when it is the member's own.
+        const own = accounts.find(account => account.is_self);
+
+        if (own && session && own.user_id !== session.userId) {
+          throw new Error(
+            'Open your own account to change biometric login.',
+          );
+        }
+
+        const me = await authService.me();
+
+        mobile = String(me?.mobile_number ?? '')
+          .replace(/\D/g, '')
+          .slice(-10);
+      }
+
+      if (!mobile) {
+        throw new Error(
+          'Could not confirm it is you. Sign in again and retry.',
+        );
+      }
+
+      await authService.checkCredential(mobile, credential);
+    },
+    [accounts, session],
   );
 
   /**
@@ -313,9 +376,13 @@ export function AuthProvider({ children }) {
     const credentials = await authenticateWithBiometric();
 
     if (!credentials?.token) {
-      throw new Error(
+      const cancelled = new Error(
         'Biometric authentication was cancelled or no biometric login is configured.',
       );
+
+      cancelled.biometricCancelled = true;
+
+      throw cancelled;
     }
 
     try {
@@ -372,6 +439,17 @@ export function AuthProvider({ children }) {
 
     await forgetSession();
 
+    loginMobile.current = null;
+
+    /*
+     * Signing in again after this is a fresh sign-in
+     * whichever way it is done — a biometric login
+     * included — so "My QR Code" and the birthday
+     * greeting show again.
+     */
+    await removeStored(STORAGE_KEYS.qrPopupShownOn);
+    birthdayWishesMark.clear();
+
     /*
      * The next person to sign in on this phone must
      * not see the previous member's cached data.
@@ -415,7 +493,7 @@ export function AuthProvider({ children }) {
    *
    * Biometric credentials are not automatically
    * opened here. LoginPage controls the biometric
-   * prompt.
+   * prompt, and opens it by itself once per launch.
    */
   useEffect(() => {
     if (booted.current) {
@@ -523,6 +601,8 @@ export function AuthProvider({ children }) {
 
       loginWithBiometric,
 
+      confirmCredential,
+
       enableBiometric,
 
       disableBiometric,
@@ -547,6 +627,7 @@ export function AuthProvider({ children }) {
       biometricPromptDue,
       dismissBiometricPrompt,
       loginWithBiometric,
+      confirmCredential,
       enableBiometric,
       disableBiometric,
       refreshBiometric,

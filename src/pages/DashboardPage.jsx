@@ -36,6 +36,7 @@ import MemberStatsSearch from '../components/dashboard/MemberStatsSearch';
 import TrendChart from '../components/charts/TrendChart';
 import { dashboardService } from '../services/dashboardService';
 import { useAuth } from '../hooks/core';
+import { useMyPermissions } from '../hooks/useMyPermissions';
 import {
   canReadHelp,
   canReadOverallDashboard,
@@ -49,6 +50,8 @@ import {
   saveRemoteImage,
   shareRemoteImageOnWhatsApp,
 } from '../utils/saveImage';
+import DailyQrPopup from '../components/DailyQrPopup';
+import { BirthdayWishesPopup } from './BirthdaysPage';
 
 const COLORS = {
   navy: '#003158',
@@ -1890,9 +1893,12 @@ export default function DashboardPage({
   onOpenPrivacy,
   onOpenTerms,
   onOpenDeleteAccount,
-  onOpenYuvaSeva
+  onOpenYuvaSeva,
+  onOpenMyWishes,
 }) {
   const { activeUserId } = useAuth();
+  // Known from sign-in, well before this page's own load brings `me`.
+  const signedInName = useMyPermissions().data?.userName;
   const queryClient = useQueryClient();
   const [overview, setOverview] = useState(null);
   const [live, setLive] = useState(null);
@@ -1906,6 +1912,9 @@ export default function DashboardPage({
   const [error, setError] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDownloading, setQrDownloading] = useState(false);
+  // The birthday greeting waits for the QR popup to be out of the way.
+  const [qrPopupDone, setQrPopupDone] = useState(false);
+  const onQrPopupDone = useCallback(() => setQrPopupDone(true), []);
 
   useEffect(() => {
     if (me?.role_name) onRoleNameChange?.(me.role_name);
@@ -2004,6 +2013,12 @@ export default function DashboardPage({
 
   return (
     <View style={styles.safe}>
+      <DailyQrPopup
+        userId={activeUserId || me?.id || me?.user_id}
+        fullName={signedInName || me?.full_name || me?.user_name}
+        onDone={onQrPopupDone}
+      />
+      {qrPopupDone && <BirthdayWishesPopup onViewAll={onOpenMyWishes} />}
       <AppHeader
         onMenu={onOpenMenu}
         onHelp={canReadHelp(roleId) ? onOpenHelp : null}

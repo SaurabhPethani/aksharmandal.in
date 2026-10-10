@@ -22,6 +22,16 @@ export const authService = {
   loginWithPin: (mobile_number, pin) =>
     api.post(AUTH_PATHS.loginPin, { mobile_number, pin }),
 
+  /**
+   * Checks a PIN or password. The API has no endpoint for that, so this is a
+   * login whose token is thrown away. Sent without cookies, which leaves the
+   * refresh cookie of the session in use alone.
+   */
+  checkCredential: (mobile_number, { pin, password }) =>
+    pin != null
+      ? api.post(AUTH_PATHS.loginPin, { mobile_number, pin }, { withCredentials: false })
+      : api.post(AUTH_PATHS.loginPassword, { mobile_number, password }, { withCredentials: false }),
+
   /** `purpose` is required and comes from login-init's response. */
   verifyOtp: (mobile_number, otp, purpose) =>
     api.post(AUTH_PATHS.verifyOtp, { mobile_number, otp, purpose }),

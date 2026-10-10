@@ -47,3 +47,16 @@ export function readBirthdayWishes(body) {
   if (body.message != null || body.send_user_id != null) return [body];
   return [];
 }
+
+// Whether the "Happy Birthday!" popup has been shown since the last sign-in.
+// Held in memory, so it ends with the app the way a browser tab's session does.
+let wishesPopupSeen = false;
+export const birthdayWishesMark = {
+  seen: () => wishesPopupSeen,
+  set: () => {
+    wishesPopupSeen = true;
+  },
+  clear: () => {
+    wishesPopupSeen = false;
+  },
+};

@@ -1,7 +1,14 @@
 import { api } from '../api/client';
 
 export const usersService = {
-  list: params => api.get('/api/v1/users/list', { params }),
+  // Repeated keys (`filter_sabha_id=1&filter_sabha_id=2`): the API does not
+  // read the bracketed form axios sends by default.
+  list: params =>
+    api.get('/api/v1/users/list', {
+      params,
+      paramsSerializer: { indexes: null },
+    }),
+  listFilters: () => api.get('/api/v1/users/list-filters'),
   byId: userId => api.get(`/api/v1/users/${userId}`),
 
   create: payload => api.post('/api/v1/users/', payload, { envelope: true }),
@@ -30,10 +37,12 @@ export const usersService = {
       { role_id: roleId },
       { envelope: true },
     ),
+  // The call the web makes. The API document scopes it to the caller's band;
+  // `/users/{id}/followup` is listed there as "own records only".
   updateFollowup: (userId, followupById) =>
     api.patch(
-      `/api/v1/users/${userId}/followup`,
-      { followup_id: followupById },
+      `/api/v1/users/update-pending-followup/${userId}`,
+      { followup_by_id: Number(followupById) },
       { envelope: true },
     ),
   assignableRoles: userId =>

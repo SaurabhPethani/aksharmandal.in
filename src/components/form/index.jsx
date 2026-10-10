@@ -245,6 +245,11 @@ export function Select({
   );
 }
 
+// A member lookup can hold a couple of thousand names. Building a row for each
+// one when the list opens held the screen for seconds, so only the first few
+// are drawn and the search finds the rest.
+const COMBOBOX_ROWS = 50;
+
 /** Select with a search box — for lookups long enough to scroll past. */
 export function Combobox({
   value,
@@ -268,6 +273,20 @@ export function Combobox({
       `${o.label} ${o.meta ?? ''}`.toLowerCase().includes(q),
     );
   }, [options, term]);
+
+  const shown = useMemo(() => {
+    if (filtered.length <= COMBOBOX_ROWS) return filtered;
+    const first = filtered.slice(0, COMBOBOX_ROWS);
+    // The current choice stays in view even when it is further down.
+    if (
+      chosen &&
+      !term.trim() &&
+      !first.some(o => String(o.value) === String(chosen.value))
+    ) {
+      return [chosen, ...first.slice(0, COMBOBOX_ROWS - 1)];
+    }
+    return first;
+  }, [filtered, chosen, term]);
 
   const close = () => {
     setOpen(false);
@@ -295,7 +314,7 @@ export function Combobox({
           style={styles.searchBox}
         />
         <OptionList
-          options={filtered}
+          options={shown}
           value={value}
           emptyLabel={emptyLabel}
           onPick={next => {
@@ -303,6 +322,11 @@ export function Combobox({
             close();
           }}
         />
+        {filtered.length > shown.length ? (
+          <Text style={styles.optionMore}>
+            Showing {shown.length} of {filtered.length}. Type to find the rest.
+          </Text>
+        ) : null}
       </Modal>
     </>
   );
@@ -409,6 +433,12 @@ const styles = StyleSheet.create({
     paddingVertical: space(6),
     textAlign: 'center',
     fontSize: TEXT.sm,
+    color: COLORS.textMuted,
+  },
+  optionMore: {
+    paddingTop: space(3),
+    textAlign: 'center',
+    fontSize: TEXT.xs,
     color: COLORS.textMuted,
   },
   checkboxRow: {

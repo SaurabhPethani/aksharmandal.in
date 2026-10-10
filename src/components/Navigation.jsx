@@ -135,6 +135,108 @@ export function Tabs({ tabs = [], value, onChange, style, variant = 'underline' 
   );
 }
 
+const STEPPER_MIN_WIDTH = 640;
+
+/**
+ * The steps of a multi-step form: each one's label over a circle, the circles
+ * joined by a line. `steps` are `{ key, label, badge }`; the circle shows the
+ * badge, or the step's number without one. Wider than a phone, so it scrolls,
+ * and keeps the current step in view.
+ */
+export function Stepper({ steps = [], value, onChange, style }) {
+  const strip = useRef(null);
+  const viewport = useRef(0);
+  const content = useRef(0);
+  const activeIndex = steps.findIndex(s => s.key === value);
+
+  const reveal = animated => {
+    if (activeIndex < 0 || !viewport.current || !content.current) return;
+    const stepWidth = content.current / steps.length;
+    const centred = activeIndex * stepWidth - (viewport.current - stepWidth) / 2;
+    const x = Math.max(0, Math.min(content.current - viewport.current, centred));
+    strip.current?.scrollTo({ x, animated });
+  };
+
+  useEffect(() => {
+    reveal(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex]);
+
+  return (
+    <ScrollView
+      ref={strip}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      onLayout={e => {
+        viewport.current = e.nativeEvent.layout.width;
+        reveal(false);
+      }}
+      onContentSizeChange={width => {
+        content.current = width;
+        reveal(false);
+      }}
+      style={[styles.stepper, style]}
+      contentContainerStyle={styles.stepperContent}
+    >
+      {steps.map((step, i) => {
+        const active = i === activeIndex;
+        const done = i < activeIndex;
+        return (
+          <View key={step.key} style={styles.step}>
+            <Pressable
+              onPress={() => onChange(step.key)}
+              accessibilityRole="button"
+              accessibilityLabel={step.label}
+              hitSlop={4}
+              style={styles.stepLabelBox}
+            >
+              <Text
+                numberOfLines={1}
+                style={[styles.stepLabel, active && styles.stepLabelActive]}
+              >
+                {step.label}
+              </Text>
+            </Pressable>
+            <View style={styles.stepRow}>
+              {i > 0 && <View style={[styles.stepRail, styles.stepRailLeft]} />}
+              {i < steps.length - 1 && (
+                <View style={[styles.stepRail, styles.stepRailRight]} />
+              )}
+              <View style={styles.stepCircleBox}>
+                {active && <View style={styles.stepHalo} />}
+                <Pressable
+                  onPress={() => onChange(step.key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${step.label}, step ${i + 1}`}
+                  accessibilityState={{ selected: active }}
+                  style={[
+                    styles.stepCircle,
+                    done && styles.stepCircleDone,
+                    active && styles.stepCircleActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.stepBadge,
+                      done && styles.stepBadgeDone,
+                      active && styles.stepBadgeActive,
+                    ]}
+                  >
+                    {step.badge ?? i + 1}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+const STEP_CIRCLE = space(10);
+const STEP_HALO = 5;
+
 const styles = StyleSheet.create({
   crumbs: {
     marginTop: space(2),
@@ -196,4 +298,75 @@ const styles = StyleSheet.create({
     paddingVertical: space(0.5),
   },
   countText: { fontSize: 12.33, color: COLORS.primary },
+
+  stepper: { flexGrow: 0 },
+  // The halo round the current circle reaches past the row, hence the padding.
+  stepperContent: {
+    flexGrow: 1,
+    minWidth: STEPPER_MIN_WIDTH,
+    alignItems: 'flex-start',
+    paddingBottom: STEP_HALO + 1,
+  },
+  step: { flex: 1, minWidth: 0, alignItems: 'center' },
+  stepLabelBox: {
+    maxWidth: '100%',
+    marginBottom: space(2),
+    paddingHorizontal: space(1),
+  },
+  stepLabel: {
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.semibold,
+    color: COLORS.textMuted,
+  },
+  stepLabelActive: { color: COLORS.primary },
+  stepRow: {
+    width: '100%',
+    height: STEP_CIRCLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepRail: {
+    position: 'absolute',
+    top: STEP_CIRCLE / 2,
+    height: 1,
+    width: '50%',
+    backgroundColor: COLORS.lineStrong,
+  },
+  stepRailLeft: { left: 0 },
+  stepRailRight: { right: 0 },
+  stepCircleBox: { width: STEP_CIRCLE, height: STEP_CIRCLE },
+  stepHalo: {
+    position: 'absolute',
+    top: -STEP_HALO,
+    right: -STEP_HALO,
+    bottom: -STEP_HALO,
+    left: -STEP_HALO,
+    borderRadius: RADII.full,
+    backgroundColor: 'rgba(255,134,42,0.2)',
+  },
+  stepCircle: {
+    width: STEP_CIRCLE,
+    height: STEP_CIRCLE,
+    borderRadius: RADII.full,
+    borderWidth: 1,
+    borderColor: COLORS.lineStrong,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCircleDone: {
+    borderColor: 'rgba(0,49,88,0.3)',
+    backgroundColor: COLORS.primary50,
+  },
+  stepCircleActive: {
+    borderColor: 'transparent',
+    backgroundColor: COLORS.primary,
+  },
+  stepBadge: {
+    fontSize: TEXT.xs,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.textMuted,
+  },
+  stepBadgeDone: { color: COLORS.primary },
+  stepBadgeActive: { color: COLORS.white },
 });

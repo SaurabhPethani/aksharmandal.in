@@ -20,6 +20,12 @@ import MultiSelectFilter from '../components/form/MultiSelectFilter';
 import ScrollViewWithTop from '../components/ScrollToTop';
 import { dashboardService } from '../services/dashboardService';
 import { searchMatches } from '../utils/options';
+import {
+  AREA_LEVELS,
+  EMPTY_AREA_SELECTION,
+  computeSabhaIds,
+  pruneSelection,
+} from '../utils/scopeArea';
 import { todayISO } from '../utils/validation';
 
 const C = {
@@ -89,24 +95,6 @@ function summary(rows) {
     },
   );
 }
-
-const EMPTY_AREA_SELECTION = {
-  pradeshGroupIds: [],
-  pradeshIds: [],
-  mandalGroupIds: [],
-  mandalIds: [],
-  sabhaGroupIds: [],
-  sabhaIds: [],
-};
-
-const AREA_LEVELS = [
-  { key: 'pradeshGroupIds', opt: 'pradesh_groups', show: 'show_pradesh_group' },
-  { key: 'pradeshIds', opt: 'pradeshes', show: 'show_pradesh' },
-  { key: 'mandalGroupIds', opt: 'mandal_groups', show: 'show_mandal_group' },
-  { key: 'mandalIds', opt: 'mandals', show: 'show_mandal' },
-  { key: 'sabhaGroupIds', opt: 'sabha_groups', show: 'show_sabha_group' },
-  { key: 'sabhaIds', opt: 'sabhas', show: 'show_sabha' },
-];
 
 const SOUL_TAG = {
   mission_double: {
@@ -183,126 +171,6 @@ function SoulLegendDialog({ isOpen, onClose }) {
       </View>
     </Modal>
   );
-}
-
-function asStrSet(values) {
-  return new Set((values || []).map(String));
-}
-
-function optionsAt(levelKey, filters) {
-  return filters?.[AREA_LEVELS.find(level => level.key === levelKey).opt] || [];
-}
-
-function optionCoverage(levelKey, option, filters) {
-  if (
-    levelKey === 'pradeshGroupIds' ||
-    levelKey === 'mandalGroupIds' ||
-    levelKey === 'sabhaGroupIds'
-  ) {
-    return new Set((option?.sabha_ids || []).map(String));
-  }
-  if (levelKey === 'pradeshIds') {
-    return new Set(
-      (filters?.sabhas || [])
-        .filter(item => String(item.pradesh_id) === String(option.id))
-        .map(item => String(item.id)),
-    );
-  }
-  if (levelKey === 'mandalIds') {
-    return new Set(
-      (filters?.sabhas || [])
-        .filter(item => String(item.mandal_id) === String(option.id))
-        .map(item => String(item.id)),
-    );
-  }
-  return new Set([String(option.id)]);
-}
-
-function levelCoverage(levelKey, ids, filters) {
-  if (!ids || !ids.length) return null;
-  const selected = asStrSet(ids);
-  const covered = new Set();
-
-  optionsAt(levelKey, filters)
-    .filter(option => selected.has(String(option.id)))
-    .forEach(option => {
-      optionCoverage(levelKey, option, filters).forEach(id =>
-        covered.add(String(id)),
-      );
-    });
-
-  return covered;
-}
-
-function intersectSets(a, b) {
-  const result = new Set();
-  a.forEach(value => {
-    if (b.has(value)) result.add(value);
-  });
-  return result;
-}
-
-function ancestorAllowed(idx, selection, filters) {
-  let allowed = null;
-  for (let i = 0; i < idx; i += 1) {
-    const covered = levelCoverage(
-      AREA_LEVELS[i].key,
-      selection[AREA_LEVELS[i].key],
-      filters,
-    );
-    if (covered) {
-      allowed = allowed === null ? covered : intersectSets(allowed, covered);
-    }
-  }
-  return allowed;
-}
-
-function availableAt(idx, selection, filters) {
-  const allowed = ancestorAllowed(idx, selection, filters);
-  const options = optionsAt(AREA_LEVELS[idx].key, filters);
-  if (allowed === null) return options;
-  return options.filter(option => {
-    const coverage = optionCoverage(AREA_LEVELS[idx].key, option, filters);
-    for (const value of coverage) {
-      if (allowed.has(value)) return true;
-    }
-    return false;
-  });
-}
-
-function pruneSelection(selection, filters) {
-  const value = { ...EMPTY_AREA_SELECTION, ...(selection || {}) };
-  const next = { ...value };
-
-  for (let i = 0; i < AREA_LEVELS.length; i += 1) {
-    const levelKey = AREA_LEVELS[i].key;
-    const available = new Set(
-      availableAt(i, next, filters).map(option => String(option.id)),
-    );
-    next[levelKey] = (next[levelKey] || []).filter(id =>
-      available.has(String(id)),
-    );
-  }
-
-  return next;
-}
-
-function computeSabhaIds(selection, filters) {
-  if (!filters) return [];
-  const value = { ...EMPTY_AREA_SELECTION, ...(selection || {}) };
-  let allowed = null;
-  let anySelected = false;
-
-  for (const level of AREA_LEVELS) {
-    const covered = levelCoverage(level.key, value[level.key], filters);
-    if (covered) {
-      anySelected = true;
-      allowed = allowed === null ? covered : intersectSets(allowed, covered);
-    }
-  }
-
-  if (!anySelected || !allowed) return [];
-  return [...allowed];
 }
 
 function deriveScopeRows(rows, scope) {

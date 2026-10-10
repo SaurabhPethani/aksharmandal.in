@@ -3,9 +3,11 @@ import React, {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
+  Animated,
   BackHandler,
   Linking,
   Pressable,
@@ -13,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialDesignIcons as MaterialCommunityIcons } from '@react-native-vector-icons/material-design-icons/static';
 import SiteFooter from '../components/SiteFooter';
 import ScrollViewWithTop from '../components/ScrollToTop';
@@ -26,7 +29,8 @@ import {
   PageHeader,
   Skeleton,
 } from '../components/ui';
-import { Modal } from '../components/Overlays';
+import { Arrive, Modal } from '../components/Overlays';
+import { useOverlay } from '../contexts/OverlayContext';
 import { DialogCancel } from '../components/FormDialog';
 import { Breadcrumbs, Tabs } from '../components/Navigation';
 import { FormField, Textarea } from '../components/form';
@@ -36,7 +40,7 @@ import {
   useSendBirthdayWish,
 } from '../hooks/useBirthdays';
 import { useMyPermissions } from '../hooks/useMyPermissions';
-import { birthdayMessage } from '../utils/birthdayWish';
+import { birthdayMessage, birthdayWishesMark } from '../utils/birthdayWish';
 import { hasMobile, telUrl, whatsAppUrl } from '../utils/contact';
 import { readDate } from '../utils/dates';
 import { FONT_DISPLAY } from '../constants/typography';
@@ -1034,6 +1038,196 @@ function ReceivedWishes() {
   );
 }
 
+/**
+ * "Happy Birthday!" — how many members have sent wishes, shown once per
+ * sign-in to a member who has any. `onViewAll` opens My Wishes.
+ */
+export function BirthdayWishesPopup({ onViewAll }) {
+  const insets = useSafeAreaInsets();
+  const overlay = useOverlay();
+  const shownAnim = useRef(new Animated.Value(0)).current;
+
+  const [seen, setSeen] = useState(() => birthdayWishesMark.seen());
+  const { rows, isLoading, error } = useMyBirthdayWishes(!seen);
+  const count = rows.length;
+  const visible = !seen && !isLoading && !error && count > 0;
+
+  const close = () => {
+    birthdayWishesMark.set();
+    setSeen(true);
+  };
+  const viewAll = () => {
+    close();
+    onViewAll?.();
+  };
+
+  useEffect(() => {
+    if (!visible) {
+      overlay.remove();
+      return;
+    }
+    shownAnim.setValue(0);
+  }, [visible, overlay, shownAnim]);
+
+  const entry = {
+    content: (
+      <View style={popupStyles.layer}>
+        <Arrive value={shownAnim} />
+        <Animated.View style={[popupStyles.backdrop, { opacity: shownAnim }]}>
+          <Pressable
+            style={popupStyles.fill}
+            onPress={close}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          />
+        </Animated.View>
+
+        <Animated.View
+          accessibilityViewIsModal
+          style={[
+            popupStyles.sheet,
+            {
+              paddingBottom: insets.bottom,
+              opacity: shownAnim,
+              transform: [
+                {
+                  translateY: shownAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [24, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <LinearFill
+            id="wishPopupWarm"
+            stops={[
+              [0, '#FEF3C7'],
+              [0.5, '#FFEDD5'],
+              [1, '#FFE4CC'],
+            ]}
+          />
+
+          <Pressable
+            onPress={close}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            hitSlop={6}
+            style={({ pressed }) => [
+              popupStyles.x,
+              pressed && popupStyles.xPressed,
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="close"
+              size={space(5)}
+              color="rgba(120,53,15,0.5)"
+            />
+          </Pressable>
+
+          <View style={popupStyles.body}>
+            <View style={popupStyles.icon}>
+              <LinearFill
+                id="wishPopupIcon"
+                radius={RADII['2xl']}
+                stops={[
+                  [0, '#FBBF24'],
+                  [1, '#F97316'],
+                ]}
+              />
+              <MaterialCommunityIcons
+                name="party-popper"
+                size={space(7)}
+                color={COLORS.white}
+              />
+            </View>
+            <Text accessibilityRole="header" style={popupStyles.title}>
+              Happy Birthday!
+            </Text>
+            <Text style={popupStyles.copy}>
+              <Text style={popupStyles.count}>{count}</Text>
+              {count === 1 ? ' member has' : ' members have'} sent you wishes
+              for your birthday.
+            </Text>
+            <View style={popupStyles.actions}>
+              <Button variant="accent" onPress={viewAll}>
+                View all wishes
+              </Button>
+              <Button variant="ghost" onPress={close}>
+                Not now
+              </Button>
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+    ),
+    onRequestClose: close,
+  };
+  useEffect(() => {
+    if (visible) overlay.show(entry);
+  });
+  return null;
+}
+
+const popupStyles = StyleSheet.create({
+  fill: { flex: 1 },
+  layer: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
+  backdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(10,15,40,0.55)',
+  },
+  sheet: {
+    width: '100%',
+    maxWidth: space(112),
+    overflow: 'hidden',
+    borderTopLeftRadius: RADII.card,
+    borderTopRightRadius: RADII.card,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.32)',
+    backgroundColor: '#FFEDD5',
+  },
+  x: {
+    position: 'absolute',
+    zIndex: 1,
+    top: space(3),
+    right: space(3),
+    borderRadius: RADII.control,
+    padding: space(1.5),
+  },
+  xPressed: { backgroundColor: 'rgba(255,255,255,0.5)' },
+  body: { alignItems: 'center', padding: space(6) },
+  icon: {
+    width: space(14),
+    height: space(14),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    marginTop: space(4),
+    fontFamily: FONT_DISPLAY,
+    fontSize: TEXT.xl,
+    fontWeight: WEIGHT.bold,
+    color: COLORS.primary,
+  },
+  copy: {
+    marginTop: space(1.5),
+    maxWidth: space(80),
+    textAlign: 'center',
+    fontSize: TEXT.sm,
+    color: 'rgba(120,53,15,0.8)',
+  },
+  count: { ...TNUM, fontWeight: WEIGHT.bold, color: COLORS.primary },
+  actions: {
+    marginTop: space(5),
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space(2),
+  },
+});
+
 const TABS = [
   { value: 'send', label: 'This week' },
   { value: 'received', label: 'My Wishes' },
@@ -1048,8 +1242,12 @@ export default function BirthdaysPage({
   onOpenTerms,
   onOpenDeleteAccount,
   onProfile,
+  /** `'received'` opens on My Wishes; anything else on This week. */
+  initialTab,
 }) {
-  const [tab, setTab] = useState('send');
+  const [tab, setTab] = useState(
+    initialTab === 'received' ? 'received' : 'send',
+  );
 
   // Android's back button goes where the breadcrumb does.
   useEffect(() => {

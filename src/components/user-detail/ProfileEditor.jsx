@@ -61,7 +61,7 @@ export const readTabForStep = step =>
  * and `followup_by_id_name` — the id is part of the field's name, not a suffix
  * to swap out. Substituting blindly missed both, so the raw id was shown.
  */
-function readOnlyTextFor(field, user) {
+export function readOnlyTextFor(field, user) {
   if (!user) return null;
   const candidates = [
     `${field.name}_name`,
